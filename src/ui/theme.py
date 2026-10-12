@@ -384,63 +384,6 @@ _STYLES = f"""
   .zg-ring-desc {{ font-size: 12.5px; color: {INK_SOFT}; line-height: 1.65; }}
 
   /* ===================================================================
-     比较页：商品概览网格
-     ===================================================================
-     用 CSS grid 而不是 st.columns：列数由容器宽度自动决定，每格有最小宽度
-     保证中文名能正常换行。st.columns(N) 在 N=5 时每列只剩 ~180px，
-     减去图标块后文字区不足 110px，中文会被一个字一行地竖排下来。 */
-  .zg-compare-grid {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
-    gap: 10px;
-    margin-bottom: 4px;
-  }}
-  .zg-compare-cell {{
-    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
-    padding: 16px 14px; box-shadow: {SHADOW};
-    display: flex; flex-direction: column; align-items: center;
-    text-align: center; gap: 0;
-  }}
-  .zg-compare-name {{
-    font-size: 14.5px; font-weight: 650; color: {INK};
-    line-height: 1.45; margin: 11px 0 3px 0;
-    word-break: break-word;
-  }}
-  .zg-compare-brand {{ font-size: 12px; color: {INK_SOFT}; line-height: 1.5; }}
-  .zg-compare-price {{
-    font-size: 18px; font-weight: 700; color: {INK};
-    margin: 9px 0 7px 0; font-variant-numeric: tabular-nums;
-  }}
-  .zg-compare-score {{
-    font-size: 20px; font-weight: 700; color: {INK};
-    font-variant-numeric: tabular-nums; line-height: 1.1;
-  }}
-  .zg-compare-score small {{ font-size: 11.5px; font-weight: 400; color: {INK_FAINT}; }}
-
-  /* ===================================================================
-     比较页：优缺点平铺网格
-     =================================================================== */
-  .zg-proscons {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px;
-  }}
-  .zg-proscons-card {{
-    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
-    padding: 16px 18px; box-shadow: {SHADOW};
-  }}
-  .zg-proscons-title {{
-    font-size: 14.5px; font-weight: 650; color: {INK};
-    padding-bottom: 9px; margin-bottom: 11px; border-bottom: 1px solid {LINE_SOFT};
-    display: flex; align-items: center; gap: 8px;
-  }}
-  .zg-proscons-sub {{
-    font-size: 12.5px; font-weight: 600; color: {INK_SOFT};
-    margin: 10px 0 4px 0;
-  }}
-  .zg-proscons-sub:first-of-type {{ margin-top: 0; }}
-
-  /* ===================================================================
      数据来源脚注
      =================================================================== */
   .zg-source {{
