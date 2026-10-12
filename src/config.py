@@ -78,6 +78,30 @@ def database_path() -> Path:
     return Path(override) if override else PROJECT_ROOT / "storage" / "zhigou.db"
 
 
+def settings_path() -> Path:
+    """用户偏好设置文件路径。
+
+    和商品数据、数据库一样支持环境变量覆盖——测试靠它把设置写进临时目录，
+    避免污染开发机上的真实设置文件（这个坑真的踩过一次：
+    设置页的测试写到了 storage/settings.json，把后续测试全带偏了）。
+    """
+    override = _env_str("ZHIGOU_SETTINGS_PATH")
+    return Path(override) if override else PROJECT_ROOT / "storage" / "settings.json"
+
+
+def display_path(path: Path | str) -> str:
+    """把路径显示成相对项目根的短路径。
+
+    不在项目目录内时返回绝对路径——**不能直接用 `relative_to`**，
+    配置指向外部目录时它会抛 ValueError，把界面整个搞崩。
+    """
+    target = Path(path)
+    try:
+        return str(target.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(target)
+
+
 # --------------------------------------------------------------------------
 # 大模型（可选）配置
 # --------------------------------------------------------------------------

@@ -10,15 +10,15 @@ from src.comparison import compare
 from src.data_loader import Catalog
 from src.demand_parser import Demand
 from src.errors import ZhigouError, to_user_message
+from src.scoring import score_all
 from src.ui import components, state
 from src.ui.theme import bullet_list
+
+_PICK_KEY = "zg_compare_pick"
 
 
 def _label(product) -> str:
     return f"{product.name or product.id}（{product.price_label}）"
-
-
-_PICK_KEY = "zg_compare_pick"
 
 
 def _apply_pending_pick() -> None:
@@ -52,7 +52,6 @@ def render(catalog: Catalog) -> None:
     )
 
     demand = state.get(state.KEY_DEMAND) or Demand()
-
     by_label = {_label(p): p.id for p in catalog.products}
 
     col1, col2 = st.columns([3, 1])
@@ -81,7 +80,8 @@ def render(catalog: Catalog) -> None:
         st.write("")
         components.empty_state(
             f"还需要选择 {config.MIN_COMPARE_COUNT - len(chosen)} 件商品。"
-            f"少于 {config.MIN_COMPARE_COUNT} 件无法进行横向比较。"
+            f"少于 {config.MIN_COMPARE_COUNT} 件无法进行横向比较。",
+            icon_name="compare",
         )
         return
 
@@ -93,20 +93,59 @@ def render(catalog: Catalog) -> None:
         components.show_notice(to_user_message(exc), "stop")
         return
 
+    # --- 商品概览 ---------------------------------------------------------
+    components.section_title("参与比较的商品", len(products))
+    columns = st.columns(len(products), gap="small")
+    scores = score_all(products, demand)
+    for column, product in zip(columns, products, strict=True):
+        with column:
+            budget_row = next(
+                row for row in table.rows if row.label == "预算匹配"
+            )
+            budget_label = budget_row.values[table.products.index(product)]
+            score = scores[product.id]
+            st.markdown(
+                components.product_mini(product, budget_label=budget_label)
+                + f'<div style="margin:-4px 0 0 2px">'
+                f'<div class="zg-price">{score.total:.0f}'
+                f'<small>/100</small></div>'
+                f'<div style="margin:3px 0">{components.stars(score.total)}</div>'
+                f'<div class="zg-score-name">{config.SCORE_DISPLAY_NAME}</div></div>',
+                unsafe_allow_html=True,
+            )
+
     # --- 比较表 -----------------------------------------------------------
     components.section_title("横向比较")
 
-    frame = pd.DataFrame(table.to_records()).set_index("比较维度")
-    st.dataframe(frame, use_container_width=True, height=min(760, 60 + 38 * len(table.rows)))
+    records = table.to_records()
+    # 把匹配度作为额外一行加进表里。comparison 模块只负责商品数据本身，
+    # 评分是另一条链路，不该混进业务数据结构里。
+    records.append(
+        {
+            "比较维度": config.SCORE_DISPLAY_NAME,
+            **{p.name: f"{scores[p.id].total:.0f} / 100" for p in products},
+        }
+    )
 
+    frame = pd.DataFrame(records).set_index("比较维度")
+    st.dataframe(
+        frame,
+        use_container_width=True,
+        height=min(780, 70 + 36 * len(records)),
+    )
+
+    # --- 差异与完整度 -----------------------------------------------------
     st.write("")
-    col3, col4 = st.columns(2)
+    col3, col4 = st.columns(2, gap="large")
     with col3:
+        components.section_title("存在差异的维度")
         varying = [row.label for row in table.rows if row.varies]
-        st.markdown('<div class="zg-caption">存在差异的维度</div>', unsafe_allow_html=True)
-        st.markdown(bullet_list(varying), unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="zg-card is-flat">{bullet_list(varying)}</div>',
+            unsafe_allow_html=True,
+        )
     with col4:
-        st.markdown('<div class="zg-caption">数据完整度</div>', unsafe_allow_html=True)
+        components.section_title("数据完整度")
         if table.missing_cells:
             components.show_notice(
                 f"表中有 {table.missing_cells} 个单元格缺少数据，已标注为「信息缺失」，"
@@ -116,28 +155,9 @@ def render(catalog: Catalog) -> None:
         else:
             components.show_notice("所选商品的数据字段完整。", "ok")
 
-    # --- 逐件摘要 ---------------------------------------------------------
-    components.section_title("逐个商品看")
+    # --- 优缺点 -----------------------------------------------------------
+    components.section_title("逐个看优缺点")
     for product in products:
-        budget_cell = next(
-            row.values[table.products.index(product)]
-            for row in table.rows
-            if row.label == "预算匹配"
-        )
-        badge = components.badge(budget_cell, "ok" if budget_cell == "预算内" else "neutral")
-        st.markdown(
-            f'<div class="zg-card">'
-            f'  <div class="zg-card-head">'
-            f'    <div><div class="zg-card-title">{product.name}</div>'
-            f'      <div class="zg-card-sub">{product.brand} · {product.category_label}</div>'
-            f'      <div style="margin-top:8px">{badge}</div></div>'
-            f'    <div class="zg-score-top"><div class="zg-price">{product.price_label}</div></div>'
-            f"  </div>"
-            f'  <div class="zg-source">数据来源：{product.data_source}　·　'
-            f"更新时间：{product.updated_at}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
         with st.expander(f"{product.name} 的优点与不足"):
             left, right = st.columns(2)
             with left:

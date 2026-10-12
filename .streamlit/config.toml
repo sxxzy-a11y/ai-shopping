@@ -1,28 +1,27 @@
 # 智购参谋 —— Streamlit 主题配置
 #
-# 只使用 Streamlit 官方支持的 [theme] 配置项，
-# 不通过注入 CSS 覆盖内部类名（内部类名每次发版都可能变，绑上去等于给升级埋雷）。
-# 需要更细的控制时，由 app.py 中自有 class 的样式承担。
+# 这里用 Streamlit 官方支持的 [theme] 配置项，是所有样式里最稳的一层。
+# 更细的控制（深色侧栏、卡片、图标块）由 src/ui/theme.py 注入的 CSS 承担，
+# 那部分只挂在标准 HTML 标签、稳定类名和极少数 data-testid 上，
+# 不触碰 st-emotion-cache-* 这类发版就会变的哈希类名。
 
 [theme]
-# 主色：深蓝
-primaryColor = "#1B3A6B"
-# 背景：白
-backgroundColor = "#FFFFFF"
-# 次要背景：浅灰（卡片、侧栏、表格斑马纹）
-secondaryBackgroundColor = "#F4F6F9"
-# 正文
-textColor = "#1F2933"
+# 主操作色（也是侧栏当前页按钮的底色）
+primaryColor = "#2563EB"
+# 页面底色：浅灰，让白色卡片浮起来
+backgroundColor = "#F7F9FC"
+# 控件底色：纯白，在浅灰页面上仍清晰
+secondaryBackgroundColor = "#FFFFFF"
+# 正文色
+textColor = "#101828"
 font = "sans serif"
 
 [server]
-# 演示环境关掉使用统计收集
 headless = true
 
 [browser]
 gatherUsageStats = false
 
 [client]
-# 避免 Streamlit 把每个 widget 的值都同步到 URL，减少重复提交时的干扰
 showErrorDetails = false
 toolbarMode = "minimal"

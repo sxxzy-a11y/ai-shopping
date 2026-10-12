@@ -34,10 +34,13 @@ KEY_COMPARE = "zg_compare"        # ComparisonTable
 #
 # 统一模式：发起方只**记一个请求**，由接收方在控件创建**之前**消费掉。
 # 下面三个键就是这套机制的载体，任何跨页/重置操作都必须走它们。
-KEY_NAV_REQUEST = "zg_nav_request"     # 请求切换到某个页面
+KEY_PAGE = "zg_current_page"           # 当前页面（普通状态，不绑定任何控件）
 KEY_PREFILL = "zg_prefill"             # 请求预填分析页的输入
 KEY_RESET = "zg_reset_requested"       # 请求清空分析页的输入
 KEY_COMPARE_PREFILL = "zg_compare_prefill"  # 请求填充比较页的商品选择
+
+#: 默认落地页
+DEFAULT_PAGE = "首页"
 
 
 def get(key: str, default: Any = None) -> Any:
@@ -48,13 +51,18 @@ def put(key: str, value: Any) -> None:
     st.session_state[key] = value
 
 
-def request_page(name: str) -> None:
-    """请求切换到某个页面。
+def current_page() -> str:
+    return st.session_state.get(KEY_PAGE, DEFAULT_PAGE)
 
-    不能直接写 `zg_page`——那是侧栏 radio 的键，此刻控件已经建好了。
-    记为请求，由 app.py 在创建 radio 之前消费。
+
+def request_page(name: str) -> None:
+    """切换页面。
+
+    导航改用 `st.button` 之后，当前页存在一个**普通**会话键里，不绑定任何
+    控件，所以可以直接写——之前那套「记请求、下一轮消费」的绕路不再需要。
+    （当初绕路是因为键绑在侧栏 radio 上，控件创建后就不能改了。）
     """
-    st.session_state[KEY_NAV_REQUEST] = name
+    st.session_state[KEY_PAGE] = name
 
 
 def clear_analysis() -> None:

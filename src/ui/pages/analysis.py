@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import config
+from src import config, settings
 from src.data_loader import Catalog
 from src.demand_parser import (
     AVAILABLE_CORE_NEEDS,
@@ -20,6 +20,7 @@ from src.demand_parser import (
 from src.errors import EmptyDemand, ZhigouError, to_user_message
 from src.recommender import recommend
 from src.ui import components, state
+from src.ui.theme import bullet_list, facts
 
 #: 首页「快速开始」与输入框占位符共用的示例句。
 EXAMPLE_DEMAND = (
@@ -30,7 +31,7 @@ EXAMPLE_DEMAND = (
 
 _NO_CATEGORY = "（不指定，在全部类别中检索）"
 
-#: 分析页输入控件绑定的 session_state 键。重置与预填都走这里，
+#: 输入控件绑定的 session_state 键。重置与预填都走这里，
 #: 避免在两个地方各写一份键名、改一处漏一处。
 _INPUT_KEYS = (
     "zg_input_text",
@@ -58,13 +59,10 @@ def _apply_pending_inputs() -> None:
     if prefill:
         st.session_state["zg_input_text"] = prefill.get("text", "")
         st.session_state[_CATEGORY_KEY] = prefill.get("category", _NO_CATEGORY)
-        for key in _INPUT_KEYS[1:]:
-            st.session_state[key] = [] if key != "zg_input_budget" else ""
-
-
-# --------------------------------------------------------------------------
-# 输入区
-# --------------------------------------------------------------------------
+        st.session_state["zg_input_budget"] = ""
+        st.session_state["zg_input_use_cases"] = []
+        st.session_state["zg_input_core_needs"] = []
+        st.session_state["zg_input_brands"] = []
 
 
 def _category_options(catalog: Catalog) -> dict[str, str]:
@@ -75,25 +73,23 @@ def _category_options(catalog: Catalog) -> dict[str, str]:
     return mapping
 
 
-def _input_signature(
-    raw_text: str,
-    category: str,
-    budget_raw: str,
-    use_cases: list[str],
-    core_needs: list[str],
-    brands: list[str],
-) -> str:
+def _input_signature() -> str:
     """把当前输入揉成一个指纹，用来判断「条件改过但还没重新分析」。"""
     return repr(
         (
-            raw_text.strip(),
-            category,
-            budget_raw.strip(),
-            tuple(use_cases),
-            tuple(core_needs),
-            tuple(brands),
+            st.session_state.get("zg_input_text", "").strip(),
+            st.session_state.get(_CATEGORY_KEY, _NO_CATEGORY),
+            st.session_state.get("zg_input_budget", "").strip(),
+            tuple(st.session_state.get("zg_input_use_cases", [])),
+            tuple(st.session_state.get("zg_input_core_needs", [])),
+            tuple(st.session_state.get("zg_input_brands", [])),
         )
     )
+
+
+# --------------------------------------------------------------------------
+# 输入区
+# --------------------------------------------------------------------------
 
 
 def _render_inputs(catalog: Catalog) -> None:
@@ -102,17 +98,17 @@ def _render_inputs(catalog: Catalog) -> None:
     st.text_area(
         "用一句话说清楚你要买什么、预算多少、主要用来做什么",
         key="zg_input_text",
-        height=118,
+        height=112,
         placeholder=f"例如：{EXAMPLE_DEMAND}",
         help="尽量写清预算和用途；没提到的信息可以留空，系统会在下方补充询问。",
     )
 
-    st.caption("也可以直接用下面的选项填写，选项的取值会覆盖上面的文字描述。")
+    st.caption("也可以直接用下面的选项填写。选项填了的内容会覆盖上面的文字描述。")
 
     options = _category_options(catalog)
     col1, col2 = st.columns(2)
     with col1:
-        st.selectbox("商品类别", options=list(options), key="zg_input_category")
+        st.selectbox("商品类别", options=list(options), key=_CATEGORY_KEY)
     with col2:
         st.text_input(
             "预算（元）",
@@ -150,17 +146,6 @@ def _render_inputs(catalog: Catalog) -> None:
         )
 
 
-def _current_signature() -> str:
-    return _input_signature(
-        st.session_state.get("zg_input_text", ""),
-        st.session_state.get(_CATEGORY_KEY, _NO_CATEGORY),
-        st.session_state.get("zg_input_budget", ""),
-        st.session_state.get("zg_input_use_cases", []),
-        st.session_state.get("zg_input_core_needs", []),
-        st.session_state.get("zg_input_brands", []),
-    )
-
-
 # --------------------------------------------------------------------------
 # 分析
 # --------------------------------------------------------------------------
@@ -171,8 +156,9 @@ def _run_analysis(catalog: Catalog) -> None:
     state.clear_analysis()
 
     raw_text = st.session_state.get("zg_input_text", "")
-    category_label = st.session_state.get("zg_input_category", _NO_CATEGORY)
-    category = _category_options(catalog).get(category_label, "")
+    category = _category_options(catalog).get(
+        st.session_state.get(_CATEGORY_KEY, _NO_CATEGORY), ""
+    )
     budget_raw = st.session_state.get("zg_input_budget", "")
     use_cases = list(st.session_state.get("zg_input_use_cases", []))
     core_needs = list(st.session_state.get("zg_input_core_needs", []))
@@ -197,11 +183,14 @@ def _run_analysis(catalog: Catalog) -> None:
         return
 
     try:
-        parsed = parse_demand(raw_text, known_brands=catalog.brands()) if raw_text.strip() else Demand()
-        budget = parse_budget_value(budget_raw)
+        parsed = (
+            parse_demand(raw_text, known_brands=catalog.brands())
+            if raw_text.strip()
+            else Demand()
+        )
         structured = Demand(
             category=category,
-            budget=budget,
+            budget=parse_budget_value(budget_raw),
             use_cases=use_cases,
             core_needs=core_needs,
             brand_preferences=brands,
@@ -218,10 +207,27 @@ def _run_analysis(catalog: Catalog) -> None:
         state.put(state.KEY_FOLLOWUPS, questions)
         return
 
-    result = recommend(catalog, demand)
-    state.put(state.KEY_DEMAND, demand)
+    # 个人设置里的偏好作为默认值并入（不覆盖本次手填的内容）
+    prefs = settings.load_preferences()
+    applied = settings.apply_preferences(prefs, demand)
+
+    # 提示只在偏好**确实改变了什么**的时候给。
+    # 不能只看 auto_apply 开关——它默认就是 True，那样每个人每次都会看到
+    # 「已自动带上偏好」，哪怕他一项都没设过，等于在说假话。
+    contributed = bool(
+        set(applied.core_needs) - set(demand.core_needs)
+        or (not demand.brand_preferences and applied.brand_preferences)
+        or (prefs.auto_apply and not prefs.show_over_budget)
+    )
+
+    result = recommend(catalog, applied)
+    if not prefs.show_over_budget:
+        result.over_budget = []
+
+    state.put(state.KEY_DEMAND, applied)
     state.put(state.KEY_RESULT, result)
-    state.put(state.KEY_SIGNATURE, _current_signature())
+    state.put(state.KEY_SIGNATURE, _input_signature())
+    state.put("zg_prefs_applied", contributed)
 
 
 # --------------------------------------------------------------------------
@@ -229,9 +235,8 @@ def _run_analysis(catalog: Catalog) -> None:
 # --------------------------------------------------------------------------
 
 
-def _render_demand_summary(demand: Demand) -> None:
-    components.section_title("需求摘要")
-    pairs = [
+def _summary_pairs(demand: Demand) -> list[tuple[str, str]]:
+    return [
         ("商品类别", demand.category_label or "未指定"),
         ("预算", demand.budget_label),
         ("使用场景", "、".join(demand.use_cases) or "未提供"),
@@ -240,25 +245,59 @@ def _render_demand_summary(demand: Demand) -> None:
         ("硬性限制", "、".join(demand.hard_constraints) or "无"),
         ("可妥协项", "、".join(demand.compromises) or "未说明"),
     ]
-    st.markdown(components.facts(pairs), unsafe_allow_html=True)
+
+
+def _render_left_column(demand: Demand, result) -> None:
+    components.section_title("需求摘要")
+    st.markdown(
+        f'<div class="zg-card is-flat">{facts(_summary_pairs(demand))}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # 预算匹配度：候选中落在预算内的比例。真实可算，不是编的指标。
+    if result.candidate_count:
+        ratio = len(result.within_budget) / result.candidate_count * 100
+        if len(result.within_budget) == 0:
+            desc = "当前条件下没有商品落在预算内"
+        elif ratio >= 50:
+            desc = "推荐商品多数在预算范围内"
+        else:
+            desc = "预算偏紧，多数候选超出预算"
+        st.write("")
+        st.markdown(
+            f'<div class="zg-card is-flat">{components.score_ring(ratio, "预算匹配度", desc)}</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.write("")
+    components.section_title("筛选情况")
+    st.markdown(
+        f'<div class="zg-card is-flat">{facts([
+            ("候选商品", f"{result.candidate_count} 件"),
+            ("预算内", f"{len(result.within_budget)} 件"),
+            ("超出预算", f"{len(result.over_budget)} 件"),
+            ("排序依据", config.SCORE_DISPLAY_NAME),
+        ])}</div>',
+        unsafe_allow_html=True,
+    )
+    components.caption("排序看的是需求匹配度，不是价格高低。")
 
     if demand.raw_text:
         with st.expander("原始输入"):
             st.write(demand.raw_text)
 
 
-def _render_recommendations(result) -> None:
-    components.section_title(f"预算内推荐（{len(result.within_budget)} 件）")
+def _render_right_column(result) -> None:
+    total = len(result.within_budget)
 
-    if not result.within_budget:
-        components.show_notice(
-            "在你给出的条件下没有任何预算内的商品。下面列出了超出预算的候选，"
-            "以及具体可以放宽哪一项。",
-            "warn",
+    if total:
+        components.section_title("为你推荐", total)
+        components.caption(
+            "按需求匹配度排序，第 1 名为当前条件下的首选。"
+            "展开任意一条可以看到评分是怎么算出来的。"
         )
-    else:
         for index, item in enumerate(result.within_budget):
-            components.render_product_card(
+            components.render_product_row(
                 item.product,
                 item.score,
                 item.budget_label,
@@ -266,22 +305,34 @@ def _render_recommendations(result) -> None:
                 highlight=index == 0,
                 expanded=index == 0,
             )
+    else:
+        components.section_title("预算内的推荐", 0)
+        components.empty_state(
+            "在你给出的条件下没有任何预算内的商品。"
+            "右侧下方列出了超出预算的候选，以及具体可以放宽哪一项。",
+            icon_name="alert",
+        )
+
+    if result.notes:
+        st.write("")
+        components.render_notes(result.notes)
 
     if result.over_budget:
-        components.section_title(f"超出预算的候选（{len(result.over_budget)} 件）")
+        components.section_title("超出预算的候选", len(result.over_budget))
         components.caption(
-            "以下商品超出你设定的预算，已逐条标出超出金额。它们不计入上面的推荐排序，"
-            "仅供你判断「加多少钱能买到什么」。"
+            "以下商品超出你设定的预算，已逐条标出超出金额。"
+            "它们不在上面的排序里，只用来判断「加多少钱能买到什么」。"
         )
         for item in result.over_budget:
-            components.render_product_card(
+            components.render_product_row(
                 item.product, item.score, item.budget_label
             )
 
     if result.relaxations:
         components.section_title("放宽条件的建议")
         st.markdown(
-            components.bullet_list(result.relaxations), unsafe_allow_html=True
+            f'<div class="zg-card is-flat">{bullet_list(result.relaxations)}</div>',
+            unsafe_allow_html=True,
         )
 
 
@@ -295,40 +346,40 @@ def _render_results() -> None:
     if followups:
         components.section_title("还需要一点信息")
         components.caption("已经提供的信息不会再问一遍，只补缺口。")
-        st.markdown(components.bullet_list(followups), unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="zg-card is-flat">{bullet_list(followups)}</div>',
+            unsafe_allow_html=True,
+        )
         return
 
     demand = state.get(state.KEY_DEMAND)
     result = state.get(state.KEY_RESULT)
     if demand is None or result is None:
         components.empty_state(
-            "还没有分析结果。填好上面的需求，点「开始分析」即可看到推荐与评分。"
+            "还没有分析结果。填好上面的需求，点「开始分析」即可看到推荐与评分。",
+            icon_name="analysis",
         )
         return
 
-    if state.get(state.KEY_SIGNATURE) != _current_signature():
+    if state.get(state.KEY_SIGNATURE) != _input_signature():
         components.show_notice(
             "你已经修改了输入条件。当前显示的是上一次分析的结果，"
             "点「开始分析」按新条件重新计算。",
             "warn",
         )
 
-    _render_demand_summary(demand)
+    if state.get("zg_prefs_applied"):
+        components.show_notice(
+            "本次分析已自动带上「个人设置」里的偏好。偏好只补空缺，"
+            "你这次手填的内容优先。",
+            "info",
+        )
 
-    components.section_title("筛选与匹配情况")
-    pairs = [
-        ("候选商品", f"{result.candidate_count} 件"),
-        ("预算内", f"{len(result.within_budget)} 件"),
-        ("超出预算", f"{len(result.over_budget)} 件"),
-        ("排序依据", f"{config.SCORE_DISPLAY_NAME}（不是按价格排序）"),
-    ]
-    st.markdown(components.facts(pairs), unsafe_allow_html=True)
-
-    if result.notes:
-        st.write("")
-        components.render_notes(result.notes)
-
-    _render_recommendations(result)
+    left, right = st.columns([2, 3], gap="large")
+    with left:
+        _render_left_column(demand, result)
+    with right:
+        _render_right_column(result)
 
 
 # --------------------------------------------------------------------------
@@ -349,15 +400,22 @@ def render(catalog: Catalog) -> None:
     _render_inputs(catalog)
 
     st.write("")
-    left, right = st.columns([1, 4])
+    left, mid, right = st.columns([1, 1, 4])
     with left:
         clicked = st.button("开始分析", type="primary", use_container_width=True)
-    with right:
-        if st.button("清空条件", use_container_width=False):
+    with mid:
+        if st.button("清空条件", use_container_width=True):
             # 只记请求——此刻输入控件都已创建，就地清空会抛异常
             st.session_state[state.KEY_RESET] = True
             state.clear_analysis()
             st.rerun()
+    with right:
+        if state.get(state.KEY_RESULT) is not None:
+            st.markdown(
+                '<div class="zg-caption" style="padding-top:9px">'
+                "改完条件记得重新点一次「开始分析」。</div>",
+                unsafe_allow_html=True,
+            )
 
     if clicked:
         # 处理中给个明确反馈，避免用户以为点了没反应而反复点击

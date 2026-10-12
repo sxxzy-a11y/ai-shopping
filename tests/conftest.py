@@ -19,6 +19,16 @@ from src.data_loader import Catalog, Product, load_catalog  # noqa: E402
 from src.demand_parser import Demand  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def isolated_settings(tmp_path, monkeypatch):
+    """把偏好设置文件指到临时目录。
+
+    没有这道隔离，设置页的测试会写到开发机真实的 storage/settings.json，
+    后面所有测试都会读到那些残留偏好——这个坑真的踩过一次。
+    """
+    monkeypatch.setenv("ZHIGOU_SETTINGS_PATH", str(tmp_path / "settings.json"))
+
+
 @pytest.fixture(scope="session")
 def catalog() -> Catalog:
     """真实数据集 data/products.json，整个测试会话只加载一次。"""

@@ -17,6 +17,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from src import config
+from src.ui import icons, theme
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 APP_FILE = str(PROJECT_ROOT / "app.py")
@@ -57,6 +58,16 @@ def _all_text(at: AppTest) -> str:
     return re.sub(r"<style>.*?</style>", "", combined, flags=re.DOTALL)
 
 
+def _raw_text(at: AppTest) -> str:
+    """不剥 style 的版本，用于断言注入的样式确实包含某条规则。"""
+    return "\n".join(str(getattr(el, "value", "")) for el in at.markdown)
+
+
+def _go_to_page(at: AppTest, page: str) -> None:
+    """导航已经从 st.radio 改成 st.button，用点击代替 set_value。"""
+    _button(at, page).click().run()
+
+
 def _state(at: AppTest, key: str, default=None):
     """AppTest 的 session_state 不支持 `.get()`，这里补一个。"""
     try:
@@ -86,7 +97,22 @@ def test_app_starts_without_exception():
 
 def test_app_uses_the_expected_page_layout():
     at = _run()
-    assert at.radio[0].options == ["首页", "智能分析", "商品比较", "历史记录", "项目说明"]
+    labels = [b.label for b in at.button]
+    for expected in ("首页", "智能分析", "商品比较", "历史记录", "个人设置", "项目说明"):
+        assert expected in labels, f"侧栏缺少导航项「{expected}」"
+
+
+def test_sidebar_is_dark():
+    """守住那处 data-testid 依赖。
+
+    深色侧栏是唯一一处用到 Streamlit 非公开结构的地方
+    （`[data-testid="stSidebar"]`）。升级 Streamlit 把它改坏了，
+    这条测试会失败，而不是悄悄退化成浅色。
+    """
+    at = _run()
+    css = _raw_text(at)
+    assert 'data-testid="stSidebar"' in css, "侧栏样式选择器不见了"
+    assert theme.NAVY_900 in css, "侧栏深色令牌没有注入"
 
 
 @pytest.mark.parametrize(
@@ -94,7 +120,7 @@ def test_app_uses_the_expected_page_layout():
 )
 def test_every_page_renders_without_exception(page):
     at = _run()
-    at.radio[0].set_value(page).run()
+    _go_to_page(at, page)
     _assert_clean(at)
 
 
@@ -105,22 +131,22 @@ def test_every_page_renders_without_exception(page):
 
 def test_quick_start_prefills_the_analysis_page():
     at = _run()
-    _button(at, "用这个示例").click().run()
+    at.button(key="quick_大学生买笔记本").click().run()
     _assert_clean(at)
 
-    assert at.radio[0].value == "智能分析"
+    assert _state(at, "zg_current_page") == "智能分析"
     assert "预算 3000 元" in at.text_area[0].value
 
 
 def test_quick_start_then_analysis_produces_recommendations():
     at = _run()
-    _button(at, "用这个示例").click().run()
+    at.button(key="quick_大学生买笔记本").click().run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
     body = _all_text(at)
     assert "需求摘要" in body
-    assert "预算内推荐" in body
+    assert "为你推荐" in body
 
     result = at.session_state["zg_result"]
     assert result.has_results
@@ -130,10 +156,10 @@ def test_quick_start_then_analysis_produces_recommendations():
 def test_filling_comparison_from_analysis_does_not_blow_up():
     """这条曾经真的炸过：控件创建之后写它的 session_state 键。"""
     at = _run()
-    _button(at, "用这个示例").click().run()
+    at.button(key="quick_大学生买笔记本").click().run()
     _button(at, "开始分析").click().run()
 
-    at.radio[0].set_value("商品比较").run()
+    _go_to_page(at, "商品比较")
     _assert_clean(at)
 
     _button(at, "用上次分析的推荐").click().run()
@@ -147,7 +173,7 @@ def test_filling_comparison_from_analysis_does_not_blow_up():
 def test_clearing_conditions_does_not_blow_up():
     """这条也炸过：清空按钮在输入控件创建之后动它们的键。"""
     at = _run()
-    _button(at, "用这个示例").click().run()
+    at.button(key="quick_大学生买笔记本").click().run()
     _button(at, "开始分析").click().run()
     assert at.session_state["zg_result"] is not None
 
@@ -165,7 +191,7 @@ def test_clearing_conditions_does_not_blow_up():
 
 def test_analysis_without_any_input_shows_chinese_hint():
     at = _run()
-    at.radio[0].set_value("智能分析").run()
+    _go_to_page(at, "智能分析")
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -174,7 +200,7 @@ def test_analysis_without_any_input_shows_chinese_hint():
 
 def test_invalid_budget_shows_a_chinese_error():
     at = _run()
-    at.radio[0].set_value("智能分析").run()
+    _go_to_page(at, "智能分析")
     at.text_input[0].set_value("三千块").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
@@ -186,7 +212,7 @@ def test_invalid_budget_shows_a_chinese_error():
 
 def test_unsupported_category_is_rejected_explicitly():
     at = _run()
-    at.radio[0].set_value("智能分析").run()
+    _go_to_page(at, "智能分析")
     at.text_area[0].set_value("想买个平板，预算 2000").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
@@ -198,7 +224,7 @@ def test_unsupported_category_is_rejected_explicitly():
 
 def test_missing_key_field_triggers_a_targeted_follow_up():
     at = _run()
-    at.radio[0].set_value("智能分析").run()
+    _go_to_page(at, "智能分析")
     at.text_area[0].set_value("想买台笔记本").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
@@ -211,7 +237,7 @@ def test_missing_key_field_triggers_a_targeted_follow_up():
 
 def test_no_match_gives_relaxation_advice():
     at = _run()
-    at.radio[0].set_value("智能分析").run()
+    _go_to_page(at, "智能分析")
     at.text_area[0].set_value("预算 500 元买笔记本电脑").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
@@ -223,7 +249,7 @@ def test_no_match_gives_relaxation_advice():
 
 def test_comparison_with_too_few_products_shows_hint():
     at = _run()
-    at.radio[0].set_value("商品比较").run()
+    _go_to_page(at, "商品比较")
     _assert_clean(at)
     assert "无法进行横向比较" in _all_text(at)
 
@@ -274,14 +300,111 @@ def test_score_is_never_presented_as_market_reputation():
     """系统评分只能以「需求匹配度」的口径出现，不能冒充市场数据。"""
     at = _run()
     for page in ("首页", "智能分析", "商品比较", "历史记录", "项目说明"):
-        at.radio[0].set_value(page).run()
+        _go_to_page(at, page)
         _assert_clean(at)
         _assert_only_negated(_all_text(at), _MARKET_CLAIM_TERMS, page)
 
 
 def test_score_display_name_is_shown_with_results():
     at = _run()
-    _button(at, "用这个示例").click().run()
+    at.button(key="quick_大学生买笔记本").click().run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
     assert config.SCORE_DISPLAY_NAME in _all_text(at)
+
+
+# --------------------------------------------------------------------------
+# 图标
+# --------------------------------------------------------------------------
+
+
+def test_every_icon_name_is_defined():
+    """图标表里不能有返回空内容的条目。"""
+    for name in icons.available_icons():
+        assert icons.icon(name), f"图标「{name}」渲染为空"
+
+
+def test_unknown_icon_falls_back_instead_of_leaving_a_hole():
+    rendered = icons.icon("definitely_not_an_icon")
+    assert rendered.startswith("<svg"), "未知图标名应回退到通用图标，而不是返回空串"
+
+
+def test_no_page_uses_an_undefined_icon(caplog):
+    """跑遍所有页面，断言没有任何图标名回退。
+
+    这条测试是有来历的：统计卡上写了 `view_column`，而这个名字在自绘图标表里
+    并不存在（那是 Material 的名字），结果那一格渲染出了一个空洞——
+    而且没有任何报错。
+    """
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="zhigou.icons"):
+        at = _run()
+        for page in ("首页", "智能分析", "商品比较", "历史记录", "个人设置", "项目说明"):
+            _go_to_page(at, page)
+            _assert_clean(at)
+
+        # 也跑一遍有结果的路径，那里图标更多
+        _go_to_page(at, "首页")
+        at.button(key="quick_大学生买笔记本").click().run()
+        _button(at, "开始分析").click().run()
+        _assert_clean(at)
+        _go_to_page(at, "商品比较")
+        _button(at, "用上次分析的推荐").click().run()
+
+    fallbacks = [r.message for r in caplog.records if "未知图标名" in str(r.message)]
+    assert fallbacks == [], f"有页面用了不存在的图标名：{fallbacks}"
+
+
+# --------------------------------------------------------------------------
+# 设置页
+# --------------------------------------------------------------------------
+
+
+def test_settings_page_renders_and_exposes_the_real_options(catalog):
+    at = _run()
+    _go_to_page(at, "个人设置")
+    _assert_clean(at)
+
+    assert "品牌偏好" in _all_text(at)
+    assert "价格取向" in _all_text(at)
+    assert "长期关注项" in _all_text(at)
+
+
+def test_preference_notice_is_not_shown_when_nothing_was_applied():
+    """没设过任何偏好时，不能显示「已自动带上偏好」——那是假话。"""
+    at = _run()
+    at.button(key="quick_大学生买笔记本").click().run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    assert _state(at, "zg_prefs_applied") is False
+    assert "已自动带上" not in _all_text(at)
+
+
+def test_preferences_are_applied_and_reported():
+    """设了偏好之后，提示必须出现，且核心需求确实被补进了需求里。
+
+    经会话状态驱动而不是操作 pills 控件：AppTest 对 `st.pills` 的选项
+    表示形式不稳定（set_value 会报 `content: "p" is not in list`），
+    而保存按钮本来就是从会话状态读值的，这条路径覆盖的正是真实逻辑。
+    """
+    at = _run()
+    _go_to_page(at, "个人设置")
+
+    at.session_state["zg_pref_focus"] = ["续航", "便携"]
+    at.run()
+    _button(at, "保存设置").click().run()
+    _assert_clean(at)
+
+    _go_to_page(at, "首页")
+    at.button(key="quick_大学生买笔记本").click().run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    assert _state(at, "zg_prefs_applied") is True
+    assert "已自动带上" in _all_text(at)
+
+    demand = _state(at, "zg_demand")
+    assert "续航" in demand.core_needs
+    assert "便携" in demand.core_needs
