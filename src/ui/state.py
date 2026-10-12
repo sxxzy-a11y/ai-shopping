@@ -23,7 +23,9 @@ KEY_DEMAND = "zg_demand"
 KEY_RESULT = "zg_result"          # RecommendationResult
 KEY_ERROR = "zg_error"            # 面向用户的中文错误文案
 KEY_FOLLOWUPS = "zg_followups"    # 需要追问的问题列表
-KEY_SIGNATURE = "zg_signature"    # 本次分析的条件指纹（用于识别重复提交）
+KEY_SIGNATURE = "zg_signature"    # 本次分析的条件指纹（用于识别条件改动）
+KEY_REPORT = "zg_report"          # DecisionReport：当前分析的完整报告
+KEY_SAVED_SIGNATURE = "zg_saved_signature"  # 已落库那一次的条件指纹（会话级去重）
 KEY_SELECTED = "zg_selected"      # 比较页选中的商品 ID
 KEY_COMPARE = "zg_compare"        # ComparisonTable
 
@@ -67,8 +69,9 @@ def request_page(name: str) -> None:
 
 def clear_analysis() -> None:
     """清掉上一次分析的一切痕迹。"""
-    for key in (KEY_DEMAND, KEY_RESULT, KEY_ERROR, KEY_FOLLOWUPS, KEY_SIGNATURE):
+    for key in (KEY_DEMAND, KEY_RESULT, KEY_ERROR, KEY_FOLLOWUPS, KEY_SIGNATURE, KEY_REPORT):
         st.session_state.pop(key, None)
+    # KEY_SAVED_SIGNATURE 刻意不清：重复提交同一组条件不应重复落库
 
 
 # --------------------------------------------------------------------------
@@ -100,3 +103,48 @@ def current_mode() -> tuple[str, str]:
     if config.is_ai_configured():
         return "AI 增强模式", f"已接入模型 {config.llm_model()}"
     return "本地演示模式", "未配置模型密钥，全部由本地规则完成，不联网"
+
+
+# --------------------------------------------------------------------------
+# 控件状态镜像
+# --------------------------------------------------------------------------
+#
+# 为什么需要这个东西：侧栏导航按钮的处理器里调了 `st.rerun()`，那次运行在
+# 渲染完侧栏之后就中断了，页面正文的控件根本没被「看到」，Streamlit 于是把它们
+# 的 session 状态清掉。表现出来就是：用户在分析页写了一段需求，去历史页看一眼
+# 再回来，输入全没了——这在真实浏览器里复现过。
+#
+# 对策是把这些值另存一份到**普通**会话键（不绑控件，不会被清理），
+# 下次渲染时如果发现控件键不见了就从镜像里恢复。
+
+_MIRROR_PREFIX = "zg_mirror_"
+
+
+def snapshot_widgets(namespace: str, keys: dict[str, Any]) -> None:
+    """把一组控件的当前值记进镜像。keys 形如 {控件键: 默认值}。"""
+    from copy import copy
+
+    recorded: dict[str, Any] = {}
+    for key, default in keys.items():
+        value = st.session_state.get(key, default)
+        # 列表要拷一份，否则镜像和控件共用同一个对象，控件被清时会一起没
+        recorded[key] = copy(value) if isinstance(value, list) else value
+    st.session_state[_MIRROR_PREFIX + namespace] = recorded
+
+
+def restore_widgets(namespace: str, keys: dict[str, Any]) -> None:
+    """控件键被清掉时从镜像恢复。
+
+    只在键**不存在**时写入。键还在就说明是用户当前这一次的输入，不能被镜像盖掉。
+    """
+    mirror = st.session_state.get(_MIRROR_PREFIX + namespace)
+    if not mirror:
+        return
+    for key, default in keys.items():
+        if key not in st.session_state and key in mirror:
+            value = mirror[key]
+            st.session_state[key] = list(value) if isinstance(value, list) else value
+
+
+def clear_mirror(namespace: str) -> None:
+    st.session_state.pop(_MIRROR_PREFIX + namespace, None)

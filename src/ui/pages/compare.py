@@ -15,6 +15,8 @@ from src.ui import components, state
 from src.ui.theme import bullet_list
 
 _PICK_KEY = "zg_compare_pick"
+_MIRROR_NS = "compare_pick"
+_PICK_DEFAULTS = {_PICK_KEY: []}
 
 
 def _label(product) -> str:
@@ -30,6 +32,9 @@ def _apply_pending_pick() -> None:
     requested = st.session_state.pop(state.KEY_COMPARE_PREFILL, None)
     if requested is not None:
         st.session_state[_PICK_KEY] = requested
+        return
+    # 切页会清掉控件状态，这里恢复用户之前选好的商品
+    state.restore_widgets(_MIRROR_NS, _PICK_DEFAULTS)
 
 
 def _request_fill_from_analysis() -> None:
@@ -75,6 +80,8 @@ def render(catalog: Catalog) -> None:
                 "这里就能一键填入推荐结果。</div>",
                 unsafe_allow_html=True,
             )
+
+    state.snapshot_widgets(_MIRROR_NS, _PICK_DEFAULTS)
 
     if len(chosen) < config.MIN_COMPARE_COUNT:
         st.write("")
@@ -166,6 +173,8 @@ def render(catalog: Catalog) -> None:
             with right:
                 st.markdown('<div class="zg-caption">缺点</div>', unsafe_allow_html=True)
                 st.markdown(bullet_list(product.cons, tone="con"), unsafe_allow_html=True)
+
+    state.snapshot_widgets(_MIRROR_NS, _PICK_DEFAULTS)
 
     st.write("")
     components.caption(

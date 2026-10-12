@@ -17,7 +17,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from src import config
-from src.ui import icons, theme
+from src.ui import icons, state, theme
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 APP_FILE = str(PROJECT_ROOT / "app.py")
@@ -408,3 +408,220 @@ def test_preferences_are_applied_and_reported():
     demand = _state(at, "zg_demand")
     assert "续航" in demand.core_needs
     assert "便携" in demand.core_needs
+
+
+# --------------------------------------------------------------------------
+# 历史记录与收藏（阶段四）
+# --------------------------------------------------------------------------
+
+
+def _analyze_laptop(at: AppTest) -> AppTest:
+    """从首页快速开始跑一次完整分析。"""
+    _go_to_page(at, "首页")
+    at.button(key="quick_大学生买笔记本").click().run()
+    _button(at, "开始分析").click().run()
+    return at
+
+
+def test_analysis_is_saved_to_history():
+    at = _analyze_laptop(_run())
+    _assert_clean(at)
+
+    assert _state(at, state.KEY_REPORT) is not None
+
+    _go_to_page(at, "历史记录")
+    _assert_clean(at)
+    assert "共 1 条记录" in _all_text(at)
+
+
+def test_repeated_submit_does_not_duplicate_the_record():
+    """spec：快速重复点击只产生一条历史记录。"""
+    at = _analyze_laptop(_run())
+
+    for _ in range(3):
+        _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    _go_to_page(at, "历史记录")
+    assert "共 1 条记录" in _all_text(at), "重复提交产生了重复记录"
+
+
+def test_changing_conditions_creates_a_second_record():
+    """去重是按条件指纹的，换了条件必须另存一条。"""
+    at = _analyze_laptop(_run())
+
+    _go_to_page(at, "智能分析")
+    at.text_input[0].set_value("5000").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    _go_to_page(at, "历史记录")
+    assert "共 2 条记录" in _all_text(at)
+
+
+def test_history_report_can_be_reopened():
+    at = _analyze_laptop(_run())
+    _go_to_page(at, "历史记录")
+
+    _button(at, "查看详情").click().run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "需求摘要" in body
+    assert "最终决策建议" in body
+    assert "需要进一步核实的信息" in body
+
+
+def test_reopened_report_is_marked_with_its_generation_time():
+    at = _analyze_laptop(_run())
+    _go_to_page(at, "历史记录")
+    _button(at, "查看详情").click().run()
+    _assert_clean(at)
+
+    assert "生成时间：" in _all_text(at)
+
+
+def test_history_empty_state():
+    at = _run()
+    _go_to_page(at, "历史记录")
+    _assert_clean(at)
+    assert "还没有分析记录" in _all_text(at)
+
+
+def test_corrupt_database_reports_but_does_not_block_analysis(tmp_path, monkeypatch):
+    """spec：数据库损坏时历史页给出提示，智能分析页仍可正常分析。"""
+    broken = tmp_path / "broken.db"
+    broken.write_bytes(b"definitely not a sqlite file" * 60)
+    monkeypatch.setenv("ZHIGOU_DB_PATH", str(broken))
+
+    at = _run()
+    _go_to_page(at, "历史记录")
+    _assert_clean(at)
+    assert "暂不可用" in _all_text(at)
+
+    # 关键：分析仍然可用，而且不能把 traceback 或兜底错误抛出来
+    _analyze_laptop(at)
+    _assert_clean(at)
+    assert _state(at, state.KEY_RESULT) is not None
+
+
+def test_export_buttons_are_available_after_analysis():
+    """导出入口用的是 st.download_button。
+
+    它不在 `at.button` 里（AppTest 把下载按钮单独归类），
+    要用 `at.get("download_button")` 取。
+    """
+    at = _analyze_laptop(_run())
+    _assert_clean(at)
+
+    downloads = at.get("download_button")
+    labels = [d.label for d in downloads]
+    assert len(downloads) == 2, f"应有 Markdown 与 CSV 两个导出入口，实际 {labels}"
+    assert any("Markdown" in label for label in labels), labels
+    assert any("CSV" in label for label in labels), labels
+
+
+def test_exported_content_covers_the_whole_report():
+    """导出的是报告本身，不是空文件——按钮在不在是一回事，内容对不对是另一回事。"""
+    from src import report_service
+
+    at = _analyze_laptop(_run())
+    report = _state(at, state.KEY_REPORT)
+    assert report is not None
+
+    markdown = report_service.to_markdown(report)
+    for section in ("需求摘要", "推荐商品及排序", "最终决策建议", "数据说明"):
+        assert section in markdown
+
+    csv_text = report_service.to_csv(report)
+    assert csv_text.splitlines()[0]
+    assert "商品名称" in csv_text
+
+
+def test_favorite_round_trip():
+    at = _analyze_laptop(_run())
+
+    labels = [b.label for b in at.button]
+    assert "收藏这件商品" in labels, f"推荐列表里没有收藏按钮：{labels}"
+
+    _button(at, "收藏这件商品").click().run()
+    _assert_clean(at)
+
+    _go_to_page(at, "历史记录")
+    body = _all_text(at)
+    assert "共收藏 1 件商品" in body
+
+
+def test_unfavorite_removes_it():
+    at = _analyze_laptop(_run())
+    _button(at, "收藏这件商品").click().run()
+
+    _go_to_page(at, "历史记录")
+    _button(at, "取消收藏").click().run()
+    _assert_clean(at)
+
+    assert "还没有收藏任何商品" in _all_text(at)
+
+
+def test_favorite_of_a_missing_product_is_labelled():
+    """spec：收藏的商品已从数据文件移除时，界面标注且不崩溃。"""
+    from src import database
+
+    database.add_favorite("GONE-9999")
+
+    at = _run()
+    _go_to_page(at, "历史记录")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "GONE-9999" in body
+    assert "已不在当前数据集" in body
+
+
+def test_typed_demand_survives_a_page_switch():
+    """切页回来后输入还在。
+
+    这条测试锁的是一个真实缺陷：侧栏导航按钮的处理器里调了 `st.rerun()`，
+    那次运行渲染完侧栏就中断了，正文控件没被「看到」，Streamlit 会清掉它们的
+    session 状态。表现出来就是用户写了一半的需求，去历史页看一眼再回来就没了。
+    修法是给输入做一份不绑控件的镜像，键不见了就恢复。
+    """
+    at = _run()
+    _go_to_page(at, "智能分析")
+
+    typed = "预算 2500，想买一副通勤用的降噪耳机"
+    at.text_area[0].set_value(typed).run()
+    assert at.text_area[0].value == typed
+
+    _go_to_page(at, "历史记录")
+    _go_to_page(at, "智能分析")
+
+    assert at.text_area[0].value == typed, "切页之后输入被清掉了"
+
+
+def test_selected_products_survive_a_page_switch():
+    """比较页选中的商品同样不能被切页清掉。"""
+    at = _analyze_laptop(_run())
+    _go_to_page(at, "商品比较")
+
+    _button(at, "用上次分析的推荐").click().run()
+    picked = list(_state(at, "zg_compare_pick"))
+    assert len(picked) >= 3
+
+    _go_to_page(at, "首页")
+    _go_to_page(at, "商品比较")
+
+    assert list(_state(at, "zg_compare_pick")) == picked, "切页之后选中的商品被清掉了"
+
+
+def test_clearing_conditions_does_not_get_undone_by_the_mirror():
+    """清空是用户的明确意图，镜像不能把旧值恢复回来。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("随便写点什么").run()
+    assert at.text_area[0].value
+
+    _button(at, "清空条件").click().run()
+    _assert_clean(at)
+
+    assert at.text_area[0].value == "", "镜像把已清空的内容又恢复了"

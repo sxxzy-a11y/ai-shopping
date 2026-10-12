@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 import streamlit as st
 
@@ -347,8 +348,14 @@ def render_product_row(
     rank: int | None = None,
     highlight: bool = False,
     expanded: bool = False,
+    extra_actions: Callable[[], None] | None = None,
 ) -> None:
-    """商品行 + 可展开的评分构成与优缺点。"""
+    """商品行 + 可展开的评分构成与优缺点。
+
+    `extra_actions` 会在「优点与不足」展开区末尾调用一次，用于挂收藏之类的
+    操作按钮。做成回调而不是直接在这里写按钮，是为了让组件层不依赖数据库——
+    它只管画，不该知道数据存在哪。
+    """
     st.markdown(
         product_row(product, score, budget_label, rank=rank, highlight=highlight),
         unsafe_allow_html=True,
@@ -363,6 +370,9 @@ def render_product_row(
         with right:
             st.markdown('<div class="zg-caption">缺点</div>', unsafe_allow_html=True)
             st.markdown(bullet_list(product.cons, tone="con"), unsafe_allow_html=True)
+        if extra_actions is not None:
+            st.write("")
+            extra_actions()
 
 
 def product_mini(product: Product, *, budget_label: str = "") -> str:
@@ -397,3 +407,116 @@ def runtime_chip() -> str:
 
 def facts_block(pairs: list[tuple[str, str]]) -> None:
     st.markdown(facts(pairs), unsafe_allow_html=True)
+
+
+# --------------------------------------------------------------------------
+# 历史报告（快照）的渲染
+# --------------------------------------------------------------------------
+#
+# 历史报告里存的是 ReportItem 快照，不是当前的 Product + ScoreResult，
+# 所以不能复用上面的商品行渲染——那会诱使我们去当前数据里查商品，
+# 从而把「还原历史结论」变成「按当前数据重算」。这两件事必须分开。
+
+
+def report_item_card(item, *, show_rank: bool = True) -> str:
+    """渲染一条历史推荐快照。"""
+    rank_html = ""
+    if show_rank:
+        muted = " is-muted" if item.rank > 3 else ""
+        rank_html = f'<div class="zg-rank{muted}">{item.rank}</div>'
+
+    budget_tone = _budget_tone(item.budget_label)
+    chips = chip(item.budget_label, budget_tone) + chip(
+        item.match_level, _MATCH_TONE.get(item.match_level, "neutral")
+    )
+
+    return (
+        f'<div class="zg-card{" is-accent" if show_rank and item.rank == 1 else ""}">'
+        f'  <div class="zg-row">'
+        f"    {rank_html}"
+        f'    <div class="zg-row-main">'
+        f'      <div class="zg-row-name">{esc(item.name)}</div>'
+        f'      <div class="zg-row-spec">{esc(item.brand or "品牌未知")}'
+        f"        · {esc(item.category_label)}</div>"
+        f'      <div style="display:flex;flex-wrap:wrap;gap:6px">{chips}</div>'
+        f"    </div>"
+        f'    <div style="text-align:right;flex-shrink:0">'
+        f'      <div class="zg-price">{esc(item.price_label)}</div>'
+        f"    </div>"
+        f'    <div class="zg-row-score">'
+        f'      <div class="zg-score-num">{item.score_total:.0f}<small>/100</small></div>'
+        f'      <div style="margin:3px 0">{stars(item.score_total)}</div>'
+        f'      <div class="zg-score-name">{esc(config.SCORE_DISPLAY_NAME)}</div>'
+        f"    </div>"
+        f"  </div>"
+        f'  <div class="zg-source">数据来源：{esc(item.data_source or "信息缺失")}'
+        f"　·　更新时间：{esc(item.updated_at or '信息缺失')}</div>"
+        f"</div>"
+    )
+
+
+def render_stored_report(report) -> None:
+    """把一份**固化的**历史报告渲染出来。
+
+    所有数据都来自报告快照本身，不访问当前商品库——
+    这样商品数据更新后，历史报告的结论依然与当时一致。
+    """
+    from src.ui.theme import notice as notice_html
+
+    st.markdown(
+        f'<div class="zg-caption">生成时间：{esc(report.created_at.replace("T", " ")[:19])}</div>',
+        unsafe_allow_html=True,
+    )
+
+    section_title("需求摘要")
+    st.markdown(f'<div class="zg-card is-flat">{facts(report.demand_facts)}</div>', unsafe_allow_html=True)
+    if report.demand_text:
+        with st.expander("原始输入"):
+            st.write(report.demand_text)
+
+    section_title("预算与筛选条件")
+    st.markdown(f'<div class="zg-card is-flat">{facts(report.filter_facts)}</div>', unsafe_allow_html=True)
+
+    section_title("推荐商品及排序", len(report.recommendations) or None)
+    if report.recommendations:
+        for item in report.recommendations:
+            st.markdown(report_item_card(item), unsafe_allow_html=True)
+            with st.expander(f"{item.name} 的推荐理由与优缺点"):
+                st.markdown('<div class="zg-caption">推荐理由</div>', unsafe_allow_html=True)
+                st.markdown(bullet_list(item.reasons), unsafe_allow_html=True)
+                left, right = st.columns(2)
+                with left:
+                    st.markdown('<div class="zg-caption">优点</div>', unsafe_allow_html=True)
+                    st.markdown(bullet_list(item.pros), unsafe_allow_html=True)
+                with right:
+                    st.markdown('<div class="zg-caption">缺点</div>', unsafe_allow_html=True)
+                    st.markdown(bullet_list(item.cons, tone="con"), unsafe_allow_html=True)
+    else:
+        empty_state("这次分析没有预算内的匹配商品。", icon_name="alert")
+
+    if report.over_budget:
+        section_title("超出预算的候选", len(report.over_budget))
+        for item in report.over_budget:
+            st.markdown(report_item_card(item, show_rank=False), unsafe_allow_html=True)
+
+    if report.relaxations:
+        section_title("放宽条件的建议")
+        st.markdown(
+            f'<div class="zg-card is-flat">{bullet_list(report.relaxations)}</div>',
+            unsafe_allow_html=True,
+        )
+
+    section_title("需要进一步核实的信息")
+    st.markdown(
+        f'<div class="zg-card is-flat">{bullet_list(report.to_verify or ["无"])}</div>',
+        unsafe_allow_html=True,
+    )
+
+    section_title("最终决策建议")
+    st.markdown(
+        f'<div class="zg-card is-accent">{esc(report.conclusion)}</div>',
+        unsafe_allow_html=True,
+    )
+
+    if report.dataset_disclaimer:
+        st.markdown(notice_html(report.dataset_disclaimer, "warn"), unsafe_allow_html=True)

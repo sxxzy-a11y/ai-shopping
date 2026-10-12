@@ -20,13 +20,15 @@ from src.demand_parser import Demand  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def isolated_settings(tmp_path, monkeypatch):
-    """把偏好设置文件指到临时目录。
+def isolated_local_state(tmp_path, monkeypatch):
+    """把偏好设置与数据库都指到临时目录。
 
-    没有这道隔离，设置页的测试会写到开发机真实的 storage/settings.json，
-    后面所有测试都会读到那些残留偏好——这个坑真的踩过一次。
+    没有这道隔离，界面测试会写到开发机真实的 storage/settings.json 和
+    storage/zhigou.db，后面所有测试都会读到残留状态——这个坑真的踩过一次
+    （设置文件那次），数据库这边是同一个问题，所以一次隔离干净。
     """
     monkeypatch.setenv("ZHIGOU_SETTINGS_PATH", str(tmp_path / "settings.json"))
+    monkeypatch.setenv("ZHIGOU_DB_PATH", str(tmp_path / "zhigou.db"))
 
 
 @pytest.fixture(scope="session")

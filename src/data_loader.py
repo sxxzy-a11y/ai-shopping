@@ -59,8 +59,29 @@ class Product(BaseModel):
     cons: list[str] = Field(default_factory=list)
     data_source: str = ""
     updated_at: str = ""
-    #: 加载时判定为缺失的字段名，界面据此标注「信息不完整」。
-    missing_fields: list[str] = Field(default_factory=list)
+
+    @property
+    def missing_fields(self) -> list[str]:
+        """当前缺失的必填字段名。
+
+        刻意做成**派生属性**而不是存储字段。存下来的列表会在数据被改动后
+        失效——比如某处把 price 置空，列表里还留着「已完整」的旧结论；
+        直接构造 Product（不经过加载器）时更是会谎报为完整。
+        派生值永远和当前字段一致。
+        """
+        checks: dict[str, bool] = {
+            "name": bool(self.name),
+            "category": bool(self.category),
+            "price": self.price is not None,
+            "brand": bool(self.brand),
+            "specs": bool(self.specs),
+            "use_cases": bool(self.use_cases),
+            "pros": bool(self.pros),
+            "cons": bool(self.cons),
+            "data_source": bool(self.data_source),
+            "updated_at": bool(self.updated_at),
+        }
+        return [name for name, ok in checks.items() if not ok]
 
     @property
     def is_complete(self) -> bool:
@@ -190,39 +211,23 @@ def _build_product(record: Any) -> Product | None:
     if not product_id:
         return None
 
-    specs = _coerce_specs(record.get("specs"))
-    price = _coerce_price(record.get("price"))
-
-    product = Product(
+    # 逐项转换都是宽容的：拿到不合预期的类型就落到安全值，
+    # 由 Product.missing_fields 这个派生属性实时判定哪些字段算缺失。
+    # 注意判定依据是「转换后是否为空」而不是「原始键是否存在」——
+    # price 填了 "abc" 这种情况同样属于数据不可用。
+    return Product(
         id=product_id,
         name=_coerce_text(record.get("name")),
         category=_coerce_text(record.get("category")),
-        price=price,
+        price=_coerce_price(record.get("price")),
         brand=_coerce_text(record.get("brand")),
-        specs=specs,
+        specs=_coerce_specs(record.get("specs")),
         use_cases=_coerce_str_list(record.get("use_cases")),
         pros=_coerce_str_list(record.get("pros")),
         cons=_coerce_str_list(record.get("cons")),
         data_source=_coerce_text(record.get("data_source")),
         updated_at=_coerce_text(record.get("updated_at")),
     )
-
-    # 逐项判定缺失。注意用的是「转换后是否为空」而不是「原始键是否存在」，
-    # 因为 price 填了 "abc" 这种情况同样属于数据不可用。
-    checks: dict[str, bool] = {
-        "name": bool(product.name),
-        "category": bool(product.category),
-        "price": product.price is not None,
-        "brand": bool(product.brand),
-        "specs": bool(product.specs),
-        "use_cases": bool(product.use_cases),
-        "pros": bool(product.pros),
-        "cons": bool(product.cons),
-        "data_source": bool(product.data_source),
-        "updated_at": bool(product.updated_at),
-    }
-    product.missing_fields = [name for name, ok in checks.items() if not ok]
-    return product
 
 
 # --------------------------------------------------------------------------

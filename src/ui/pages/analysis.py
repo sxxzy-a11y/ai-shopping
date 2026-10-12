@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import config, settings
+from src import config, database, report_service, settings
 from src.data_loader import Catalog
 from src.demand_parser import (
     AVAILABLE_CORE_NEEDS,
@@ -42,27 +42,51 @@ _INPUT_KEYS = (
 )
 _CATEGORY_KEY = "zg_input_category"
 
+#: 各输入控件的初始值。镜像与恢复都以它为基准。
+_INPUT_DEFAULTS: dict[str, object] = {
+    "zg_input_text": "",
+    "zg_input_budget": "",
+    "zg_input_use_cases": [],
+    "zg_input_core_needs": [],
+    "zg_input_brands": [],
+    _CATEGORY_KEY: _NO_CATEGORY,
+}
 
-def _apply_pending_inputs() -> None:
-    """在控件创建**之前**处理预填与重置请求。
+#: 镜像命名空间，与其它页面区分开
+_MIRROR_NS = "analysis_inputs"
 
-    必须在 `_render_inputs()` 之前调用。Streamlit 不允许在控件实例化后
-    修改它绑定的 session_state 键，所以「清空条件」「快速开始」这类操作
-    都不能就地改值，只能记请求、下一轮在这里消费。
+
+def _prepare_inputs() -> None:
+    """在控件创建**之前**把输入状态准备好。
+
+    必须在 `_render_inputs()` 之前调用，做两件事：
+
+    1. 处理「预填」与「清空」请求。Streamlit 不允许在控件实例化后改它绑定的
+       session_state 键，所以这两类操作只能记请求、下一轮在这里消费。
+    2. 键不存在时从镜像恢复。切页会触发侧栏按钮里的 `st.rerun()`，那次运行
+       在渲染完侧栏后就中断了，正文控件没被「看到」，Streamlit 会清掉它们的
+       session 状态——不恢复的话，用户写了一半的需求切页回来就没了。
     """
+    acted = False
+
     if st.session_state.pop(state.KEY_RESET, False):
         for key in _INPUT_KEYS:
             st.session_state.pop(key, None)
         st.session_state[_CATEGORY_KEY] = _NO_CATEGORY
+        acted = True
 
     prefill = st.session_state.pop(state.KEY_PREFILL, None)
     if prefill:
         st.session_state["zg_input_text"] = prefill.get("text", "")
         st.session_state[_CATEGORY_KEY] = prefill.get("category", _NO_CATEGORY)
-        st.session_state["zg_input_budget"] = ""
-        st.session_state["zg_input_use_cases"] = []
-        st.session_state["zg_input_core_needs"] = []
-        st.session_state["zg_input_brands"] = []
+        for key, default in _INPUT_DEFAULTS.items():
+            if key not in ("zg_input_text", _CATEGORY_KEY):
+                st.session_state[key] = default
+        acted = True
+
+    # 清空/预填是用户明确的意图，不能被镜像里的旧值盖回去
+    if not acted:
+        state.restore_widgets(_MIRROR_NS, _INPUT_DEFAULTS)
 
 
 def _category_options(catalog: Catalog) -> dict[str, str]:
@@ -224,10 +248,35 @@ def _run_analysis(catalog: Catalog) -> None:
     if not prefs.show_over_budget:
         result.over_budget = []
 
+    signature = _input_signature()
     state.put(state.KEY_DEMAND, applied)
     state.put(state.KEY_RESULT, result)
-    state.put(state.KEY_SIGNATURE, _input_signature())
+    state.put(state.KEY_SIGNATURE, signature)
     state.put("zg_prefs_applied", contributed)
+
+    # 生成报告并落库。报告在这一刻固化，之后商品数据怎么变都不影响它。
+    report = report_service.build_report(catalog, applied, result)
+    state.put(state.KEY_REPORT, report)
+    _persist(report, signature)
+
+
+def _persist(report, signature: str) -> None:
+    """把报告写进历史记录，带会话级去重。
+
+    去重依据是「条件指纹」：同一组条件重复点「开始分析」只落一条记录。
+    写入失败**不中断**当前页面——结果还在内存里，用户这次分析没有白做。
+    """
+    if st.session_state.get(state.KEY_SAVED_SIGNATURE) == signature:
+        return
+
+    try:
+        database.save_analysis(report)
+    except ZhigouError as exc:
+        state.put("zg_save_error", to_user_message(exc))
+        return
+
+    st.session_state[state.KEY_SAVED_SIGNATURE] = signature
+    state.put("zg_save_error", None)
 
 
 # --------------------------------------------------------------------------
@@ -287,6 +336,24 @@ def _render_left_column(demand: Demand, result) -> None:
             st.write(demand.raw_text)
 
 
+def _favorite_actions(product) -> None:
+    """商品行展开区里的收藏按钮。"""
+    try:
+        favorited = database.is_favorite(product.id)
+    except ZhigouError:
+        favorited = False
+
+    label = "取消收藏" if favorited else "收藏这件商品"
+    if st.button(label, key=f"fav_{product.id}", use_container_width=False):
+        try:
+            database.remove_favorite(product.id) if favorited else database.add_favorite(product.id)
+        except ZhigouError as exc:
+            state.put("zg_fav_error", to_user_message(exc))
+        else:
+            state.put("zg_fav_error", None)
+        st.rerun()
+
+
 def _render_right_column(result) -> None:
     total = len(result.within_budget)
 
@@ -304,6 +371,7 @@ def _render_right_column(result) -> None:
                 rank=index + 1,
                 highlight=index == 0,
                 expanded=index == 0,
+                extra_actions=lambda p=item.product: _favorite_actions(p),
             )
     else:
         components.section_title("预算内的推荐", 0)
@@ -325,7 +393,10 @@ def _render_right_column(result) -> None:
         )
         for item in result.over_budget:
             components.render_product_row(
-                item.product, item.score, item.budget_label
+                item.product,
+                item.score,
+                item.budget_label,
+                extra_actions=lambda p=item.product: _favorite_actions(p),
             )
 
     if result.relaxations:
@@ -333,6 +404,29 @@ def _render_right_column(result) -> None:
         st.markdown(
             f'<div class="zg-card is-flat">{bullet_list(result.relaxations)}</div>',
             unsafe_allow_html=True,
+        )
+
+
+def _render_export(report) -> None:
+    """导出按钮。导出内容与界面一致，且保留演示数据来源标注。"""
+    col_md, col_csv, _spacer = st.columns([1, 1, 3])
+    with col_md:
+        st.download_button(
+            "导出 Markdown",
+            data=report_service.markdown_bytes(report),
+            file_name=report_service.suggested_filename(report, "md"),
+            mime="text/markdown",
+            key="zg_export_md",
+            use_container_width=True,
+        )
+    with col_csv:
+        st.download_button(
+            "导出 CSV",
+            data=report_service.csv_bytes(report),
+            file_name=report_service.suggested_filename(report, "csv"),
+            mime="text/csv",
+            key="zg_export_csv",
+            use_container_width=True,
         )
 
 
@@ -375,6 +469,19 @@ def _render_results() -> None:
             "info",
         )
 
+    save_error = state.get("zg_save_error")
+    if save_error:
+        components.show_notice(save_error, "warn")
+
+    fav_error = state.get("zg_fav_error")
+    if fav_error:
+        components.show_notice(fav_error, "warn")
+
+    report = state.get(state.KEY_REPORT)
+    if report is not None:
+        st.write("")
+        _render_export(report)
+
     left, right = st.columns([2, 3], gap="large")
     with left:
         _render_left_column(demand, result)
@@ -389,7 +496,7 @@ def _render_results() -> None:
 
 def render(catalog: Catalog) -> None:
     # 必须在任何输入控件创建之前执行
-    _apply_pending_inputs()
+    _prepare_inputs()
 
     components.page_header(
         "智能分析",
@@ -421,6 +528,9 @@ def render(catalog: Catalog) -> None:
         # 处理中给个明确反馈，避免用户以为点了没反应而反复点击
         with st.spinner("正在解析需求、筛选商品并计算匹配度…"):
             _run_analysis(catalog)
+
+    # 控件都已渲染完，此刻的值就是用户当前所见，记进镜像备下次切页恢复
+    state.snapshot_widgets(_MIRROR_NS, _INPUT_DEFAULTS)
 
     st.write("")
     _render_results()
