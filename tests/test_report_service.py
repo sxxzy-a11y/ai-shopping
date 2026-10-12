@@ -333,3 +333,39 @@ def test_report_timestamp_is_local_and_sortable(sample_report):
     parsed = datetime.fromisoformat(sample_report.created_at)
     assert parsed.tzinfo is not None, "时间戳必须带时区，否则跨时区排序会错"
     assert parsed.utcoffset() == datetime.now(timezone.utc).astimezone().utcoffset()
+
+
+# --------------------------------------------------------------------------
+# 导出失败（spec：导出失败时给出提示，不暴露堆栈）
+# --------------------------------------------------------------------------
+
+
+def test_export_error_carries_a_chinese_message():
+    """导出失败走领域异常，界面只显示中文提示。"""
+    from src.errors import ExportError, to_user_message
+
+    error = ExportError(detail="PermissionError: [WinError 5] 拒绝访问")
+    message = to_user_message(error)
+
+    assert message == "导出失败，请检查目标位置是否可写后重试。"
+    assert "WinError" not in message
+    assert "PermissionError" not in message
+    assert error.detail, "原始信息保留在 detail 里，供日志使用"
+
+
+def test_export_helpers_never_touch_the_filesystem(sample_report):
+    """导出函数只产出字节，不落盘。
+
+    正因为不直接写文件，才没有「目标目录不可写」这条失败路径——
+    真正的写入由浏览器下载完成，失败由浏览器提示。
+    这条测试把这个设计约束固定下来。
+    """
+    import inspect
+
+    from src import report_service
+
+    for func in (report_service.markdown_bytes, report_service.csv_bytes,
+                 report_service.to_markdown, report_service.to_csv):
+        source = inspect.getsource(func)
+        for banned in ("open(", "write_bytes", "write_text", "Path("):
+            assert banned not in source, f"{func.__name__} 里出现了文件操作：{banned}"

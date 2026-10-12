@@ -161,6 +161,15 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
 
     try:
         init_db(path)
+    except HistoryWriteError as exc:
+        # init_db 失败时它说的是「数据库初始化失败」，但用户此刻做的是「保存」。
+        # 报错要按用户正在做的事来说，不然他会以为是自己点错了地方。
+        raise HistoryWriteError(
+            "本次分析记录保存失败，结果仍可在当前页面查看。",
+            detail=exc.detail,
+        ) from exc
+
+    try:
         with _connect(path) as connection:
             cursor = connection.execute(
                 """
@@ -302,6 +311,10 @@ def add_favorite(product_id: str, path: Path | None = None) -> None:
 def remove_favorite(product_id: str, path: Path | None = None) -> None:
     try:
         init_db(path)
+    except HistoryWriteError as exc:
+        raise HistoryWriteError("取消收藏失败。", detail=exc.detail) from exc
+
+    try:
         with _connect(path) as connection:
             connection.execute(
                 "DELETE FROM favorites WHERE product_id = ?", (product_id,)

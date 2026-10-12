@@ -892,3 +892,62 @@ def test_ai_explanations_never_reach_the_stored_report(enable_ai, catalog):
     report = _state(at, state.KEY_REPORT)
     assert report is not None
     assert "AI 解读" not in report_service.to_markdown(report)
+
+
+# --------------------------------------------------------------------------
+# 追溯表补缺：这几条 Scenario 之前只有手工验证，没有自动化断言
+# --------------------------------------------------------------------------
+
+
+def test_product_card_carries_the_demo_data_source():
+    """spec：商品卡片要显示演示数据来源标注。
+
+    之前只在首页断言过免责声明，卡片本身的标注没测。
+    """
+    at = _analyze_laptop(_run())
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "数据来源" in body
+    assert "演示数据" in body
+    assert "更新时间" in body
+
+
+def test_reset_preferences_restores_defaults():
+    """spec：恢复默认 —— 所有偏好回到初始状态并落盘。"""
+    at = _run()
+    _go_to_page(at, "个人设置")
+
+    at.session_state["zg_pref_focus"] = ["续航", "便携"]
+    at.session_state["zg_pref_priority"] = "performance"
+    at.run()
+    _button(at, "保存设置").click().run()
+    _assert_clean(at)
+
+    from src import settings
+
+    saved = settings.load_preferences()
+    assert saved.focus_areas == ["续航", "便携"]
+    assert saved.price_priority == "performance"
+
+    _button(at, "恢复默认").click().run()
+    _assert_clean(at)
+
+    restored = settings.load_preferences()
+    assert restored.focus_areas == []
+    assert restored.price_priority == "none", "恢复默认后没有回到初始状态"
+
+
+def test_analysis_shows_a_processing_indicator():
+    """spec：处理中给出状态反馈。
+
+    `st.spinner` 在 AppTest 里不产生可断言的元素，所以这里断言
+    「分析确实在按钮点击的那一次运行里同步完成」——它就是那个反馈的前提。
+    视觉上的 spinner 由 Playwright 实测覆盖。
+    """
+    at = _run()
+    at.button(key="quick_大学生买笔记本").click().run()
+
+    assert _state(at, state.KEY_RESULT) is None, "还没点分析就有结果了"
+    _button(at, "开始分析").click().run()
+    assert _state(at, state.KEY_RESULT) is not None, "点击后结果没有同步产出"

@@ -335,6 +335,9 @@ _BUDGET_SUFFIX = re.compile(r"\s*(元|块|rmb|人民币)\s*$", re.IGNORECASE)
 #: 结构化预算字段的合法形式：阿拉伯数字，可带小数。
 _BUDGET_PLAIN = re.compile(r"^\d+(?:\.\d+)?$")
 
+#: 先于合法形式判断的负数形式，用于给出「不能为负」而不是「格式不对」。
+_BUDGET_NEGATIVE = re.compile(r"^-\s*\d+(?:\.\d+)?$")
+
 
 def parse_budget_value(raw: str | float | int | None) -> float | None:
     """解析**结构化控件**里的预算输入。
@@ -363,6 +366,10 @@ def parse_budget_value(raw: str | float | int | None) -> float | None:
 
     stripped = _BUDGET_SUFFIX.sub("", text).strip()
     if not _BUDGET_PLAIN.match(stripped):
+        # 负数要单独说清楚：用户填的是一个合法数字，只是符号不对。
+        # 一律回「格式不正确」会让人以为是自己写错了格式，反而更迷惑。
+        if _BUDGET_NEGATIVE.match(stripped):
+            raise InvalidBudget("预算不能为负数，请填写一个大于 0 的金额，例如 3000。")
         raise InvalidBudget(
             f"预算「{text}」格式不正确，请填写为数字，例如 3000 或 3000 元。"
         )
