@@ -255,14 +255,15 @@ def test_changing_budget_recomputes_candidates(catalog):
     # 同样要放大限条数，否则两边的截断会掩盖真实的候选差异
     limit = len(catalog)
     tight = recommend(catalog, Demand(category="laptop", budget=3000), limit=limit)
-    loose = recommend(catalog, Demand(category="laptop", budget=8000), limit=limit)
+    # 预算给到 9000：比类别里最贵的那件还高，超预算一侧就应当是空的
+    loose = recommend(catalog, Demand(category="laptop", budget=9000), limit=limit)
 
     tight_ids = {i.product.id for i in tight.within_budget}
     loose_ids = {i.product.id for i in loose.within_budget}
 
     assert tight_ids < loose_ids, "放宽预算后应有更多商品进入预算内"
     assert tight.over_budget, "预算收紧时应有商品落到超预算一侧"
-    assert not loose.over_budget, "预算放到 8000 后笔记本不应再有超预算项"
+    assert not loose.over_budget, "预算高于最贵商品时不应再有超预算项"
 
     # 同一件商品在两次分析中的预算匹配得分应当不同——说明确实是重算的
     shared = tight_ids & loose_ids
