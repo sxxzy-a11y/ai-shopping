@@ -412,6 +412,64 @@ def product_mini(product: Product, *, budget_label: str = "") -> str:
     )
 
 
+def compare_overview(products, *, budgets: dict[str, str], scores: dict) -> str:
+    """比较页顶部的商品概览网格。
+
+    竖向排布（图标在上、文字在下）而不是横向的行式卡片：
+    比较 5 件时每格只有 150–200px，横向排布会把中文名挤成一个字一行。
+    用 grid 让列数随宽度自适应，窄屏自动减少列数。
+    """
+    cells = []
+    for product in products:
+        score = scores.get(product.id)
+        score_html = ""
+        if score is not None:
+            score_html = (
+                f'<div class="zg-compare-score">{score.total:.0f}<small>/100</small></div>'
+                f'<div style="margin-top:4px">{stars(score.total, size=12)}</div>'
+                f'<div style="font-size:11px;color:{theme.INK_SOFT};margin-top:3px">'
+                f"{esc(config.SCORE_DISPLAY_NAME)}</div>"
+            )
+        budget = budgets.get(product.id, "")
+        cells.append(
+            f'<div class="zg-compare-cell">'
+            f'  <div class="zg-thumb">{icons.category_icon(product.category, size=26)}</div>'
+            f'  <div class="zg-compare-name">{esc(product.name or product.id)}</div>'
+            f'  <div class="zg-compare-brand">{esc(product.brand or "品牌未知")}'
+            f"    · {esc(product.category_label)}</div>"
+            f'  <div class="zg-compare-price">{esc(product.price_label)}</div>'
+            f'  <div>{chip(budget, _budget_tone(budget))}</div>'
+            f'  <div style="margin-top:11px">{score_html}</div>'
+            f"</div>"
+        )
+    return f'<div class="zg-compare-grid">{"".join(cells)}</div>'
+
+
+def pros_cons_grid(products) -> str:
+    """所有参评商品的优缺点，平铺展示、不用逐个点开。
+
+    原先用的是折叠面板，比较 5 件时要点 5 次才看得到内容——
+    而「优缺点」恰恰是决策时最需要横向看的东西。
+    """
+    cards = []
+    for product in products:
+        pros = "".join(f"<li>{esc(item)}</li>" for item in product.pros) or "<li>无</li>"
+        cons = "".join(f"<li>{esc(item)}</li>" for item in product.cons) or "<li>无</li>"
+        cards.append(
+            f'<div class="zg-proscons-card">'
+            f'  <div class="zg-proscons-title">'
+            f'    <span class="zg-thumb" style="width:30px;height:30px;border-radius:8px">'
+            f"{icons.category_icon(product.category, size=17)}</span>"
+            f"    {esc(product.name or product.id)}</div>"
+            f'  <div class="zg-proscons-sub">优点</div>'
+            f'  <ul class="zg-list">{pros}</ul>'
+            f'  <div class="zg-proscons-sub">缺点</div>'
+            f'  <ul class="zg-list zg-list-con">{cons}</ul>'
+            f"</div>"
+        )
+    return f'<div class="zg-proscons">{"".join(cards)}</div>'
+
+
 def runtime_chip() -> str:
     """当前运行模式的标签。"""
     from src.ui.state import current_mode
