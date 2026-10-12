@@ -207,6 +207,11 @@ _BUDGET_CONTEXT: tuple[str, ...] = (
     "元", "块", "rmb", "人民币",
 )
 
+#: 供界面下拉/多选控件使用的候选值。控件选项与解析器识别的词保持一致，
+#: 避免出现「控件里能选、但解析器不认识」的错位。
+AVAILABLE_USE_CASES: tuple[str, ...] = tuple(_USE_CASE_KEYWORDS)
+AVAILABLE_CORE_NEEDS: tuple[str, ...] = tuple(_CORE_NEED_KEYWORDS)
+
 
 # --------------------------------------------------------------------------
 # 数字解析

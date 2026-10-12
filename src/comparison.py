@@ -149,7 +149,7 @@ class ComparisonTable:
 # --------------------------------------------------------------------------
 
 
-def _format_param(key: str, value) -> str:
+def format_param(key: str, value) -> str:
     """把一项核心参数格式化成中文展示文本。"""
     if key in _PARAM_BOOL:
         yes, no = _PARAM_BOOL[key]
@@ -253,7 +253,7 @@ def compare(
         missing: list[bool] = []
         for product in items:
             if product.has_spec(key):
-                values.append(_format_param(key, product.spec(key)))
+                values.append(format_param(key, product.spec(key)))
                 missing.append(False)
             else:
                 values.append(MISSING_TEXT)

@@ -241,13 +241,24 @@ def _score_need_fit(
             )
         )
 
-    # (b) 核心需求里可量化的部分
+    # (b) 核心需求里可量化的部分。
+    #
+    # 分母只算**能评估**的需求：像「性价比」这类由独立维度承担的项，
+    # 如果也算进分母，界面上就会出现「命中 2/3」而实际只评估了 2 项，
+    # 用户会误以为有一项评估过但没通过。所以拆成两条信息说清楚。
     need_scores: list[float] = []
     hit_needs: list[str] = []
+    evaluable = 0
+    handled_elsewhere: list[str] = []
+
     for need in demand.core_needs:
-        signals = _NEED_SIGNALS.get(need.strip())
+        label = need.strip()
+        signals = _NEED_SIGNALS.get(label)
         if not signals:
+            handled_elsewhere.append(label)
             continue
+
+        evaluable += 1
         values = [
             normalized
             for key in signals
@@ -257,15 +268,20 @@ def _score_need_fit(
         ]
         if values:
             need_scores.append(sum(values) / len(values))
-            hit_needs.append(need.strip())
-    if need_scores:
-        parts.append(
-            (
-                f"核心需求命中 {len(need_scores)}/{len(demand.core_needs)}"
-                f"（{'、'.join(hit_needs)}）",
-                sum(need_scores) / len(need_scores),
-            )
+            hit_needs.append(label)
+
+    if evaluable:
+        text = (
+            f"核心需求命中 {len(hit_needs)}/{evaluable}"
+            f"（{'、'.join(hit_needs) or '无'}）"
         )
+        if handled_elsewhere:
+            text += (
+                f"；{'、'.join(handled_elsewhere)}"
+                f"由对应维度单独衡量，未在此重复计分"
+            )
+        average = sum(need_scores) / len(need_scores) if need_scores else 0.0
+        parts.append((text, average))
 
     if not parts:
         return None, "需求中没有可用于对比的场景或核心需求"

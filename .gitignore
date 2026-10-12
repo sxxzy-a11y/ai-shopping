@@ -7,6 +7,9 @@ storage/
 *.sqlite
 *.sqlite3
 
+# --- 运行日志（app.py 写入，可能含商品路径等信息）---
+*.log
+
 # --- Python ---
 __pycache__/
 *.py[cod]
