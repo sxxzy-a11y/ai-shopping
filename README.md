@@ -355,11 +355,22 @@ streamlit run app.py --server.port 8502
 ## 开发说明
 
 本项目使用 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 做规格驱动开发。
-需求规格、技术决策与任务清单都在 `openspec/changes/add-zhigou-mvp/` 下：
 
-- `proposal.md` —— 为什么做、改什么、明确不做的事
-- `design.md` —— 关键技术决策及取舍
-- `specs/` —— 8 份能力规格，共 99 条可测试的场景
-- `tasks.md` —— 任务清单与完成情况
+**当前规格**（已归档合并，是后续改动的依据）：
 
-改动行为前先改规格，再改代码。
+```
+openspec/specs/            8 份能力规格，39 条需求、99 条可测试场景
+```
+
+**这次迭代的完整记录**（提案、设计、任务）：
+
+```
+openspec/changes/archive/2026-10-12-add-zhigou-mvp/
+├── proposal.md   为什么做、改什么、明确不做的事
+├── design.md     9 项关键技术决策及取舍
+├── specs/        8 份增量规格
+└── tasks.md      104 项任务的完成情况
+```
+
+改动行为前先改 `openspec/specs/` 下的规格，再改代码。
+新功能用 `openspec new change <名字>` 起一个新的变更。
