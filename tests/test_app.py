@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import httpx
+
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -51,8 +53,16 @@ def _all_text(at: AppTest) -> str:
         for element in getattr(at, attr, []):
             chunks.append(str(getattr(element, "value", "")))
 
-    for element in at.selectbox:
-        chunks.append(str(element.label))
+    # 控件上的文案（toogle 的说明、输入框的标题、按钮的字）也是"页面上可见文本"，
+    # 不收进来会漏判——曾经因此以为「AI 开关没渲染」，其实只是断言取不到。
+    for attr in (
+        "selectbox", "multiselect", "text_input", "text_area", "toggle",
+        "radio", "checkbox", "button", "slider", "number_input",
+    ):
+        for element in getattr(at, attr, []):
+            label = getattr(element, "label", "")
+            if label:
+                chunks.append(str(label))
 
     combined = "\n".join(chunks)
     return re.sub(r"<style>.*?</style>", "", combined, flags=re.DOTALL)
@@ -625,3 +635,260 @@ def test_clearing_conditions_does_not_get_undone_by_the_mirror():
     _assert_clean(at)
 
     assert at.text_area[0].value == "", "镜像把已清空的内容又恢复了"
+
+
+# --------------------------------------------------------------------------
+# AI 增强模式（全部走打桩服务，不碰真实 API）
+# --------------------------------------------------------------------------
+
+
+def _stub_service(handler, *, key: str = "sk-test-000000000000"):
+    """造一个走打桩传输的 AI 服务。"""
+    from src.ai_service import AIService
+
+    return AIService(
+        api_key=key,
+        base_url="https://example.invalid/v1",
+        model="stub-model",
+        timeout_s=5,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+
+def _ai_reply(content: str) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "model": "stub-model",
+            "choices": [
+                {"message": {"role": "assistant", "content": content}, "finish_reason": "stop"}
+            ],
+            "usage": {"total_tokens": 10},
+        },
+    )
+
+
+@pytest.fixture
+def enable_ai(monkeypatch):
+    """打开 AI 通路，用打桩服务替换真实服务。
+
+    conftest 已经删掉了环境变量里的密钥，就算不打桩也只会走本地模式；
+    打桩是为了覆盖「模型确实返回了东西」的那条分支。
+    """
+    from src import ai_service
+
+    def install(handler) -> None:
+        monkeypatch.setattr(ai_service, "get_service", lambda: _stub_service(handler))
+
+    return install
+
+
+def _parse_payload(**overrides) -> str:
+    import json
+
+    payload = {
+        "category": "laptop",
+        "budget": 3000,
+        "use_cases": ["编程"],
+        "core_needs": ["性能"],
+        "compromises": [],
+        "brand_preferences": [],
+        "hard_constraints": [],
+    }
+    payload.update(overrides)
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def _is_parse_request(request) -> bool:
+    """靠系统提示里的关键词区分「解析」和「解读」两类请求。"""
+    import json
+
+    body = json.loads(request.content)
+    return "解析器" in body["messages"][0]["content"]
+
+
+def test_ai_toggle_is_hidden_when_not_configured():
+    """没配密钥时不该出现 AI 开关——出现了点开也是坏的。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    _assert_clean(at)
+
+    assert "启用 AI 增强" not in _all_text(at)
+    assert "本地演示模式" in _all_text(at)
+
+
+def test_ai_toggle_appears_when_configured(enable_ai):
+    enable_ai(lambda r: _ai_reply(_parse_payload()))
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    _assert_clean(at)
+    assert "启用 AI 增强" in _all_text(at)
+
+
+def test_enabling_ai_shows_the_data_sharing_notice(enable_ai):
+    """spec：调用外部服务前须说明发送的数据范围。"""
+    enable_ai(lambda r: _ai_reply(_parse_payload()))
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.toggle[0].set_value(True).run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "需求原文" in body
+    assert "不会发送" in body
+
+
+def test_ai_parse_is_used_when_enabled(enable_ai):
+    seen: list = []
+
+    def handler(request):
+        seen.append(request)
+        return _ai_reply(_parse_payload(category="headphone", budget=800, core_needs=["降噪"]))
+
+    enable_ai(handler)
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.toggle[0].set_value(True).run()
+    at.text_area[0].set_value("想买副通勤用的耳机，预算 800").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    assert _state(at, "zg_parse_engine") == "ai", "没有走 AI 解析"
+    demand = _state(at, "zg_demand")
+    assert demand.category == "headphone"
+    assert demand.core_needs == ["降噪"]
+    assert seen, "没有向模型发出请求"
+
+
+def test_ai_failure_degrades_to_rules_with_a_notice(enable_ai):
+    """spec：AI 调用失败时降级到本地规则模式，不崩溃，且告知用户。"""
+    enable_ai(lambda r: httpx.Response(500, text="upstream boom"))
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.toggle[0].set_value(True).run()
+    at.text_area[0].set_value("预算 3000 买笔记本电脑，主要编程").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    assert "本地规则" in _all_text(at), "降级了但没告诉用户"
+
+    assert _state(at, "zg_parse_engine") == "rule", "失败后没有回退到规则解析"
+    demand = _state(at, "zg_demand")
+    assert demand.category == "laptop", "降级后规则解析应当仍然认得类别"
+    assert _state(at, state.KEY_RESULT) is not None, "降级后结果应当可用"
+
+
+def test_ai_timeout_degrades_gracefully(enable_ai):
+    def handler(request):
+        raise httpx.ReadTimeout("slow", request=request)
+
+    enable_ai(handler)
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.toggle[0].set_value(True).run()
+    at.text_area[0].set_value("预算 3000 买笔记本电脑").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    assert "超时" in _all_text(at)
+    assert _state(at, state.KEY_RESULT) is not None
+
+
+def test_ai_explanation_is_shown_and_marked(enable_ai, catalog):
+    """解读要标出来源，且不能混进「系统匹配评分」里冒充规则结果。"""
+    import json
+
+    every_id = [p.id for p in catalog.by_category("laptop")]
+
+    def handler(request):
+        if _is_parse_request(request):
+            return _ai_reply(_parse_payload())
+        return _ai_reply(
+            json.dumps(
+                {
+                    "overview": "这几件都在你的预算内。",
+                    "per_product": [
+                        {"product_id": pid, "why": "处理器档位较高，适合编程"}
+                        for pid in every_id
+                    ],
+                },
+                ensure_ascii=False,
+            )
+        )
+
+    enable_ai(handler)
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.toggle[0].set_value(True).run()
+    at.text_area[0].set_value("预算 3000 买笔记本，主要编程，看重性能").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "AI 解读" in body
+    assert "适合编程" in body
+    assert "AI 总述" in body
+
+
+def test_explanation_failure_keeps_the_recommendations(enable_ai):
+    """解读失败只丢解读，规则算出的推荐结果必须原样保留。"""
+
+    def handler(request):
+        if _is_parse_request(request):
+            return _ai_reply(_parse_payload())
+        return _ai_reply("我拒绝输出 JSON")
+
+    enable_ai(handler)
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.toggle[0].set_value(True).run()
+    at.text_area[0].set_value("预算 3000 买笔记本，主要编程").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    result = _state(at, state.KEY_RESULT)
+    assert result is not None and result.within_budget, "解读失败把推荐也弄丢了"
+    assert "为你推荐" in _all_text(at)
+    assert _state(at, "zg_ai_explanation") is None
+
+
+def test_ai_explanations_never_reach_the_stored_report(enable_ai, catalog):
+    """报告存的是规则快照。
+
+    AI 解读不进报告，这样历史结论不会因为模型换了、超时了而前后不一致。
+    """
+    import json
+
+    every_id = [p.id for p in catalog.by_category("laptop")]
+
+    def handler(request):
+        if _is_parse_request(request):
+            return _ai_reply(_parse_payload())
+        return _ai_reply(
+            json.dumps(
+                {"overview": "总述", "per_product": [{"product_id": i, "why": "理由"} for i in every_id]},
+                ensure_ascii=False,
+            )
+        )
+
+    enable_ai(handler)
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.toggle[0].set_value(True).run()
+    at.text_area[0].set_value("预算 3000 买笔记本，主要编程").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    from src import report_service
+
+    report = _state(at, state.KEY_REPORT)
+    assert report is not None
+    assert "AI 解读" not in report_service.to_markdown(report)

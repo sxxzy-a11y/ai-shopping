@@ -21,10 +21,11 @@ from src import config
 from src.demand_parser import Demand
 
 #: 价格取向。取值与界面选项一一对应。
-PricePriority = Literal["value", "performance", "brand"]
+PricePriority = Literal["none", "value", "performance", "brand"]
 
 #: 价格取向 → 中文名
 PRICE_PRIORITY_LABELS: dict[str, str] = {
+    "none": "不限",
     "value": "性价比优先",
     "performance": "性能优先",
     "brand": "品牌优先",
@@ -50,7 +51,9 @@ class UserPreferences(BaseModel):
     brand_preferences: list[str] = Field(default_factory=list)
 
     #: 价格取向。
-    price_priority: PricePriority = "value"
+    #: 默认 **"none"** 而不是某个具体取向：全新安装时用户并没有做过这个选择，
+    #: 替他默认「性价比优先」等于每次分析都悄悄往需求里塞一个核心需求。
+    price_priority: PricePriority = "none"
 
     #: 长期关注的点，会自动并入每次分析的核心需求。
     focus_areas: list[str] = Field(default_factory=list)

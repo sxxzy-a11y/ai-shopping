@@ -299,6 +299,7 @@ def product_row(
     *,
     rank: int | None = None,
     highlight: bool = False,
+    ai_note: str = "",
 ) -> str:
     """推荐列表里的一行商品。
 
@@ -334,7 +335,14 @@ def product_row(
         f'      <div class="zg-score-name">{esc(config.SCORE_DISPLAY_NAME)}</div>'
         f"    </div>"
         f"  </div>"
-        f'  <div class="zg-source">数据来源：{esc(product.data_source or "信息缺失")}'
+        + (
+            f'  <div class="zg-notice zg-notice-info" style="margin:12px 0 0 0">'
+            f'<span class="zg-notice-icon">{icons.icon("sparkles", size=16)}</span>'
+            f'<span><strong>AI 解读</strong>：{esc(ai_note)}</span></div>'
+            if ai_note
+            else ""
+        )
+        + f'  <div class="zg-source">数据来源：{esc(product.data_source or "信息缺失")}'
         f"　·　更新时间：{esc(product.updated_at or '信息缺失')}</div>"
         f"</div>"
     )
@@ -349,6 +357,7 @@ def render_product_row(
     highlight: bool = False,
     expanded: bool = False,
     extra_actions: Callable[[], None] | None = None,
+    ai_note: str = "",
 ) -> None:
     """商品行 + 可展开的评分构成与优缺点。
 
@@ -357,7 +366,9 @@ def render_product_row(
     它只管画，不该知道数据存在哪。
     """
     st.markdown(
-        product_row(product, score, budget_label, rank=rank, highlight=highlight),
+        product_row(
+            product, score, budget_label, rank=rank, highlight=highlight, ai_note=ai_note
+        ),
         unsafe_allow_html=True,
     )
     render_score_breakdown(score, expanded=expanded)

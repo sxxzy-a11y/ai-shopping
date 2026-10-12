@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import config, database, report_service, settings
+from src import ai_enhance, ai_service, config, database, report_service, settings
 from src.data_loader import Catalog
 from src.demand_parser import (
     AVAILABLE_CORE_NEEDS,
@@ -116,6 +116,54 @@ def _input_signature() -> str:
 # --------------------------------------------------------------------------
 
 
+def _render_ai_controls() -> None:
+    """AI 增强开关。
+
+    spec 要求「调用外部 AI API 前，界面 SHALL 说明将要发送的数据范围，
+    并由用户确认」。所以这里默认**关闭**，打开时才展示数据共享说明，
+    且每次分析都会把说明再列一遍。
+    """
+    service = ai_service.get_service()
+    if not service.configured:
+        st.markdown(
+            f'<div class="zg-caption" style="margin-bottom:10px">'
+            f"当前为本地演示模式：未配置模型密钥，全部由本地规则完成，不联网。"
+            f"配置 {config.LLM_API_KEY_ENV} 后可使用 AI 增强。</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.toggle(
+        "启用 AI 增强（会把你输入的内容与候选商品数据发送给模型服务）",
+        key="zg_ai_enabled",
+        help="关闭时全部由本地规则完成，不发起任何网络请求。",
+    )
+
+    if st.session_state.get("zg_ai_enabled"):
+        st.markdown(
+            f'<div class="zg-caption">当前模型：{service.model}　·　'
+            f"端点：{service.describe()['base_url']}</div>",
+            unsafe_allow_html=True,
+        )
+        notice = ai_enhance.data_sharing_notice(
+            state.get(state.KEY_DEMAND) or Demand(),
+            0,
+        )
+        st.markdown(
+            f'<div class="zg-notice zg-notice-warn">'
+            f'<span>{esc_multi(notice)}</span></div>',
+            unsafe_allow_html=True,
+        )
+    st.write("")
+
+
+def esc_multi(text: str) -> str:
+    """把多行文本转成 HTML（换行变 <br>），逐段转义。"""
+    from src.ui.theme import esc
+
+    return "<br>".join(esc(line) if line else "&nbsp;" for line in text.splitlines())
+
+
 def _render_inputs(catalog: Catalog) -> None:
     components.section_title("描述你的购买需求")
 
@@ -206,12 +254,14 @@ def _run_analysis(catalog: Catalog) -> None:
         state.put(state.KEY_ERROR, unsupported_category_message(term))
         return
 
+    ai_notes: list[str] = []
+    ai_enabled = bool(st.session_state.get("zg_ai_enabled")) and ai_service.get_service().configured
+
     try:
-        parsed = (
-            parse_demand(raw_text, known_brands=catalog.brands())
-            if raw_text.strip()
-            else Demand()
-        )
+        if raw_text.strip():
+            parsed = _parse_text(raw_text, catalog, ai_enabled, ai_notes)
+        else:
+            parsed = Demand()
         structured = Demand(
             category=category,
             budget=parse_budget_value(budget_raw),
@@ -248,6 +298,18 @@ def _run_analysis(catalog: Catalog) -> None:
     if not prefs.show_over_budget:
         result.over_budget = []
 
+    # AI 解读：失败只丢掉解读，规则算出的推荐结果照常保留
+    explanation: dict | None = None
+    if ai_enabled and result.within_budget:
+        try:
+            explanation = ai_enhance.explain_recommendations(
+                applied, result.within_budget[:3], service=ai_service.get_service()
+            )
+        except ZhigouError as exc:
+            ai_notes.append(to_user_message(exc))
+    state.put("zg_ai_explanation", explanation)
+    state.put("zg_ai_notes", ai_notes)
+
     signature = _input_signature()
     state.put(state.KEY_DEMAND, applied)
     state.put(state.KEY_RESULT, result)
@@ -258,6 +320,33 @@ def _run_analysis(catalog: Catalog) -> None:
     report = report_service.build_report(catalog, applied, result)
     state.put(state.KEY_REPORT, report)
     _persist(report, signature)
+
+
+def _parse_text(raw_text: str, catalog: Catalog, ai_enabled: bool, notes: list[str]) -> Demand:
+    """解析需求：优先 AI，失败回退规则。
+
+    回退不是「静默降级」——失败原因会记进 notes 并在界面上说出来，
+    让用户知道这次结果是谁算的。
+
+    解析器用**单独的会话键**记录，而不是塞进 `Demand.source`：
+    需求经过 `merge_demand` 之后 source 会变成 "merged"（这是准确的，
+    它确实被合并过），拿它判断「是不是 AI 解析的」会失准。
+    """
+    if not ai_enabled:
+        state.put("zg_parse_engine", "rule")
+        return parse_demand(raw_text, known_brands=catalog.brands())
+
+    try:
+        parsed = ai_enhance.parse_demand_with_ai(
+            raw_text, service=ai_service.get_service(), known_brands=catalog.brands()
+        )
+    except ZhigouError as exc:
+        notes.append(to_user_message(exc) + "（本次需求解析已改用本地规则）")
+        state.put("zg_parse_engine", "rule")
+        return parse_demand(raw_text, known_brands=catalog.brands())
+
+    state.put("zg_parse_engine", "ai")
+    return parsed
 
 
 def _persist(report, signature: str) -> None:
@@ -356,6 +445,8 @@ def _favorite_actions(product) -> None:
 
 def _render_right_column(result) -> None:
     total = len(result.within_budget)
+    explanation = state.get("zg_ai_explanation") or {}
+    per_product = explanation.get("per_product") or {}
 
     if total:
         components.section_title("为你推荐", total)
@@ -372,6 +463,7 @@ def _render_right_column(result) -> None:
                 highlight=index == 0,
                 expanded=index == 0,
                 extra_actions=lambda p=item.product: _favorite_actions(p),
+                ai_note=per_product.get(item.product.id, ""),
             )
     else:
         components.section_title("预算内的推荐", 0)
@@ -462,6 +554,19 @@ def _render_results() -> None:
             "warn",
         )
 
+    for note in state.get("zg_ai_notes") or []:
+        components.show_notice(note, "warn")
+
+    engine = state.get("zg_parse_engine")
+    if engine == "ai":
+        components.show_notice("本次需求由 AI 解析，推荐排序仍由本地规则计算。", "info")
+    elif engine == "rule" and st.session_state.get("zg_ai_enabled"):
+        components.show_notice("本次需求由本地规则解析。", "info")
+
+    explanation = state.get("zg_ai_explanation")
+    if explanation and explanation.get("overview"):
+        components.show_notice(f"AI 总述：{explanation['overview']}", "info")
+
     if state.get("zg_prefs_applied"):
         components.show_notice(
             "本次分析已自动带上「个人设置」里的偏好。偏好只补空缺，"
@@ -504,6 +609,7 @@ def render(catalog: Catalog) -> None:
         "并把评分怎么算出来的逐项摊开给你看。",
     )
 
+    _render_ai_controls()
     _render_inputs(catalog)
 
     st.write("")

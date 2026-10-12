@@ -25,7 +25,7 @@ def test_missing_file_returns_defaults(tmp_path: Path):
     prefs = settings.load_preferences(tmp_path / "nope.json")
 
     assert prefs.brand_preferences == []
-    assert prefs.price_priority == "value"
+    assert prefs.price_priority == "none"
     assert prefs.auto_apply is True
 
 
@@ -38,7 +38,7 @@ def test_corrupt_or_wrong_shape_falls_back_to_defaults(tmp_path: Path, content: 
     path.write_text(content, encoding="utf-8")
 
     prefs = settings.load_preferences(path)
-    assert prefs.price_priority == "value"
+    assert prefs.price_priority == "none"
 
 
 def test_round_trip(tmp_path: Path):
@@ -77,6 +77,16 @@ def test_save_does_not_leave_a_temp_file_behind(tmp_path: Path):
 def test_effective_core_needs_follows_price_priority():
     assert "性价比" in UserPreferences(price_priority="value").effective_core_needs()
     assert "性能" in UserPreferences(price_priority="performance").effective_core_needs()
+
+
+def test_default_preferences_inject_nothing():
+    """全新安装时不该替用户做任何决定。
+
+    之前 price_priority 默认 "value"，导致从没打开过设置页的用户，
+    每次分析都会被自动塞进一个「性价比」核心需求。
+    """
+    assert UserPreferences().effective_core_needs() == []
+    assert UserPreferences(price_priority="none").effective_core_needs() == []
 
 
 def test_brand_first_priority_adds_no_scoring_need():

@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src import config  # noqa: E402
 from src.data_loader import Catalog, Product, load_catalog  # noqa: E402
 from src.demand_parser import Demand  # noqa: E402
 
@@ -29,6 +30,11 @@ def isolated_local_state(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("ZHIGOU_SETTINGS_PATH", str(tmp_path / "settings.json"))
     monkeypatch.setenv("ZHIGOU_DB_PATH", str(tmp_path / "zhigou.db"))
+
+    # 断掉密钥，保证测试**永远不会**真的调外部 API。
+    # 开发机上 .env 里放着真密钥，这一步不做的话，跑测试就会消耗额度、
+    # 而且测试结果会依赖网络——两头都不该发生。
+    monkeypatch.delenv(config.LLM_API_KEY_ENV, raising=False)
 
 
 @pytest.fixture(scope="session")

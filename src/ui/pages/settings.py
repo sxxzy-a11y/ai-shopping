@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import config, settings
+from src import ai_service, config, settings
 from src.data_loader import Catalog
 from src.errors import ZhigouError, to_user_message
 from src.ui import components, state
@@ -190,9 +190,35 @@ def render(catalog: Catalog) -> None:
 
         components.section_title("AI 设置")
         mode, detail = state.current_mode()
-        st.markdown(facts([("当前模式", mode), ("说明", detail)]), unsafe_allow_html=True)
-        st.write("")
-        components.caption(
-            "大模型接入在阶段五实现。届时可以通过环境变量配置密钥与模型，"
-            "未配置时应用照常以本地规则模式运行，不发起任何网络请求。"
+        service = ai_service.get_service()
+        st.markdown(
+            facts(
+                [
+                    ("当前模式", mode),
+                    ("说明", detail),
+                    ("模型", service.model if service.configured else "未配置"),
+                    ("密钥", service.describe()["key_hint"]),
+                ]
+            ),
+            unsafe_allow_html=True,
         )
+        st.write("")
+
+        if service.configured:
+            if st.button("测试连接", use_container_width=False):
+                with st.spinner("正在向模型服务发一次最小请求…"):
+                    ok, message = ai_service.probe()
+                components.show_notice(
+                    ("连接正常：" if ok else "连接失败：") + message,
+                    "ok" if ok else "stop",
+                )
+            st.write("")
+            components.caption(
+                "密钥只从环境变量读取，不会写进代码、日志或导出文件。"
+                "本项目用 httpx 直连 OpenAI 兼容端点，换服务商只需改环境变量。"
+            )
+        else:
+            components.caption(
+                f"未配置 {config.LLM_API_KEY_ENV}，应用以本地演示模式运行，"
+                "不发起任何网络请求。配置后可在「智能分析」页启用 AI 增强。"
+            )

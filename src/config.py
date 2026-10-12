@@ -113,10 +113,16 @@ LLM_API_KEY_ENV: Final[str] = "ZHIGOU_LLM_API_KEY"
 LLM_BASE_URL_ENV: Final[str] = "ZHIGOU_LLM_BASE_URL"
 LLM_MODEL_ENV: Final[str] = "ZHIGOU_LLM_MODEL"
 LLM_TIMEOUT_ENV: Final[str] = "ZHIGOU_LLM_TIMEOUT"
+LLM_MAX_TOKENS_ENV: Final[str] = "ZHIGOU_LLM_MAX_TOKENS"
 
 DEFAULT_LLM_BASE_URL: Final[str] = "https://api.openai.com/v1"
 DEFAULT_LLM_MODEL: Final[str] = "gpt-4o-mini"
-DEFAULT_LLM_TIMEOUT_S: Final[float] = 20.0
+DEFAULT_LLM_TIMEOUT_S: Final[float] = 60.0
+
+#: 单次回复的 token 上限。
+#: **推理模型的推理过程也计入这个额度**，给小了会出现「正文为空、
+#: finish_reason=length」——所以默认值要比普通对话模型宽裕得多。
+DEFAULT_LLM_MAX_TOKENS: Final[int] = 2000
 
 
 def llm_api_key() -> str:
@@ -137,6 +143,18 @@ def llm_model() -> str:
 def llm_timeout_s() -> float:
     """读取请求超时秒数。"""
     return _env_float(LLM_TIMEOUT_ENV, DEFAULT_LLM_TIMEOUT_S)
+
+
+def llm_max_tokens() -> int:
+    """读取单次回复的 token 上限。"""
+    raw = _env_str(LLM_MAX_TOKENS_ENV)
+    if not raw:
+        return DEFAULT_LLM_MAX_TOKENS
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_LLM_MAX_TOKENS
+    return value if value > 0 else DEFAULT_LLM_MAX_TOKENS
 
 
 def is_ai_configured() -> bool:
@@ -232,4 +250,5 @@ def describe_runtime() -> dict[str, object]:
         "llm_model": llm_model() if is_ai_configured() else None,
         "llm_base_url": llm_base_url() if is_ai_configured() else None,
         "llm_timeout_s": llm_timeout_s(),
+        "llm_max_tokens": llm_max_tokens(),
     }
