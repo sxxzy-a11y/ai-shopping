@@ -315,22 +315,38 @@ _STYLES = f"""
   .zg-list-con li:before {{ background: {DANGER}; }}
 
   /* ===================================================================
-     统计卡（首页）
-     =================================================================== */
-  .zg-stat {{
+     统计带（首页）
+     ===================================================================
+     刻意做成**一条轻量数字带**而不是四张卡：上面紧挨着功能卡，
+     再排四张同样带边框的卡会显得重复，整页变成两排盒子。
+     这里只在整条上给一层白底，格子之间不加任何框。 */
+  .zg-statstrip {{
+    display: grid; grid-template-columns: repeat(4, 1fr);
     background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
-    padding: 16px 18px; box-shadow: {SHADOW}; height: 100%;
+    box-shadow: {SHADOW}; overflow: hidden;
   }}
+  .zg-stat {{
+    display: flex; align-items: center; gap: 13px;
+    padding: 18px 20px;
+    border-right: 1px solid {LINE_SOFT};
+  }}
+  .zg-stat:last-child {{ border-right: none; }}
   .zg-stat-icon {{
-    width: 36px; height: 36px; border-radius: 9px; background: {BRAND_50};
-    color: {BRAND}; display: flex; align-items: center; justify-content: center;
-    margin-bottom: 10px;
+    width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+    background: {BRAND_50}; color: {BRAND};
+    display: flex; align-items: center; justify-content: center;
   }}
   .zg-stat-value {{
-    font-size: 24px; font-weight: 700; color: {INK};
-    line-height: 1.15; font-variant-numeric: tabular-nums;
+    font-size: 25px; font-weight: 700; color: {INK};
+    line-height: 1.1; font-variant-numeric: tabular-nums;
   }}
-  .zg-stat-label {{ font-size: 13px; color: {INK_SOFT}; margin-top: 3px; }}
+  .zg-stat-label {{ font-size: 12.5px; color: {INK_SOFT}; margin-top: 2px; }}
+
+  @media (max-width: 900px) {{
+    .zg-statstrip {{ grid-template-columns: repeat(2, 1fr); }}
+    .zg-stat:nth-child(2) {{ border-right: none; }}
+    .zg-stat:nth-child(-n + 2) {{ border-bottom: 1px solid {LINE_SOFT}; }}
+  }}
 
   /* ===================================================================
      功能卡（首页「快速开始」）

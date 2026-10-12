@@ -21,6 +21,13 @@ FALLBACK_TEXT = "操作未能完成，请稍后重试"
 FORBIDDEN = ("Traceback", "File \"", "line ", "streamlit.errors", "sqlite3.", "httpx.")
 
 
+EXAMPLE_TEXT = (
+    "我是一名大学生，预算 3000 元，想买一台主要用于 Python 编程、"
+    "日常学习和偶尔玩游戏的笔记本电脑。我比较看重性能和性价比，"
+    "不希望电脑太重。"
+)
+
+
 def _run() -> AppTest:
     at = AppTest.from_file(APP_FILE, default_timeout=60)
     at.run()
@@ -180,7 +187,8 @@ def test_without_a_key_the_app_runs_fully_locally():
     assert "启用 AI 增强" not in _text(at)
 
     _go(at, "首页")
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     _assert_no_leak(at, "无密钥分析")
 
@@ -260,7 +268,8 @@ def test_corrupt_history_database_does_not_block_analysis(tmp_path, monkeypatch)
 
     # 关键：分析功能不受影响
     _go(at, "首页")
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     _assert_no_leak(at, "损坏库下的分析")
 
@@ -274,7 +283,8 @@ def test_write_failure_keeps_the_result_on_screen(tmp_path, monkeypatch):
     Path(tmp_path / "broken.db").write_bytes(b"not a database" * 60)
 
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     _assert_no_leak(at, "写入失败")
 
@@ -290,7 +300,8 @@ def test_write_failure_keeps_the_result_on_screen(tmp_path, monkeypatch):
 
 def test_repeated_submission_creates_one_record():
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
 
     for _ in range(4):
         _button(at, "开始分析").click().run()
@@ -303,7 +314,8 @@ def test_repeated_submission_creates_one_record():
 def test_quick_condition_change_is_flagged_until_reanalysed():
     """改完条件还没重算时，界面要说明显示的是上一次的结果。"""
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
 
     at.text_input[0].set_value("6000").run()
@@ -321,7 +333,8 @@ def test_full_decision_journey():
     at = _run()
 
     # 1. 输入并分析
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     _assert_no_leak(at, "① 分析")
     result = _state(at, "zg_result")

@@ -120,19 +120,24 @@ def stat_tile(icon_name: str, value: str, label: str) -> str:
     """一个统计格：图标 + 数值 + 说明。"""
     return (
         f'<div class="zg-stat">'
-        f'  <div class="zg-stat-icon">{icons.icon(icon_name, size=19)}</div>'
-        f'  <div class="zg-stat-value">{esc(value)}</div>'
-        f'  <div class="zg-stat-label">{esc(label)}</div>'
+        f'  <div class="zg-stat-icon">{icons.icon(icon_name, size=20)}</div>'
+        f'  <div>'
+        f'    <div class="zg-stat-value">{esc(value)}</div>'
+        f'    <div class="zg-stat-label">{esc(label)}</div>'
+        f"  </div>"
         f"</div>"
     )
 
 
 def stat_row(tiles: list[tuple[str, str, str]]) -> None:
-    """一行统计卡。tiles 为 (图标名, 数值, 说明) 列表。"""
-    columns = st.columns(len(tiles), gap="small")
-    for column, (icon_name, value, label) in zip(columns, tiles, strict=True):
-        with column:
-            st.markdown(stat_tile(icon_name, value, label), unsafe_allow_html=True)
+    """一条统计带。tiles 为 (图标名, 数值, 说明) 列表。
+
+    整条渲染成**一个** HTML 块而不是 N 个 Streamlit 列——用 grid 才能保证
+    格子之间有分隔线、整条共享一层白底；拆成列的话每格各自为政，
+    又会变回「四张卡」的样子。
+    """
+    cells = "".join(stat_tile(*tile) for tile in tiles)
+    st.markdown(f'<div class="zg-statstrip">{cells}</div>', unsafe_allow_html=True)
 
 
 def feature_card(icon_name: str, title: str, description: str) -> str:

@@ -15,7 +15,13 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 #### Scenario: 首页提供入口与说明
 
 - **WHEN** 用户首次打开应用
-- **THEN** 首页展示产品定位说明、需求输入区与快速开始指引
+- **THEN** 首页展示产品定位说明、需求输入区与一键开始分析的按钮
+
+#### Scenario: 首页输入后一键得到结果
+
+- **WHEN** 用户在首页输入需求后点击「开始分析」
+- **THEN** 系统跳转到智能分析页并**直接完成本次分析**，用户无需再点一次
+- **AND** 首页未填写任何内容时，跳转后停留在等待输入的状态，不弹出错误提示
 
 #### Scenario: 项目说明页披露数据限制
 

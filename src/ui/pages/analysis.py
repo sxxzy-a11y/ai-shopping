@@ -603,6 +603,10 @@ def render(catalog: Catalog) -> None:
     # 必须在任何输入控件创建之前执行
     _prepare_inputs()
 
+    # 首页点「开始分析」跳过来时带的自动执行标记。取值必须在控件创建之前，
+    # 但**执行**要等到输入区渲染完（_run_analysis 要读控件的当前值）。
+    autorun = st.session_state.pop("zg_autorun", False)
+
     components.page_header(
         "智能分析",
         "描述你的购买需求，系统会筛选候选商品、按需求匹配度打分排序，"
@@ -630,7 +634,7 @@ def render(catalog: Catalog) -> None:
                 unsafe_allow_html=True,
             )
 
-    if clicked:
+    if clicked or autorun:
         # 处理中给个明确反馈，避免用户以为点了没反应而反复点击
         with st.spinner("正在解析需求、筛选商品并计算匹配度…"):
             _run_analysis(catalog)

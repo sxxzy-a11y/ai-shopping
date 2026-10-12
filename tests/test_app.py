@@ -28,6 +28,13 @@ APP_FILE = str(PROJECT_ROOT / "app.py")
 FALLBACK_TEXT = "操作未能完成，请稍后重试"
 
 
+EXAMPLE_TEXT = (
+    "我是一名大学生，预算 3000 元，想买一台主要用于 Python 编程、"
+    "日常学习和偶尔玩游戏的笔记本电脑。我比较看重性能和性价比，"
+    "不希望电脑太重。"
+)
+
+
 def _run(timeout: float = 60) -> AppTest:
     at = AppTest.from_file(APP_FILE, default_timeout=timeout)
     at.run()
@@ -135,38 +142,59 @@ def test_every_page_renders_without_exception(page):
 
 
 # --------------------------------------------------------------------------
-# 快速开始 → 分析 → 比较（这条链路踩坑最多）
+# 首页输入 → 分析 → 比较（这条链路踩坑最多）
 # --------------------------------------------------------------------------
 
 
-def test_quick_start_prefills_the_analysis_page():
+def test_home_input_jumps_to_analysis_and_runs_it():
+    """首页的按钮不再只是跳转——它带着需求过去并**立即执行**。
+
+    去掉快速开始的示例按钮之后，这是首页唯一的入口，只点一次就该出结果。
+    """
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
-    _assert_clean(at)
-
-    assert _state(at, "zg_current_page") == "智能分析"
-    assert "预算 3000 元" in at.text_area[0].value
-
-
-def test_quick_start_then_analysis_produces_recommendations():
-    at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
+    assert _state(at, "zg_current_page") == "智能分析"
+    assert "预算 3000 元" in at.text_area[0].value, "需求没有带过去"
+
     body = _all_text(at)
     assert "需求摘要" in body
-    assert "为你推荐" in body
+    assert "为你推荐" in body, "跳过去了但没有直接出结果"
 
-    result = at.session_state["zg_result"]
-    assert result.has_results
+    result = _state(at, "zg_result")
+    assert result is not None and result.has_results
     assert result.within_budget
+
+
+def test_home_button_with_empty_input_just_navigates():
+    """首页没填内容时，跳到分析页等着，不跑空分析、也不弹错误。
+
+    这里刻意**不**显示红色报错：用户落到分析页，输入框就在眼前空着，
+    一看就明白。真正该报错的是「在分析页点了开始分析却什么都没填」，
+    那条由 test_analysis_without_any_input_shows_chinese_hint 覆盖。
+    """
+    at = _run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value("").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    assert _state(at, "zg_current_page") == "智能分析"
+    assert _state(at, "zg_result") is None, "空输入不该跑出结果"
+
+    body = _all_text(at)
+    assert "还没有分析结果" in body
+    assert "请先描述你的购买需求" not in body, "空输入跳转不该弹错误"
 
 
 def test_filling_comparison_from_analysis_does_not_blow_up():
     """这条曾经真的炸过：控件创建之后写它的 session_state 键。"""
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
 
     _go_to_page(at, "商品比较")
@@ -183,7 +211,8 @@ def test_filling_comparison_from_analysis_does_not_blow_up():
 def test_clearing_conditions_does_not_blow_up():
     """这条也炸过：清空按钮在输入控件创建之后动它们的键。"""
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     assert at.session_state["zg_result"] is not None
 
@@ -252,7 +281,7 @@ def test_no_match_gives_relaxation_advice():
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
-    result = at.session_state["zg_result"]
+    result = _state(at, "zg_result")
     assert result.relaxations
     assert "放宽条件的建议" in _all_text(at)
 
@@ -317,7 +346,8 @@ def test_score_is_never_presented_as_market_reputation():
 
 def test_score_display_name_is_shown_with_results():
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
     assert config.SCORE_DISPLAY_NAME in _all_text(at)
@@ -356,7 +386,8 @@ def test_no_page_uses_an_undefined_icon(caplog):
 
         # 也跑一遍有结果的路径，那里图标更多
         _go_to_page(at, "首页")
-        at.button(key="quick_大学生买笔记本").click().run()
+        _go_to_page(at, "首页")
+        at.text_area[0].set_value(EXAMPLE_TEXT).run()
         _button(at, "开始分析").click().run()
         _assert_clean(at)
         _go_to_page(at, "商品比较")
@@ -384,7 +415,8 @@ def test_settings_page_renders_and_exposes_the_real_options(catalog):
 def test_preference_notice_is_not_shown_when_nothing_was_applied():
     """没设过任何偏好时，不能显示「已自动带上偏好」——那是假话。"""
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -408,7 +440,8 @@ def test_preferences_are_applied_and_reported():
     _assert_clean(at)
 
     _go_to_page(at, "首页")
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -426,9 +459,10 @@ def test_preferences_are_applied_and_reported():
 
 
 def _analyze_laptop(at: AppTest) -> AppTest:
-    """从首页快速开始跑一次完整分析。"""
+    """在首页输入需求并直接跑出结果，供后面的界面测试复用。"""
     _go_to_page(at, "首页")
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
     _button(at, "开始分析").click().run()
     return at
 
@@ -946,7 +980,8 @@ def test_analysis_shows_a_processing_indicator():
     视觉上的 spinner 由 Playwright 实测覆盖。
     """
     at = _run()
-    at.button(key="quick_大学生买笔记本").click().run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
 
     assert _state(at, state.KEY_RESULT) is None, "还没点分析就有结果了"
     _button(at, "开始分析").click().run()

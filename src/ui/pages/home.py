@@ -1,4 +1,4 @@
-"""首页：产品定位、需求输入入口、快速开始与数据集概览。"""
+"""首页：产品定位、需求输入入口与数据集概览。"""
 
 from __future__ import annotations
 
@@ -10,39 +10,6 @@ from src.ui import components, state
 from src.ui.pages.analysis import EXAMPLE_DEMAND
 from src.ui.theme import bullet_list
 
-#: 快速开始示例：(标题, 一句话说明, 需求原文, 类别显示名)。
-#: 第四项必须与 `config.category_label()` 的输出完全一致，
-#: 因为它是分析页类别下拉框的选项文本。
-_QUICK_STARTS: list[tuple[str, str, str, str]] = [
-    (
-        "大学生买笔记本",
-        "预算有限、要写代码、不想太重",
-        EXAMPLE_DEMAND,
-        "笔记本电脑",
-    ),
-    (
-        "通勤降噪耳机",
-        "地铁和自习室用，要挡住环境噪音",
-        "想买一副通勤和自习用的耳机，预算 1000 元以内，"
-        "最看重降噪和续航，音质一般就行。",
-        "耳机",
-    ),
-    (
-        "宿舍用静音键盘",
-        "怕吵到室友，但想要机械手感",
-        "预算 500 元以内买一把机械键盘，主要用于编程和打字，"
-        "宿舍用，必须静音，不吵到室友。",
-        "键盘",
-    ),
-    (
-        "给学生党的手机",
-        "续航要撑一天，拍照别太差",
-        "预算 2500 元买一部手机，主要日常使用和拍照，"
-        "最看重续航，希望一天不用充电。",
-        "手机",
-    ),
-]
-
 #: 产品能力说明卡：(图标, 标题, 说明)
 _CAPABILITIES: list[tuple[str, str, str]] = [
     ("file", "需求理解", "把口语化描述拆成预算、用途、核心需求与可妥协项"),
@@ -52,16 +19,28 @@ _CAPABILITIES: list[tuple[str, str, str]] = [
 ]
 
 
-def _go_to_analysis(payload: dict[str, str]) -> None:
-    """把请求交给分析页，由它在控件创建之前消费。
+def _go_to_analysis(raw_text: str) -> None:
+    """把需求交给分析页并**直接跑出结果**。
 
-    这里只记请求，不直接写分析页控件的键——那些控件属于另一个页面，
+    只记请求、不直接写分析页控件的键——那些控件属于另一个页面，
     直接写会埋下顺序依赖（Streamlit 不允许控件实例化后改它的键）。
+    同时置一个「自动执行」标记，由分析页在渲染完输入区之后消费。
     """
-    st.session_state[state.KEY_PREFILL] = payload
+    st.session_state[state.KEY_PREFILL] = {
+        "text": raw_text,
+        "category": analysis_no_category(),
+    }
+    st.session_state["zg_autorun"] = True
     state.clear_analysis()
     state.request_page("智能分析")
     st.rerun()
+
+
+def analysis_no_category() -> str:
+    """与分析页「不指定类别」选项一致的文本。"""
+    from src.ui.pages.analysis import _NO_CATEGORY
+
+    return _NO_CATEGORY
 
 
 def render(catalog: Catalog) -> None:
@@ -72,34 +51,47 @@ def render(catalog: Catalog) -> None:
         right=components.runtime_chip(),
     )
 
-    # --- 需求输入 ---------------------------------------------------------
-    with st.container(border=False):
+    # --- 需求输入（做成一张卡，让首屏有一个明确的操作焦点）--------------
+    with st.container(border=True):
+        st.markdown(
+            '<div class="zg-card-title">描述你的购买需求</div>'
+            '<div class="zg-card-sub" style="margin-bottom:10px">'
+            "说清楚要买什么、预算多少、主要用来做什么就够了。"
+            "没说到的信息，系统会在下一步追问，不会替你猜。"
+            "</div>",
+            unsafe_allow_html=True,
+        )
         st.text_area(
             "描述你的购买需求",
             key="zg_home_input",
-            height=104,
+            height=110,
             placeholder=f"例如：{EXAMPLE_DEMAND}",
             label_visibility="collapsed",
         )
 
-    col_action, col_hint = st.columns([1, 4])
-    with col_action:
-        if st.button("开始分析", type="primary", use_container_width=True):
-            text = st.session_state.get("zg_home_input", "").strip()
-            if text:
-                _go_to_analysis({"text": text, "category": "（不指定，在全部类别中检索）"})
-            else:
-                state.clear_analysis()
-                state.request_page("智能分析")
-                st.rerun()
-    with col_hint:
-        st.markdown(
-            '<div class="zg-caption" style="padding-top:9px">'
-            "没有头绪也可以直接点一个下面的示例，或者到「智能分析」页用选项填写。</div>",
-            unsafe_allow_html=True,
-        )
+        col_action, col_hint = st.columns([1, 3])
+        with col_action:
+            if st.button("开始分析", type="primary", use_container_width=True):
+                text = st.session_state.get("zg_home_input", "").strip()
+                if text:
+                    _go_to_analysis(text)
+                else:
+                    # 没填内容就直接跳过去，那边会给出「请先描述需求」的提示
+                    state.clear_analysis()
+                    state.request_page("智能分析")
+                    st.rerun()
+        with col_hint:
+            st.markdown(
+                '<div class="zg-caption" style="padding-top:9px">'
+                "也可以到「智能分析」页用下拉选项逐项填写。</div>",
+                unsafe_allow_html=True,
+            )
 
-    # --- 统计 -------------------------------------------------------------
+    # --- 产品能力 ---------------------------------------------------------
+    components.section_title("它能做什么")
+    components.feature_row(_CAPABILITIES)
+
+    # --- 数据概览 ---------------------------------------------------------
     st.write("")
     components.stat_row(
         [
@@ -109,32 +101,6 @@ def render(catalog: Catalog) -> None:
             ("scale", f"{len(config.DIMENSION_LABELS)}", "项评分维度"),
         ]
     )
-
-    # --- 产品能力 ---------------------------------------------------------
-    components.section_title("它能做什么")
-    components.feature_row(_CAPABILITIES)
-
-    # --- 快速开始 ---------------------------------------------------------
-    components.section_title("快速开始")
-    components.caption("点下面的示例直接体验，需求会自动填进分析页。")
-
-    columns = st.columns(len(_QUICK_STARTS), gap="small")
-    for column, (title, blurb, text, category) in zip(
-        columns, _QUICK_STARTS, strict=True
-    ):
-        with column:
-            with st.container(border=True):
-                st.markdown(f"**{title}**")
-                st.markdown(
-                    f'<div class="zg-caption" style="min-height:44px">{blurb}</div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button(
-                    "用这个示例",
-                    key=f"quick_{title}",
-                    use_container_width=True,
-                ):
-                    _go_to_analysis({"text": text, "category": category})
 
     # --- 边界说明 ---------------------------------------------------------
     components.section_title("它不做什么")
