@@ -4,7 +4,7 @@
 
 - [x] 1.1 建立项目目录结构（`src/`、`data/`、`tests/`、`.streamlit/`），验证 `find . -type d` 输出与设计文档 D2 一致
 - [x] 1.2 编写 `requirements.txt`（streamlit / pandas / pydantic / httpx / pytest），验证 `pip install -r requirements.txt` 在当前环境无新增不必要的依赖
-- [ ] 1.3 编写 `.gitignore`（排除 `.env`、SQLite 文件、`__pycache__/`、`.pytest_cache/`、`~$*`），验证 `git status` 不包含密钥与本地数据库
+- [x] 1.3 编写 `.gitignore`（排除 `.env`、SQLite 文件、`__pycache__/`、`.pytest_cache/`、`~$*`），验证 `git status` 不包含密钥与本地数据库
 - [x] 1.4 编写 `.env.example`（API 密钥占位、模型名、base_url、超时、数据库路径），验证其中不含任何真实密钥
 - [ ] 1.5 编写 `.streamlit/config.toml` 主题（白 / 深蓝 / 浅灰），验证 `streamlit run app.py` 启动后主题色生效
 - [x] 1.6 实现 `src/config.py`：环境变量读取、路径解析、`SCORING_WEIGHTS` 权重表，验证路径不依赖当前工作目录
