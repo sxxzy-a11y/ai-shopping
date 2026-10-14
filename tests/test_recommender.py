@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from src import config
+from src.demand_parser import Demand
 from src.scoring import score_all, score_product
 from src.recommender import recommend
 
@@ -39,6 +40,32 @@ def test_categories_use_different_dimensions():
     assert "portability" in config.SCORING_WEIGHTS["phone"]
     assert "portability" not in config.SCORING_WEIGHTS["keyboard"]
     assert "portability" not in config.SCORING_WEIGHTS["headphone"]
+
+
+def test_non_electronics_use_durability_instead_of_portability():
+    """非电子品类按品类调整维度：大件/耐用品用「耐用性」，不套用「便携性」。"""
+    for category in ("appliance", "furniture", "apparel", "sports", "baby"):
+        assert "durability" in config.SCORING_WEIGHTS[category], category
+        assert "portability" not in config.SCORING_WEIGHTS[category], category
+    # 个护美妆两样都不设
+    assert "durability" not in config.SCORING_WEIGHTS["personal_care"]
+
+
+@pytest.mark.parametrize("category", sorted(config.SCORING_WEIGHTS))
+def test_every_category_scores_without_errors(catalog, category):
+    """每个品类的商品都能算出 0–100 的分，且维度不越出该类别的权重表。"""
+    products = catalog.by_category(category)
+    assert products, f"{category} 没有商品"
+
+    results = score_all(products, Demand(category=category))
+
+    assert len(results) == len(products)
+    for product in products:
+        result = results[product.id]
+        assert 0.0 <= result.total <= 100.0
+        assert all(
+            d.key in config.SCORING_WEIGHTS[category] for d in result.dimensions
+        ), f"{product.id} 出现了权重表外的维度"
 
 
 # --------------------------------------------------------------------------

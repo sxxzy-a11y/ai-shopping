@@ -15,6 +15,7 @@
 - `performance_fit` 该类别下与性能/功能相关的参数档位
 - `value`        同类别内「性能排位」与「价格排位」之差
 - `portability`  该类别下与便携相关的重量/体积指标
+- `durability`   该类别下的耐用档位（家具、家电、母婴等品类常用）
 """
 
 from __future__ import annotations
@@ -55,6 +56,41 @@ _SPEC_RANGES: dict[str, dict[str, tuple[float, float]]] = {
         "weight_g": (900, 500),
         "noise_level": (5, 1),  # 越安静分越高
     },
+    "appliance": {
+        "capacity_l": (3, 500),
+        "energy_grade": (1, 5),
+        "noise_db": (70, 30),  # 越安静分越高
+        "warranty_years": (1, 8),
+        "durability_tier": (1, 5),
+    },
+    "apparel": {
+        "comfort_tier": (1, 5),
+        "breathability_tier": (1, 5),
+        "durability_tier": (1, 5),
+        "weight_g": (1200, 100),
+    },
+    "furniture": {
+        "load_kg": (30, 250),
+        "durability_tier": (1, 5),
+        "warranty_years": (1, 8),
+    },
+    "sports": {
+        "cushion_tier": (1, 5),
+        "durability_tier": (1, 5),
+        "weight_g": (8000, 300),
+    },
+    "personal_care": {
+        "power_w": (5, 1800),
+        "battery_h": (0, 40),
+        "noise_db": (75, 25),
+        "durability_tier": (1, 5),
+    },
+    "baby": {
+        # 起始月龄越小，覆盖的使用阶段越长，所以越小分越高
+        "age_min_months": (36, 0),
+        "durability_tier": (1, 5),
+        "weight_kg": (15.0, 0.5),
+    },
 }
 
 #: 该类别下「性能/功能」维度读取的参数（按重要性排序）。
@@ -63,6 +99,13 @@ _PERFORMANCE_SPECS: dict[str, tuple[str, ...]] = {
     "phone": ("chip_tier", "camera_tier"),
     "headphone": ("audio_tier",),
     "keyboard": (),  # 键盘没有性能档位，改用功能项合成，见 _keyboard_feature_score
+    "appliance": ("energy_grade",),
+    "apparel": ("comfort_tier", "breathability_tier"),
+    "furniture": ("load_kg",),
+    "sports": ("cushion_tier",),
+    "personal_care": ("power_w",),
+    # 母婴：安全认证与折叠是主要功能项，布尔值按 _normalize_spec 折算
+    "baby": ("safety_cert", "foldable"),
 }
 
 #: 核心需求关键词 → 可量化的参数名。用于 need_fit 的可解释部分。
@@ -74,7 +117,13 @@ _NEED_SIGNALS: dict[str, tuple[str, ...]] = {
     "音质": ("audio_tier",),
     "拍照": ("camera_tier",),
     "降噪": ("noise_cancelling",),
-    "静音": ("noise_level",),
+    "静音": ("noise_level", "noise_db"),
+    "省电": ("energy_grade",),
+    "耐用": ("durability_tier",),
+    "容量": ("capacity_l",),
+    "舒适": ("comfort_tier",),
+    "透气": ("breathability_tier",),
+    "安全": ("safety_cert",),
 }
 
 #: 同义场景词归一。用户说「写代码」「敲代码」都应落到「编程」。
@@ -100,6 +149,28 @@ _USE_CASE_ALIASES: dict[str, str] = {
     "健身": "运动",
     "剪视频": "视频剪辑",
     "文档": "办公",
+    # 非电子品类的场景别名
+    "家用": "家庭",
+    "家里": "家庭",
+    "做饭": "厨房",
+    "下厨": "厨房",
+    "打扫": "清洁",
+    "除尘": "清洁",
+    "睡觉": "卧室",
+    "带娃": "育儿",
+    "宝宝": "育儿",
+    "婴儿": "育儿",
+    "陪孩子": "亲子",
+    "送人": "送礼",
+    "礼物": "送礼",
+    "过冬": "冬季",
+    "冬天": "冬季",
+    "夏天": "夏季",
+    "整理": "收纳",
+    "置物": "收纳",
+    "露营": "户外",
+    "徒步": "户外",
+    "旅游": "旅行",
 }
 
 
@@ -335,7 +406,7 @@ def _score_performance_fit(product: Product) -> tuple[float | None, str]:
         if normalized is None:
             continue
         values.append(normalized)
-        described.append(f"{key}={product.spec(key)}")
+        described.append(f"{config.SPEC_LABELS.get(key, key)} {product.spec(key)}")
 
     if not values:
         return None, "缺少可评估的性能参数"
@@ -383,8 +454,12 @@ def _score_value(
 
 
 def _score_portability(product: Product) -> tuple[float | None, str]:
-    """便携性：按类别的重量指标归一化。"""
-    key = "weight_kg" if product.category == "laptop" else "weight_g"
+    """便携性：按类别的重量指标归一化。
+
+    重量单位按商品实际拥有的参数选择（整机重量 kg 优先，否则取 g），
+    不再按类别硬编码——新增品类只要在 _SPEC_RANGES 里配好范围即可。
+    """
+    key = "weight_kg" if product.has_spec("weight_kg") else "weight_g"
     if not product.has_spec(key):
         return None, "缺少重量数据"
     normalized = _normalize_spec(product.category, key, product.spec(key))
@@ -394,6 +469,22 @@ def _score_portability(product: Product) -> tuple[float | None, str]:
     raw = product.spec(key)
     unit = "kg" if key == "weight_kg" else "g"
     return normalized, f"整机 {raw}{unit}"
+
+
+def _score_durability(product: Product) -> tuple[float | None, str]:
+    """耐用性：按类别的耐用档位归一化。
+
+    非电子品类多了一个「能不能用得住」的维度——家具、家电、母婴这类
+    大件或高频使用品，寿命往往比参数高低更重要。
+    """
+    if not product.has_spec("durability_tier"):
+        return None, "缺少耐用档位"
+    normalized = _normalize_spec(
+        product.category, "durability_tier", product.spec("durability_tier")
+    )
+    if normalized is None:
+        return None, "耐用档位无法解析"
+    return normalized, f"耐用档位 {product.spec('durability_tier')}/5"
 
 
 # --------------------------------------------------------------------------
@@ -424,6 +515,7 @@ def score_product(
         ("performance_fit", lambda: _score_performance_fit(product)),
         ("value", lambda: _score_value(product, peer_list)),
         ("portability", lambda: _score_portability(product)),
+        ("durability", lambda: _score_durability(product)),
     ]
 
     dimensions: list[DimensionScore] = []

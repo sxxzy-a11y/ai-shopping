@@ -27,6 +27,12 @@ _HEADLINE_SPECS: dict[str, list[str]] = {
     "phone": ["chip", "ram_gb", "storage_gb", "weight_g"],
     "headphone": ["driver_mm", "connection", "battery_h", "noise_cancelling"],
     "keyboard": ["layout", "switch_type", "connection"],
+    "appliance": ["capacity_l", "energy_grade", "power_w"],
+    "apparel": ["material", "comfort_tier", "durability_tier"],
+    "furniture": ["material", "width_cm", "load_kg"],
+    "sports": ["material", "cushion_tier", "durability_tier"],
+    "personal_care": ["power_w", "battery_h", "noise_db"],
+    "baby": ["material", "age_min_months", "durability_tier"],
 }
 
 _SPEC_LABELS = {
@@ -44,6 +50,24 @@ _SPEC_LABELS = {
     "layout": "布局",
     "switch_type": "轴体",
     "has_dedicated_gpu": "独显",
+    "capacity_l": "容量",
+    "energy_grade": "能效",
+    "power_w": "功率",
+    "noise_db": "噪音",
+    "warranty_years": "质保",
+    "material": "材质",
+    "comfort_tier": "舒适",
+    "breathability_tier": "透气",
+    "durability_tier": "耐用",
+    "width_cm": "宽度",
+    "load_kg": "承重",
+    "assembly_required": "组装",
+    "cushion_tier": "缓冲",
+    "waterproof": "防水",
+    "suit_for": "适用",
+    "age_min_months": "适龄",
+    "safety_cert": "认证",
+    "foldable": "折叠",
 }
 
 #: 匹配档位 → 标签色调

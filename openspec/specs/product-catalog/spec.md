@@ -19,17 +19,22 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 
 ### Requirement: 数据集规模与类别覆盖
 
-系统 SHALL 在 `data/products.json` 中提供不少于 20 条彼此有差异的模拟商品记录，类别 SHALL 至少覆盖笔记本电脑、手机、耳机、键盘。
+系统 SHALL 在 `data/products.json` 中提供不少于 20 条彼此有差异的模拟商品记录，类别 SHALL 覆盖电子产品（笔记本电脑、手机、耳机、键盘）与非电子品类（家用电器、服饰鞋包、家居家具、运动户外、个护美妆、母婴用品）。系统 SHALL 支持在只扩充数据与配置的情况下新增商品类别。
 
 #### Scenario: 数据集满足规模要求
 
 - **WHEN** 应用启动并加载 `data/products.json`
-- **THEN** 可用商品总数不少于 20，且笔记本、手机、耳机、键盘四个类别均有商品
+- **THEN** 可用商品总数不少于 20，且上述电子产品与非电子品类的每一个类别下均有商品
 
 #### Scenario: 商品之间具有可区分差异
 
 - **WHEN** 检查同一类别下的商品记录
 - **THEN** 各商品在价格、品牌、核心参数上存在差异，不存在仅名称不同的重复条目
+
+#### Scenario: 新增类别只需扩充数据
+
+- **WHEN** 在 `data/products.json` 中为某个新增类别补充符合结构的商品记录，并在类别配置中登记该类别
+- **THEN** 该类别商品可参与筛选、评分与比较，无需改动评分、比较或界面的业务逻辑代码
 
 ### Requirement: 模拟数据的溯源标注
 

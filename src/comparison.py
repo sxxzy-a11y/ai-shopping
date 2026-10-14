@@ -39,33 +39,34 @@ _PARAM_ORDER: dict[str, list[str]] = {
         "layout", "switch_type", "connection", "weight_g",
         "wireless", "hot_swappable", "noise_level",
     ],
+    "appliance": [
+        "capacity_l", "energy_grade", "power_w", "noise_db",
+        "warranty_years", "durability_tier",
+    ],
+    "apparel": [
+        "material", "comfort_tier", "breathability_tier",
+        "durability_tier", "weight_g",
+    ],
+    "furniture": [
+        "material", "width_cm", "load_kg", "weight_kg",
+        "durability_tier", "warranty_years", "assembly_required",
+    ],
+    "sports": [
+        "material", "weight_g", "cushion_tier",
+        "durability_tier", "waterproof",
+    ],
+    "personal_care": [
+        "power_w", "battery_h", "noise_db", "suit_for", "durability_tier",
+    ],
+    "baby": [
+        "material", "age_min_months", "weight_kg",
+        "safety_cert", "foldable", "durability_tier",
+    ],
 }
 
-#: 参数的中文标签。
-_PARAM_LABELS: dict[str, str] = {
-    "cpu": "处理器",
-    "cpu_tier": "处理器档位",
-    "chip": "芯片",
-    "chip_tier": "芯片档位",
-    "ram_gb": "内存",
-    "storage_gb": "存储",
-    "screen_size": "屏幕尺寸",
-    "weight_kg": "整机重量",
-    "weight_g": "重量",
-    "battery_h": "续航",
-    "battery_mah": "电池容量",
-    "camera_tier": "拍照档位",
-    "driver_mm": "驱动单元",
-    "connection": "连接方式",
-    "noise_cancelling": "主动降噪",
-    "audio_tier": "音质档位",
-    "layout": "键位布局",
-    "switch_type": "轴体",
-    "wireless": "无线",
-    "hot_swappable": "热插拔",
-    "noise_level": "噪音等级",
-    "has_dedicated_gpu": "独立显卡",
-}
+#: 参数的中文标签来自 config.SPEC_LABELS（单一来源），避免与评分理由、
+#: 商品卡片各写一份而对不上。
+_PARAM_LABELS: dict[str, str] = config.SPEC_LABELS
 
 _PARAM_UNITS: dict[str, str] = {
     "ram_gb": "GB",
@@ -76,6 +77,13 @@ _PARAM_UNITS: dict[str, str] = {
     "weight_g": "g",
     "battery_mah": "mAh",
     "driver_mm": "mm",
+    "capacity_l": "L",
+    "power_w": "W",
+    "noise_db": "dB",
+    "warranty_years": "年",
+    "width_cm": "cm",
+    "load_kg": "kg",
+    "age_min_months": "个月",
 }
 
 #: 布尔型参数的中文呈现。
@@ -84,6 +92,10 @@ _PARAM_BOOL: dict[str, tuple[str, str]] = {
     "noise_cancelling": ("支持", "不支持"),
     "wireless": ("支持", "不支持"),
     "hot_swappable": ("支持", "不支持"),
+    "assembly_required": ("需自行组装", "免组装"),
+    "waterproof": ("支持", "不支持"),
+    "safety_cert": ("已认证", "未认证"),
+    "foldable": ("可折叠", "不可折叠"),
 }
 
 #: 档位型参数，标注满分便于理解量纲。
@@ -93,6 +105,11 @@ _PARAM_TIER: dict[str, int] = {
     "camera_tier": 5,
     "audio_tier": 5,
     "noise_level": 5,
+    "energy_grade": 5,
+    "durability_tier": 5,
+    "comfort_tier": 5,
+    "breathability_tier": 5,
+    "cushion_tier": 5,
 }
 
 

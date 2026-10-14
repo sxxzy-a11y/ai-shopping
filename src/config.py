@@ -171,6 +171,12 @@ CATEGORY_LABELS: Final[dict[str, str]] = {
     "phone": "手机",
     "headphone": "耳机",
     "keyboard": "键盘",
+    "appliance": "家用电器",
+    "apparel": "服饰鞋包",
+    "furniture": "家居家具",
+    "sports": "运动户外",
+    "personal_care": "个护美妆",
+    "baby": "母婴用品",
 }
 
 
@@ -194,6 +200,58 @@ DIMENSION_LABELS: Final[dict[str, str]] = {
     "performance_fit": "性能功能适配",
     "value": "性价比",
     "portability": "便携性",
+    "durability": "耐用性",
+}
+
+#: 商品参数键 → 中文标签（单一来源）。
+#: 评分理由、比较表列名、商品卡片都从这里取，避免三处各写一份而对不上。
+SPEC_LABELS: Final[dict[str, str]] = {
+    # 电子产品
+    "cpu": "处理器",
+    "cpu_tier": "处理器档位",
+    "chip": "芯片",
+    "chip_tier": "芯片档位",
+    "ram_gb": "内存",
+    "storage_gb": "存储",
+    "screen_size": "屏幕尺寸",
+    "weight_kg": "整机重量",
+    "weight_g": "重量",
+    "battery_h": "续航",
+    "battery_mah": "电池容量",
+    "camera_tier": "拍照档位",
+    "driver_mm": "驱动单元",
+    "connection": "连接方式",
+    "noise_cancelling": "主动降噪",
+    "audio_tier": "音质档位",
+    "layout": "键位布局",
+    "switch_type": "轴体",
+    "wireless": "无线",
+    "hot_swappable": "热插拔",
+    "noise_level": "噪音等级",
+    "has_dedicated_gpu": "独立显卡",
+    # 家用电器
+    "capacity_l": "容量",
+    "energy_grade": "能效等级",
+    "power_w": "功率",
+    "noise_db": "噪音",
+    "warranty_years": "质保年限",
+    # 服饰鞋包 / 家居家具 / 运动户外
+    "material": "材质",
+    "comfort_tier": "舒适档位",
+    "breathability_tier": "透气档位",
+    "width_cm": "宽度",
+    "load_kg": "承重",
+    "assembly_required": "组装方式",
+    "cushion_tier": "缓冲档位",
+    "waterproof": "防水",
+    # 个护美妆
+    "suit_for": "适用对象",
+    # 母婴用品
+    "age_min_months": "适用起始月龄",
+    "safety_cert": "安全认证",
+    "foldable": "折叠",
+    # 通用
+    "durability_tier": "耐用档位",
 }
 
 SCORING_WEIGHTS: Final[dict[str, dict[str, float]]] = {
@@ -222,6 +280,49 @@ SCORING_WEIGHTS: Final[dict[str, dict[str, float]]] = {
         "need_fit": 0.25,
         "performance_fit": 0.30,
         "value": 0.15,
+    },
+    # 以下为非电子品类。维度按品类调整：家电/服饰/母婴以「耐用性」衡量寿命，
+    # 家具把耐用权重提到 0.20（大件更看重用得住），个护美妆不设耐用与便携。
+    "appliance": {
+        "budget_fit": 0.25,
+        "need_fit": 0.30,
+        "performance_fit": 0.20,
+        "value": 0.15,
+        "durability": 0.10,
+    },
+    "apparel": {
+        "budget_fit": 0.25,
+        "need_fit": 0.30,
+        "performance_fit": 0.20,
+        "value": 0.15,
+        "durability": 0.10,
+    },
+    "furniture": {
+        "budget_fit": 0.25,
+        "need_fit": 0.25,
+        "performance_fit": 0.20,
+        "value": 0.10,
+        "durability": 0.20,
+    },
+    "sports": {
+        "budget_fit": 0.25,
+        "need_fit": 0.30,
+        "performance_fit": 0.20,
+        "value": 0.10,
+        "durability": 0.15,
+    },
+    "personal_care": {
+        "budget_fit": 0.25,
+        "need_fit": 0.30,
+        "performance_fit": 0.25,
+        "value": 0.20,
+    },
+    "baby": {
+        "budget_fit": 0.25,
+        "need_fit": 0.30,
+        "performance_fit": 0.20,
+        "value": 0.10,
+        "durability": 0.15,
     },
 }
 

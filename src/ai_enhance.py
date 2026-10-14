@@ -54,8 +54,7 @@ _PARSE_SYSTEM = """你是一个消费需求解析器。你的唯一任务是把�
 1. 只输出 JSON，不要任何解释文字，不要用 markdown 代码块。
 2. 只提取用户**明确说过**的信息。没说的一律留空，绝对不要推断或填补。
 3. 字段含义：
-   - category: 商品类别，只能取 "laptop" / "phone" / "headphone" / "keyboard"，\
-没提到就填 null
+   - category: 商品类别，只能取这些键：%s，没提到就填 null
    - budget: 总预算，单位元，只填数字。没提到或不是数字就填 null，不要猜
    - use_cases: 使用场景数组，只能从这些词里选：%s
    - core_needs: 用户看重的点，只能从这些词里选：%s
@@ -70,6 +69,7 @@ _PARSE_SYSTEM = """你是一个消费需求解析器。你的唯一任务是把�
 {"category": "laptop", "budget": 3000, "use_cases": ["编程", "学习"], \
 "core_needs": ["性能", "性价比"], "compromises": [], "brand_preferences": [], \
 "hard_constraints": []}""" % (
+    "、".join(f'"{key}"' for key in sorted(_ALLOWED_CATEGORIES)),
     "、".join(sorted(_ALLOWED_USE_CASES)),
     "、".join(sorted(_ALLOWED_CORE_NEEDS)),
     "、".join(sorted(_ALLOWED_CONSTRAINTS)),

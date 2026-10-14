@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from src import config
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 APP_FILE = str(PROJECT_ROOT / "app.py")
 
@@ -385,7 +387,7 @@ def test_full_decision_journey():
 
 
 def test_catalog_meets_the_acceptance_bar(catalog):
-    """验收要求：至少 20 条模拟商品，覆盖笔记本 / 手机 / 耳机 / 键盘。"""
+    """验收要求：商品覆盖全部已登记品类，且都标注为演示数据。"""
     assert len(catalog) >= 20
-    assert set(catalog.present_categories()) == {"laptop", "phone", "headphone", "keyboard"}
+    assert set(catalog.present_categories()) == set(config.CATEGORY_LABELS)
     assert all("演示" in p.data_source for p in catalog.products)

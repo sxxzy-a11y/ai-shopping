@@ -14,6 +14,7 @@ import pytest
 
 from src.data_loader import load_catalog
 from src.errors import DataFileInvalid, DataFileMissing, EmptyCatalog
+from src import config
 
 
 # --------------------------------------------------------------------------
@@ -25,13 +26,11 @@ def test_dataset_has_at_least_20_products(catalog):
     assert len(catalog) >= 20
 
 
-def test_dataset_covers_the_four_required_categories(catalog):
-    assert set(catalog.present_categories()) == {
-        "laptop",
-        "phone",
-        "headphone",
-        "keyboard",
-    }
+def test_dataset_covers_all_configured_categories(catalog):
+    """数据集覆盖 config 里登记的全部类别，且不留空类别。"""
+    assert set(catalog.present_categories()) == set(config.CATEGORY_LABELS)
+    for category in config.CATEGORY_LABELS:
+        assert catalog.by_category(category), f"{category} 类别没有商品"
 
 
 def test_every_product_is_labelled_as_demo_data(catalog):
