@@ -229,7 +229,8 @@ SCORING_WEIGHTS: Final[dict[str, dict[str, float]]] = {
 SCORE_DISPLAY_NAME: Final[str] = "系统匹配评分"
 
 #: 商品默认选型上限与比较数量约束，界面与校验共用同一组常量。
-MIN_COMPARE_COUNT: Final[int] = 3
+#: 最小值是 2：两件「二选一」是最常见的比较场景（spec: 两件商品比较表生成）。
+MIN_COMPARE_COUNT: Final[int] = 2
 MAX_COMPARE_COUNT: Final[int] = 5
 DEFAULT_RECOMMEND_LIMIT: Final[int] = 6
 

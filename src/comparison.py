@@ -204,7 +204,7 @@ def compare(
         demand: 用户需求。用于计算预算匹配列；省略时该列显示「未设定预算」。
 
     Raises:
-        TooFewForComparison: 少于 3 件。
+        TooFewForComparison: 少于 2 件。
         TooManyForComparison: 超过上限。
         ValueError: 传入了重复的商品 ID。
     """

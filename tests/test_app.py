@@ -204,7 +204,9 @@ def test_filling_comparison_from_analysis_does_not_blow_up():
     _assert_clean(at)
 
     picked = at.session_state["zg_compare_pick"]
-    assert len(picked) >= 3, f"填充后应至少选中 3 件，实际 {len(picked)}"
+    assert len(picked) >= config.MIN_COMPARE_COUNT, (
+        f"填充后应至少选中 {config.MIN_COMPARE_COUNT} 件，实际 {len(picked)}"
+    )
     assert "横向比较" in _all_text(at)
 
 
@@ -291,6 +293,21 @@ def test_comparison_with_too_few_products_shows_hint():
     _go_to_page(at, "商品比较")
     _assert_clean(at)
     assert "无法进行横向比较" in _all_text(at)
+
+
+def test_two_products_can_be_compared():
+    """spec：两件商品比较表生成——「二选一」是最常见的比较场景。"""
+    at = _run()
+    _go_to_page(at, "商品比较")
+    _assert_clean(at)
+
+    options = at.multiselect[0].options
+    at.multiselect[0].set_value(list(options[: config.MIN_COMPARE_COUNT])).run()
+
+    _assert_clean(at)
+    body = _all_text(at)
+    assert "横向比较" in body, "两件商品应该能生成比较表"
+    assert "无法进行横向比较" not in body
 
 
 # --------------------------------------------------------------------------

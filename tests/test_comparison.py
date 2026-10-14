@@ -84,8 +84,8 @@ def test_boolean_parameters_are_rendered_in_chinese(three_laptops, laptop_demand
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("count", [0, 1, 2])
-def test_fewer_than_three_products_is_rejected(catalog, count, laptop_demand):
+@pytest.mark.parametrize("count", [0, 1])
+def test_fewer_than_minimum_products_is_rejected(catalog, count, laptop_demand):
     products = catalog.by_category("laptop")[:count]
     with pytest.raises(TooFewForComparison) as excinfo:
         compare(products, laptop_demand)

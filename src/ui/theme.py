@@ -384,16 +384,21 @@ _STYLES = f"""
   .zg-ring-desc {{ font-size: 12.5px; color: {INK_SOFT}; line-height: 1.65; }}
 
   /* ===================================================================
-     比较页：商品概览网格
+     比较页：商品概览行
      ===================================================================
-     用 CSS grid 而不是 st.columns：列数由容器宽度自动决定，每格有最小宽度
-     保证中文名能正常换行。st.columns(N) 在 N=5 时每列只剩 ~180px，
-     减去图标块后文字区不足 110px，中文会被一个字一行地竖排下来。 */
+     商品**固定横向单行**：grid-auto-flow: column 让所有概览格排成
+     一行，空间充足时等分加宽（minmax 的 1fr），不足时不折行、
+     整行横向滚动——保证「参与比较的商品横向显示」永远成立。
+     不用 st.columns：N=5 时每列只剩 ~180px，减去图标块后文字区
+     不足 110px，中文会被一个字一行地竖排下来。 */
   .zg-compare-grid {{
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(158px, 1fr);
     gap: 10px;
     margin-bottom: 4px;
+    overflow-x: auto;
+    padding-bottom: 6px;
   }}
   .zg-compare-cell {{
     background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
