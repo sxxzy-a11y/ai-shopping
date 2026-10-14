@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -72,6 +74,105 @@ def test_check_health_reports_ok(db_path: Path):
     ok, message = database.check_health(db_path)
     assert ok is True
     assert message == "正常"
+
+
+# --------------------------------------------------------------------------
+# 条件指纹去重（spec: 同一组条件只存一条记录）
+# --------------------------------------------------------------------------
+
+
+def test_same_report_saved_twice_stores_one_row(db_path: Path, report: DecisionReport):
+    """同一报告落库两次只存一条，第二次返回已有记录的 ID。"""
+    first = database.save_analysis(report, db_path)
+    second = database.save_analysis(report, db_path)
+
+    assert database.count_analyses(db_path) == 1
+    assert second == first
+
+
+def test_same_conditions_different_session_stores_one_row(
+    db_path: Path, catalog: Catalog
+):
+    """条件相同、时间不同的两次分析（模拟刷新页面后的新会话）只存一条。"""
+    demand = Demand(category="laptop", budget=4000, use_cases=["编程"])
+    morning = build_report(
+        catalog, demand, recommend(catalog, demand),
+        created_at=datetime(2026, 10, 13, 8, 0, 0),
+    )
+    evening = build_report(
+        catalog, demand, recommend(catalog, demand),
+        created_at=datetime(2026, 10, 13, 21, 0, 0),
+    )
+
+    database.save_analysis(morning, db_path)
+    database.save_analysis(evening, db_path)
+
+    assert database.count_analyses(db_path) == 1
+
+
+def test_different_conditions_store_separately(
+    db_path: Path, report: DecisionReport, second_report: DecisionReport
+):
+    """条件不同就各自落库，去重不能误伤。"""
+    database.save_analysis(report, db_path)
+    database.save_analysis(second_report, db_path)
+
+    assert database.count_analyses(db_path) == 2
+
+
+def test_report_without_signature_is_not_deduped(db_path: Path, report: DecisionReport):
+    """签名为空的报告（老版本生成）保持历史行为：不做去重。"""
+    legacy = replace(report, signature="")
+
+    database.save_analysis(legacy, db_path)
+    database.save_analysis(legacy, db_path)
+
+    assert database.count_analyses(db_path) == 2
+
+
+# --------------------------------------------------------------------------
+# 老库升级
+# --------------------------------------------------------------------------
+
+
+_OLD_SCHEMA = """
+CREATE TABLE IF NOT EXISTS analysis_history (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at     TEXT    NOT NULL,
+    demand_summary TEXT    NOT NULL,
+    top_product    TEXT    NOT NULL DEFAULT '',
+    top_score      REAL,
+    result_count   INTEGER NOT NULL DEFAULT 0,
+    report_json    TEXT    NOT NULL
+);
+"""
+
+
+def test_migrates_old_database_without_signature_column(db_path: Path, report):
+    """没有 signature 列的老库：升级后老记录可读，新保存正常去重。"""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(_OLD_SCHEMA)
+        connection.execute(
+            "INSERT INTO analysis_history"
+            " (created_at, demand_summary, top_product, top_score,"
+            "  result_count, report_json)"
+            " VALUES ('2026-10-13T00:48:31', '笔记本电脑 · 预算 7000 元',"
+            "         '拓界 17 大屏创作本', 86.0, 6, '{}')"
+        )
+
+    database.init_db(db_path)
+
+    # 老记录还在、能正常列出
+    entries = database.list_analyses(path=db_path)
+    assert len(entries) == 1
+    assert entries[0].top_product == "拓界 17 大屏创作本"
+
+    # 新保存带签名的报告不受老数据影响，且同条件重复提交只存一条
+    first = database.save_analysis(report, db_path)
+    second = database.save_analysis(report, db_path)
+    assert database.count_analyses(db_path) == 2
+    assert second == first
 
 
 # --------------------------------------------------------------------------
@@ -280,6 +381,10 @@ def test_stored_columns_contain_no_personal_information(db_path: Path, report):
         "top_score",
         "result_count",
         "report_json",
+        # 条件指纹：结构化条件的 sha256 摘要，用于跨会话去重。
+        # 由决策所需字段派生，不含设备、位置或身份信息，仍在 spec
+        # 「数据最小化」的许可范围内。
+        "signature",
     }
 
     for forbidden in ("user", "device", "ip", "location", "email", "phone", "token"):

@@ -71,7 +71,8 @@ def clear_analysis() -> None:
     """清掉上一次分析的一切痕迹。"""
     for key in (KEY_DEMAND, KEY_RESULT, KEY_ERROR, KEY_FOLLOWUPS, KEY_SIGNATURE, KEY_REPORT):
         st.session_state.pop(key, None)
-    # KEY_SAVED_SIGNATURE 刻意不清：重复提交同一组条件不应重复落库
+    # KEY_SAVED_SIGNATURE 刻意不清：会话内重复提交不必再跑一次数据库查重，
+    # 跨会话的重复由数据库层的条件指纹兜底（见 database.save_analysis）
 
 
 # --------------------------------------------------------------------------

@@ -22,6 +22,16 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 - **WHEN** 用户点击某条历史记录
 - **THEN** 系统展示该次分析的完整报告内容
 
+#### Scenario: 同一组条件只存一条记录
+
+- **WHEN** 用户提交与已保存记录条件相同的分析（无论是否在同一个会话，例如刷新页面后再次提交）
+- **THEN** 数据库不再新增记录，历史列表中该组条件只有一条
+
+#### Scenario: 条件不同则分别记录
+
+- **WHEN** 用户修改预算、类别或任一结构化条件后重新分析
+- **THEN** 数据库新增一条记录，两次分析在历史中各自可见
+
 ### Requirement: 用户收藏与偏好保存
 
 系统 SHALL 允许用户主动保存感兴趣的商品，并将收藏与偏好在 SQLite 中持久化，重启应用后 SHALL 仍然存在。

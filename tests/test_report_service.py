@@ -24,6 +24,7 @@ from src.report_service import (
     build_report,
     collect_verification_items,
     csv_bytes,
+    demand_signature,
     markdown_bytes,
     now_local,
     suggested_filename,
@@ -369,3 +370,53 @@ def test_export_helpers_never_touch_the_filesystem(sample_report):
         source = inspect.getsource(func)
         for banned in ("open(", "write_bytes", "write_text", "Path("):
             assert banned not in source, f"{func.__name__} 里出现了文件操作：{banned}"
+
+
+# --------------------------------------------------------------------------
+# 条件指纹（历史去重的依据）
+# --------------------------------------------------------------------------
+
+
+def test_demand_signature_ignores_raw_text():
+    """措辞不同但条件相同 → 同一枚指纹。
+
+    这是「同一组条件重复提交只存一条」承诺的前提：签名只能由
+    结构化条件决定，不能被原始文本的表达方式带偏。
+    """
+    a = Demand(raw_text="预算4000买一台办公本", category="laptop", budget=4000)
+    b = Demand(raw_text="4000 元的学习笔记本", category="laptop", budget=4000)
+
+    assert demand_signature(a) == demand_signature(b)
+
+
+def test_demand_signature_ignores_list_order():
+    """同组条件条目顺序不同 → 同一枚指纹。"""
+    a = Demand(category="laptop", budget=4000, use_cases=["编程", "学习"])
+    b = Demand(category="laptop", budget=4000, use_cases=["学习", "编程"])
+
+    assert demand_signature(a) == demand_signature(b)
+
+
+def test_demand_signature_tracks_every_condition():
+    """任一结构化条件变化都会改变指纹——去重不能把不同条件混成一条。"""
+    base = Demand(category="laptop", budget=4000, use_cases=["编程"])
+
+    variants = [
+        base.model_copy(update={"budget": 4500}),
+        base.model_copy(update={"category": "headphone"}),
+        base.model_copy(update={"core_needs": ["续航"]}),
+        base.model_copy(update={"brand_preferences": ["简一"]}),
+        base.model_copy(update={"hard_constraints": ["必须静音"]}),
+        base.model_copy(update={"compromises": ["可以重一点"]}),
+    ]
+
+    signatures = {demand_signature(base)} | {demand_signature(v) for v in variants}
+    assert len(signatures) == len(variants) + 1, "不同条件撞出了同一枚指纹"
+
+
+def test_built_report_carries_signature(catalog, laptop_demand):
+    """build_report 组装报告时固化条件指纹，落库时由 save_analysis 读取。"""
+    report = build_report(catalog, laptop_demand, recommend(catalog, laptop_demand))
+
+    assert report.signature
+    assert report.signature == demand_signature(laptop_demand)

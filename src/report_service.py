@@ -12,7 +12,9 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
+import json
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 
@@ -69,6 +71,9 @@ class DecisionReport:
     demand_summary: str
     #: 用户原始输入。只有展示用途，给默认值以便老记录也能打开。
     demand_text: str = ""
+    #: 条件指纹。由**结构化条件**算出的稳定哈希，落库去重用：
+    # 措辞不同但条件相同的两次分析视为同一组条件。
+    signature: str = ""
     demand_facts: list[tuple[str, str]] = field(default_factory=list)
     filter_facts: list[tuple[str, str]] = field(default_factory=list)
     recommendations: list[ReportItem] = field(default_factory=list)
@@ -149,6 +154,30 @@ def _demand_facts(demand: Demand) -> list[tuple[str, str]]:
         ("硬性限制", "、".join(demand.hard_constraints) or "无"),
         ("可妥协项", "、".join(demand.compromises) or "未说明"),
     ]
+
+
+def demand_signature(demand: Demand) -> str:
+    """把结构化条件揉成一个稳定指纹，历史去重用。
+
+    两个刻意的设计：
+    - **不含原始文本**。措辞不同但条件相同的两次输入
+      （「预算4000买办公本」和「4000 元的学习笔记本」）是同一组条件，
+      应该得到同一枚指纹——这正是 README「同一组条件重复提交
+      只存一条」承诺的语义。
+    - **列表先排序**。同一组条件条目顺序不同（先说学习后说编程）
+      也算同一组条件。
+    """
+    canonical = {
+        "category": demand.category or "",
+        "budget": demand.budget,
+        "use_cases": sorted(demand.use_cases),
+        "core_needs": sorted(demand.core_needs),
+        "compromises": sorted(demand.compromises),
+        "brand_preferences": sorted(demand.brand_preferences),
+        "hard_constraints": sorted(demand.hard_constraints),
+    }
+    payload = json.dumps(canonical, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _filter_facts(result: RecommendationResult) -> list[tuple[str, str]]:
@@ -292,6 +321,7 @@ def build_report(
         created_at=moment.isoformat(timespec="seconds"),
         demand_summary=demand.summary_line(),
         demand_text=demand.raw_text,
+        signature=demand_signature(demand),
         demand_facts=_demand_facts(demand),
         filter_facts=_filter_facts(result),
         recommendations=recommendations,

@@ -164,7 +164,7 @@ ai shopping/
 │       ├── components.py   卡片、评分条、徽章等
 │       └── pages/          六个页面
 │
-├── tests/                  305 个测试
+├── tests/                  314 个测试
 └── openspec/               需求规格与设计文档（含 8 份能力规格）
 ```
 
@@ -229,7 +229,7 @@ pytest
 预期输出：
 
 ```
-305 passed
+314 passed
 ```
 
 **测试不需要网络，也不需要任何 API 密钥。**
@@ -254,8 +254,8 @@ pytest -k "降级"                       # 按关键词筛选
 | `test_ai_service.py` | 48 | AI 调用的全部降级路径（打桩，不联网） |
 | `test_demand_parser.py` | 44 | 需求解析与追问 |
 | `test_recommender.py` | 36 | 筛选、评分、排序、放宽建议 |
-| `test_report_service.py` | 28 | 报告组装与导出 |
-| `test_database.py` | 25 | 历史与收藏的读写与容错 |
+| `test_report_service.py` | 32 | 报告组装、导出与条件指纹 |
+| `test_database.py` | 30 | 历史与收藏的读写、容错与跨会话去重 |
 | `test_comparison.py` | 20 | 多商品比较 |
 | `test_data_loader.py` | 17 | 商品数据加载与降级 |
 | `test_settings.py` | 17 | 偏好读写与合并规则 |

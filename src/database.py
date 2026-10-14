@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS analysis_history (
     top_product    TEXT    NOT NULL DEFAULT '',
     top_score      REAL,
     result_count   INTEGER NOT NULL DEFAULT 0,
-    report_json    TEXT    NOT NULL
+    report_json    TEXT    NOT NULL,
+    signature      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_history_created_at
@@ -40,6 +41,15 @@ CREATE TABLE IF NOT EXISTS favorites (
     product_id TEXT PRIMARY KEY,
     added_at   TEXT NOT NULL
 );
+"""
+
+#: 同一组条件只存一条的唯一索引。
+#: 部分索引（WHERE signature IS NOT NULL）让**老记录**（签名列为 NULL）
+#: 与「没算出签名的报告」互不冲突，升级老库时不会因为历史重复数据而失败。
+_SIGNATURE_INDEX = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_history_signature
+    ON analysis_history (signature)
+    WHERE signature IS NOT NULL;
 """
 
 
@@ -100,16 +110,32 @@ def _connect(path: Path | None = None):
 
 
 def init_db(path: Path | None = None) -> None:
-    """建表。可重复调用，已存在时不做任何改动。"""
+    """建表并做轻量迁移。可重复调用，已存在时不做任何改动。"""
     with _connect(path) as connection:
         try:
             connection.executescript(_SCHEMA)
+            _migrate(connection)
             connection.commit()
         except sqlite3.Error as exc:
             raise HistoryWriteError(
                 "本地数据库初始化失败，历史记录功能暂不可用。",
                 detail=f"{type(exc).__name__}: {exc}",
             ) from exc
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    """老库升级。当前唯一的一步：给没有 signature 列的 analysis_history 补列。
+
+    `CREATE TABLE IF NOT EXISTS` 对已存在的表不生效，所以老库的
+    signature 列只能在这里补。列加了之后签名是 NULL，配合
+    `_SIGNATURE_INDEX` 的部分索引，历史数据不需要回填也不会冲突。
+    """
+    columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(analysis_history)")
+    }
+    if "signature" not in columns:
+        connection.execute("ALTER TABLE analysis_history ADD COLUMN signature TEXT")
+    connection.execute(_SIGNATURE_INDEX)
 
 
 def _ensure_ready(path: Path | None) -> None:
@@ -153,6 +179,12 @@ def check_health(path: Path | None = None) -> tuple[bool, str]:
 def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
     """写入一条分析记录，返回记录 ID。
 
+    **按条件指纹去重**：数据库里已有同指纹记录时不新增，
+    直接返回已有记录的 ID。去重在数据库层完成——所以跨会话
+    （刷新页面、重开浏览器后再提交同一组条件）同样只存一条，
+    这是对 spec「同一组条件只存一条记录」场景的兑现。
+    签名为空的报告（老版本生成的记录）不做去重，保持历史行为。
+
     Raises:
         HistoryWriteError: 写入失败。调用方应提示用户，但**不中断**当前页面——
         结果还在内存里，用户的这次分析没有白做。
@@ -169,26 +201,49 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
             detail=exc.detail,
         ) from exc
 
+    signature = (report.signature or "").strip() or None
+
     try:
         with _connect(path) as connection:
-            cursor = connection.execute(
-                """
-                INSERT INTO analysis_history
-                    (created_at, demand_summary, top_product, top_score,
-                     result_count, report_json)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    report.created_at,
-                    report.demand_summary,
-                    top.name if top else "",
-                    top.score_total if top else None,
-                    len(report.recommendations),
-                    json.dumps(report.to_dict(), ensure_ascii=False),
-                ),
-            )
-            connection.commit()
-            return int(cursor.lastrowid or 0)
+            if signature is not None:
+                existing = connection.execute(
+                    "SELECT id FROM analysis_history WHERE signature = ? LIMIT 1",
+                    (signature,),
+                ).fetchone()
+                if existing is not None:
+                    return int(existing["id"])
+
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO analysis_history
+                        (created_at, demand_summary, top_product, top_score,
+                         result_count, report_json, signature)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        report.created_at,
+                        report.demand_summary,
+                        top.name if top else "",
+                        top.score_total if top else None,
+                        len(report.recommendations),
+                        json.dumps(report.to_dict(), ensure_ascii=False),
+                        signature,
+                    ),
+                )
+                connection.commit()
+                return int(cursor.lastrowid or 0)
+            except sqlite3.IntegrityError:
+                # 并发窗口内另一个会话刚好插入了同指纹记录。
+                # 查回来按「已存在」处理；真的查不到再往外抛。
+                connection.rollback()
+                existing = connection.execute(
+                    "SELECT id FROM analysis_history WHERE signature = ? LIMIT 1",
+                    (signature,),
+                ).fetchone()
+                if existing is not None:
+                    return int(existing["id"])
+                raise
     except sqlite3.Error as exc:
         raise HistoryWriteError(
             "本次分析记录保存失败，结果仍可在当前页面查看。",

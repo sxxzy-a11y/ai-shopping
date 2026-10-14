@@ -350,9 +350,11 @@ def _parse_text(raw_text: str, catalog: Catalog, ai_enabled: bool, notes: list[s
 
 
 def _persist(report, signature: str) -> None:
-    """把报告写进历史记录，带会话级去重。
+    """把报告写进历史记录，带两级去重。
 
-    去重依据是「条件指纹」：同一组条件重复点「开始分析」只落一条记录。
+    第一级是会话内短路（`KEY_SAVED_SIGNATURE`），省一次数据库往返；
+    第二级在数据库层按条件指纹查重（见 `database.save_analysis`）——
+    刷新页面、重开浏览器后的新会话提交同一组条件，同样只保留一条。
     写入失败**不中断**当前页面——结果还在内存里，用户这次分析没有白做。
     """
     if st.session_state.get(state.KEY_SAVED_SIGNATURE) == signature:
