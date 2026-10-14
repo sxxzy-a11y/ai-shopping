@@ -1,0 +1,180 @@
+# 接入购物平台数据指南
+
+本文说明如何把真实购物平台的数据接进本项目。**应用本身不需要改**——
+所有业务逻辑都通过 `data/products.json` 这一份数据契约工作，
+只要生成的文件结构一致，筛选、评分、比较、界面自动适配。
+
+---
+
+## 1. 流程总览
+
+```
+平台 API / CSV 导出
+        │
+        ▼
+scripts/fetch_products.py      ← 取数（HTTP、读文件）
+        │  原始记录（字段名随平台）
+        ▼
+src/ingest.py                  ← 转换（字段映射、档位折算、类目归一）
+        │  内部商品结构
+        ▼
+写前严格校验                    ← 不合格就不写文件
+        │
+        ▼
+data/products.json             ← 应用读取的唯一入口
+```
+
+- 取数与转换分离：转换规则可以脱离网络做单元测试
+- **写盘前严格校验**：坏数据不落盘（与读取端的宽容策略刻意相反）
+- 写盘用「临时文件 + 替换」：中途失败不会留下半个文件
+
+---
+
+## 2. 快速跑通（CSV 通道，不需要任何平台账号）
+
+```bash
+# 1) 生成列名模板
+python scripts/fetch_products.py --write-template data/platform_export.csv
+
+# 2) 把模板改成你平台导出的结构，然后先空跑看报告
+python scripts/fetch_products.py --source csv --input data/platform_export.csv --dry-run
+
+# 3) 确认无误后写入（merge：同 id 覆盖，新 id 追加，其余保留）
+python scripts/fetch_products.py --source csv --input data/platform_export.csv
+```
+
+**列名不要求固定**。脚本按别名表识别（见 `src/ingest.py` 的
+`_FIELD_ALIASES`），常见的「商品ID / 标题 / 价格 / 类目 / 品牌 / 参数」
+都能直接认。新平台第一次接入时，把它的列名补进别名表即可。
+
+「参数」列支持三种写法：
+
+- JSON 对象：`{"容量": 318, "能效等级": "一级"}`
+- 文本：`容量: 318; 能效等级: 一级`
+- 留空
+
+---
+
+## 3. 接入真实 API
+
+`scripts/fetch_products.py` 里的 `ApiSource` 是一个骨架，
+典型的分页 JSON 接口只需要改三个「接入点」：
+
+| 接入点 | 位置 | 要做什么 |
+|---|---|---|
+| 鉴权 | `ApiSource._headers()` | 改成平台的 AppKey / 签名 / Token 方式 |
+| 分页 | `ApiSource._params()` | 改成平台的页码、offset 或 cursor 协议 |
+| 结构 | `ApiSource._extract_items()` | 按平台的返回包装取商品数组 |
+
+其余流程（转换、校验、合并、写盘）都无需改动。
+
+### 环境变量
+
+| 变量 | 说明 |
+|---|---|
+| `ZHIGOU_PLATFORM_BASE_URL` | 平台接口根地址，如 `https://open.example.com` |
+| `ZHIGOU_PLATFORM_API_KEY` | 平台密钥。**只从环境变量读，不写进代码** |
+| `ZHIGOU_PLATFORM_SOURCE_LABEL` | 数据来源标注，会盖进每条商品的 `data_source` |
+
+```bash
+python scripts/fetch_products.py --source api --mode replace
+```
+
+---
+
+## 4. 字段映射规则
+
+### 4.1 类目
+
+平台的类目名映射到内部类别键，配置在 `src/ingest.py` 的
+`DEFAULT_CATEGORY_MAP`。匹配顺序：精确 → 包含 → 内部类别中文名包含。
+
+平台类目对不上时有两种处理：
+
+- 映射到已有的 10 个品类之一（推荐，评分维度现成）
+- 新增一个品类：在 `src/config.py` 登记 `CATEGORY_LABELS` 与
+  `SCORING_WEIGHTS`，再指明它的参数范围（`src/scoring.py` 的
+  `_SPEC_RANGES` / `_PERFORMANCE_SPECS`）。比较表会自动带上该类别的参数
+
+### 4.2 参数（specs）
+
+平台参数名 → 内部参数键，配置在 `SPEC_ALIASES`。两个要点：
+
+1. **未登记的键原样保留**——比较表能显示，只是没有中文标签。
+   宁可先少映射，也不要乱映射
+2. **档位要折算**。项目内部用 1–5 档（5 最高），而平台给的是
+   「一级能效」「三星」这类原始表述：
+   - `parse_energy_grade("一级")` → `5`（一级能效最好，映射到 5）
+   - `to_tier(8, scale_max=10)` → `4`（满分 10 分制折算到 1–5）
+   - 新品类要补同类折算函数，并加到 `TIER_KEYS`
+
+### 4.3 价格
+
+`parse_price()` 能处理 `￥2,999.00`、`2999元` 这类文本；
+解析不出来会**报错并拒绝写盘**，不会把坏价格写进数据。
+
+---
+
+## 5. 合并策略
+
+| 模式 | 行为 | 适用场景 |
+|---|---|---|
+| `merge`（默认） | 同 id 覆盖；新 id 追加；未抓到的老商品保留 | 增量更新、平台只返回部分商品 |
+| `replace` | 完全用新数据替换 | 全量抓取 |
+
+---
+
+## 6. 定期刷新
+
+真实价格会变，建议用系统计划任务定期重跑：
+
+```bash
+# Windows：任务计划程序里安排每天执行
+python scripts/fetch_products.py --source api --mode replace
+```
+
+注意事项：
+
+- **限流**：平台的调用频次限制要留余量，加缓存与退避重试
+- **失败不破坏现状**：校验不过时脚本直接退出且不写文件，
+  旧数据集保持可用——这正是「写前校验 + 临时文件替换」的目的
+- **保留快照**（可选）：需要追溯价格历史时，把每次产物按日期另存一份
+
+---
+
+## 7. 切换为真实数据后必须同步的事
+
+1. **真实性标注**：`data_source` 由脚本统一盖章为「来自XX平台 · 抓取于
+   某日」。**不允许**再出现「演示数据」字样，也不允许把平台营销文案
+   当作用户评价
+2. **更新测试断言**：`tests/test_data_loader.py` 与
+   `tests/test_acceptance.py` 中有「数据集必须标注演示数据」的断言，
+   切换到真实数据后需要同步修改
+3. **核对评分口径**：真实参数的量纲可能与演示数据不同，
+   `src/scoring.py` 的 `_SPEC_RANGES` 需要按真实量纲校准
+4. **免责声明**：`docs/data-disclaimer.md` 与界面文案中关于「演示数据」
+   的表述需要按实际情况改写
+
+---
+
+## 8. 可直接跑的命令速查
+
+```bash
+# 生成模板
+python scripts/fetch_products.py --write-template data/platform_export.csv
+
+# 空跑（只转换与校验）
+python scripts/fetch_products.py --source csv --input data/platform_export.csv --dry-run
+
+# 正式写入（合并）
+python scripts/fetch_products.py --source csv --input data/platform_export.csv
+
+# 只处理前 20 条（调试）
+python scripts/fetch_products.py --source csv --input data/platform_export.csv --limit 20 --dry-run
+
+# API 模式（需先配好环境变量）
+python scripts/fetch_products.py --source api --mode replace
+
+# 跑接入层的测试
+pytest tests/test_ingest.py
+```

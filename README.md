@@ -144,10 +144,14 @@ ai shopping/
 ├── data/
 │   └── products.json       112 条演示商品（10 个品类，见下方「商品品类」）
 │
+├── scripts/
+│   └── fetch_products.py   外部数据接入 CLI（详见 docs/platform-integration.md）
+│
 ├── src/                    业务逻辑层（不依赖 Streamlit，可单独测试）
-│   ├── config.py           路径、环境变量、评分权重表
+│   ├── config.py           路径、环境变量、评分权重表与参数标签
 │   ├── errors.py           领域异常 + 中文文案映射
 │   ├── data_loader.py      商品数据加载与容错
+│   ├── ingest.py           外部数据接入：字段映射、档位折算、写前校验
 │   ├── demand_parser.py    自然语言 → 结构化需求
 │   ├── scoring.py          多维度需求适配评分
 │   ├── recommender.py      筛选、排序、放宽建议
@@ -164,7 +168,11 @@ ai shopping/
 │       ├── components.py   卡片、评分条、徽章等
 │       └── pages/          六个页面
 │
-├── tests/                  337 个测试
+├── docs/
+│   ├── data-disclaimer.md  数据说明
+│   └── platform-integration.md  接入购物平台数据指南
+│
+├── tests/                  380 个测试
 └── openspec/               需求规格与设计文档（含 8 份能力规格）
 ```
 
@@ -252,7 +260,7 @@ pytest
 预期输出：
 
 ```
-337 passed
+380 passed
 ```
 
 **测试不需要网络，也不需要任何 API 密钥。**
@@ -277,6 +285,7 @@ pytest -k "降级"                       # 按关键词筛选
 | `test_ai_service.py` | 48 | AI 调用的全部降级路径（打桩，不联网） |
 | `test_recommender.py` | 59 | 筛选、评分、排序、放宽建议、按品类维度 |
 | `test_demand_parser.py` | 44 | 需求解析与追问 |
+| `test_ingest.py` | 43 | 平台数据接入：映射、校验、合并与 CSV 全流程 |
 | `test_report_service.py` | 32 | 报告组装、导出与条件指纹 |
 | `test_database.py` | 30 | 历史与收藏的读写、容错与跨会话去重 |
 | `test_comparison.py` | 19 | 多商品比较 |
@@ -400,3 +409,17 @@ openspec/changes/archive/2026-10-12-add-zhigou-mvp/
 
 改动行为前先改 `openspec/specs/` 下的规格，再改代码。
 新功能用 `openspec new change <名字>` 起一个新的变更。
+
+### 接入购物平台数据
+
+应用通过 `data/products.json` 这一份数据契约工作，接入真实平台数据
+不需要改业务逻辑。完整指南见
+[docs/platform-integration.md](docs/platform-integration.md)，最快的验证方式：
+
+```bash
+python scripts/fetch_products.py --write-template data/platform_export.csv  # 生成列名模板
+python scripts/fetch_products.py --source csv --input data/platform_export.csv --dry-run
+```
+
+取数在 `scripts/fetch_products.py`（CSV / API 两种适配器），
+字段映射、档位折算与写前校验在 `src/ingest.py`。
