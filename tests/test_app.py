@@ -355,6 +355,47 @@ def test_two_products_can_be_compared():
 # --------------------------------------------------------------------------
 
 
+def test_catalog_reloads_after_the_data_file_is_refreshed(tmp_path, monkeypatch):
+    """接入脚本刷新数据文件后，应用应自动加载新数据，不用重启。
+
+    缓存键里带着文件修改时间，所以同一个进程内也能观察到重新加载。
+    """
+    import json
+    import os
+
+    data_file = tmp_path / "products.json"
+
+    def write(products):
+        data_file.write_text(
+            json.dumps({"products": products}, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def product(pid: str, name: str) -> dict:
+        return {
+            "id": pid,
+            "name": name,
+            "category": "laptop",
+            "price": 3000,
+            "brand": "测试品牌",
+            "specs": {"cpu_tier": 3},
+            "use_cases": ["办公"],
+            "pros": ["测试"],
+            "cons": ["测试"],
+            "data_source": "演示数据 · 测试夹具",
+            "updated_at": "2026-01-01",
+        }
+
+    monkeypatch.setenv("ZHIGOU_PRODUCTS_PATH", str(data_file))
+
+    write([product("T1", "一号")])
+    os.utime(data_file, (1_000_000, 1_000_000))
+    assert len(state.get_catalog()) == 1
+
+    write([product("T1", "一号"), product("T2", "二号")])
+    os.utime(data_file, (2_000_000, 2_000_000))
+    assert len(state.get_catalog()) == 2, "数据文件刷新后应自动加载新数据"
+
+
 def test_demo_data_disclaimer_is_visible_on_home():
     at = _run()
     body = _all_text(at)

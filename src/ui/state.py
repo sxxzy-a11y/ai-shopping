@@ -80,14 +80,30 @@ def clear_analysis() -> None:
 # --------------------------------------------------------------------------
 
 
-@st.cache_resource(show_spinner=False)
-def _load_cached(path_str: str) -> Catalog:
-    """按路径缓存数据集。
+@st.cache_resource(show_spinner=False, max_entries=4)
+def _load_cached(path_str: str, mtime: float) -> Catalog:
+    """按「路径 + 文件修改时间」缓存数据集。
+
+    把 mtime 放进缓存键是为了接入脚本：`scripts/fetch_products.py`
+    刷新 `data/products.json` 之后，运行中的应用下一次渲染就会自动
+    加载新数据，不需要重启。max_entries 取小值——旧版本的缓存没有
+    复用价值，留 4 份足够覆盖「刚刷新过」的窗口。
 
     用 `cache_resource` 而不是 `cache_data`：返回的是同一个对象，
     不做拷贝，页面之间共享。数据文件很小，缓存一次足够。
+
+    文件不存在时 mtime 取 0，`load_catalog` 照旧抛出领域异常
+    （`DataFileMissing`），异常出口保持不变。
     """
     return load_catalog(Path(path_str))
+
+
+def _file_stamp(path: Path) -> float:
+    """取文件修改时间；文件不在或读不到时返回 0（缓存键仍可用）。"""
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def get_catalog() -> Catalog:
@@ -96,7 +112,8 @@ def get_catalog() -> Catalog:
     这里**不吞异常**——文件缺失/非法时让 `DataFileMissing` 等抛出去，
     由 app.py 在边界处统一转成中文提示，保证整套异常处理只有一个出口。
     """
-    return _load_cached(str(config.products_path()))
+    path = config.products_path()
+    return _load_cached(str(path), _file_stamp(path))
 
 
 def current_mode() -> tuple[str, str]:
