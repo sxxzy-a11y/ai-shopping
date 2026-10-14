@@ -13,7 +13,11 @@ from src import config
 from src.comparison import MISSING_TEXT, compare
 from src.data_loader import Product
 from src.demand_parser import Demand
-from src.errors import TooFewForComparison, TooManyForComparison
+from src.errors import (
+    MixedCategoryComparison,
+    TooFewForComparison,
+    TooManyForComparison,
+)
 
 
 @pytest.fixture
@@ -112,6 +116,37 @@ def test_duplicate_products_are_rejected(catalog, laptop_demand):
     same = catalog.get("LP001")
     with pytest.raises(ValueError):
         compare([same, same, same], laptop_demand)
+
+
+# --------------------------------------------------------------------------
+# 同类约束（spec: 比较范围限定在同一类别）
+# --------------------------------------------------------------------------
+
+
+def test_mixed_categories_are_rejected_with_a_clear_message(catalog, laptop_demand):
+    """衣服和电脑放在一起比没有意义——跨类别混选必须被挡掉。"""
+    laptop = catalog.by_category("laptop")[0]
+    phone = catalog.by_category("phone")[0]
+
+    with pytest.raises(MixedCategoryComparison) as excinfo:
+        compare([laptop, phone], laptop_demand)
+
+    message = str(excinfo.value)
+    assert "同一类别" in message
+    assert "笔记本电脑" in message and "手机" in message, "提示里应指出混选了哪些类别"
+
+
+def test_mixed_categories_rejected_even_without_demand(catalog):
+    """不传需求也一样拦——这是比较本身的规则，与本次需求无关。"""
+    items = [catalog.by_category("apparel")[0], catalog.by_category("baby")[0]]
+    with pytest.raises(MixedCategoryComparison):
+        compare(items)
+
+
+def test_same_category_still_compares_after_the_guard(catalog, laptop_demand):
+    items = catalog.by_category("laptop")[:3]
+    table = compare(items, laptop_demand)
+    assert len(table) == 3
 
 
 # --------------------------------------------------------------------------
@@ -240,18 +275,19 @@ def test_to_records_is_ready_for_a_dataframe(three_laptops, laptop_demand):
 
 
 # --------------------------------------------------------------------------
-# 跨类别
+# 缺失参数的对齐（同类之间）
 # --------------------------------------------------------------------------
 
 
-def test_cross_category_comparison_still_produces_aligned_rows(catalog):
-    """比较不同类别的商品时，各商品没有的参数按缺失处理，表格不错位。"""
-    items = [catalog.get("LP001"), catalog.get("PH001"), catalog.get("HP001")]
-    table = compare(items, Demand(budget=3000))
+def test_missing_params_within_a_category_are_aligned(catalog, laptop_demand):
+    """同类商品之间参数有缺有全时，表格按列对齐，缺失项逐格标注。"""
+    complete = catalog.get("LP001")
+    broken = Product(id="LP-BROKEN", name="缺参数机型", category="laptop", price=3500)
+
+    table = compare([complete, broken], laptop_demand)
 
     for row in table.rows:
-        assert len(row.values) == 3
+        assert len(row.values) == 2
 
-    # 处理器只有笔记本有，另外两件必须标缺失
     cpu_row = _row(table, "处理器")
-    assert cpu_row.missing == [False, True, True]
+    assert cpu_row.missing == [False, True], "缺参数的商品应标缺失，且不影响另一列"

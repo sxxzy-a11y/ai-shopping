@@ -16,7 +16,11 @@ from dataclasses import dataclass
 from src import config
 from src.data_loader import Product
 from src.demand_parser import Demand
-from src.errors import TooFewForComparison, TooManyForComparison
+from src.errors import (
+    MixedCategoryComparison,
+    TooFewForComparison,
+    TooManyForComparison,
+)
 
 #: 缺失值的统一占位文案。
 MISSING_TEXT = "信息缺失"
@@ -223,6 +227,7 @@ def compare(
     Raises:
         TooFewForComparison: 少于 2 件。
         TooManyForComparison: 超过上限。
+        MixedCategoryComparison: 混选了不同类别的商品。
         ValueError: 传入了重复的商品 ID。
     """
     items = list(products)
@@ -238,6 +243,17 @@ def compare(
     ids = [p.id for p in items]
     if len(set(ids)) != len(ids):
         raise ValueError("比较列表中出现了重复的商品")
+
+    # 同类比较：价格口径、参数口径与评分的性价比排位都建立在类别之内，
+    # 跨类别放在一起比没有意义，所以在业务层直接挡掉。
+    categories = sorted({p.category for p in items})
+    if len(categories) > 1:
+        labels = "、".join(config.category_label(c) for c in categories)
+        raise MixedCategoryComparison(
+            f"一次只能比较同一类别的商品，当前混选了：{labels}。"
+            "请先移除其他类别的商品再比较。",
+            detail=f"categories={categories}",
+        )
 
     effective_demand = demand if demand is not None else Demand()
     rows: list[ComparisonRow] = []

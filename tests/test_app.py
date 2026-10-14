@@ -190,7 +190,7 @@ def test_home_button_with_empty_input_just_navigates():
     assert "请先描述你的购买需求" not in body, "空输入跳转不该弹错误"
 
 
-def test_filling_comparison_from_analysis_does_not_blow_up():
+def test_filling_comparison_from_analysis_does_not_blow_up(catalog):
     """这条曾经真的炸过：控件创建之后写它的 session_state 键。"""
     at = _run()
     _go_to_page(at, "首页")
@@ -208,6 +208,46 @@ def test_filling_comparison_from_analysis_does_not_blow_up():
         f"填充后应至少选中 {config.MIN_COMPARE_COUNT} 件，实际 {len(picked)}"
     )
     assert "横向比较" in _all_text(at)
+
+    # 预填必须是一组**同类**商品：比较只在同类之间有意义
+    category_by_label = {
+        _label_of(p): p.category for p in catalog.products
+    }
+    categories = {category_by_label[label] for label in picked}
+    assert len(categories) == 1, f"预填混选了多个类别：{categories}"
+
+
+def _label_of(product) -> str:
+    """与比较页 `_label` 一致的展示文案，用于把选项标签映射回商品。"""
+    return f"{product.name or product.id}（{product.price_label}）"
+
+
+def test_compare_options_are_scoped_to_the_chosen_category(catalog):
+    """spec：比较限定在同一类别——候选里只有所选类别的商品。"""
+    at = _run()
+    _go_to_page(at, "商品比较")
+    _assert_clean(at)
+
+    # 换到手机类别：候选应只剩手机
+    at.selectbox[0].set_value(config.category_label("phone")).run()
+    _assert_clean(at)
+
+    phone_labels = {_label_of(p) for p in catalog.by_category("phone")}
+    assert set(at.multiselect[0].options) == phone_labels
+
+    # 选两件手机，再换到服饰：上一类别的选择应被清掉，候选换成服饰
+    picks = sorted(phone_labels)[: config.MIN_COMPARE_COUNT]
+    at.multiselect[0].set_value(picks).run()
+    _assert_clean(at)
+    assert list(at.session_state["zg_compare_pick"]) == picks
+
+    at.selectbox[0].set_value(config.category_label("apparel")).run()
+    _assert_clean(at)
+    assert list(at.session_state["zg_compare_pick"]) == [], (
+        "换类别后应清空上一类别的选择，否则会留下不在候选里的幽灵选中项"
+    )
+    apparel_labels = {_label_of(p) for p in catalog.by_category("apparel")}
+    assert set(at.multiselect[0].options) == apparel_labels
 
 
 def test_clearing_conditions_does_not_blow_up():

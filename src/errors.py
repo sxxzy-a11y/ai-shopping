@@ -66,11 +66,15 @@ class DemandParseError(ZhigouError):
 
 
 class TooFewForComparison(ZhigouError):
-    default_message = "请至少选择 3 件商品进行比较。"
+    default_message = "请至少选择 2 件商品进行比较。"
 
 
 class TooManyForComparison(ZhigouError):
     default_message = "选择的商品数量过多，请减少后再比较。"
+
+
+class MixedCategoryComparison(ZhigouError):
+    default_message = "一次只能比较同一类别的商品，请先移除其他类别的商品。"
 
 
 # --- 大模型层 ---------------------------------------------------------------
@@ -129,6 +133,7 @@ _MESSAGE_BY_TYPE: dict[type[ZhigouError], str] = {
         DemandParseError,
         TooFewForComparison,
         TooManyForComparison,
+        MixedCategoryComparison,
         AINotConfigured,
         UpstreamTimeout,
         UpstreamAuthError,

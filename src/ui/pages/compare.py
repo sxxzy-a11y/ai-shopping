@@ -15,8 +15,12 @@ from src.ui import components, state
 from src.ui.theme import bullet_list
 
 _PICK_KEY = "zg_compare_pick"
+_CATEGORY_KEY = "zg_compare_category"
+#: 上一次渲染时选中的类别（普通会话键）。用于识别「用户换了类别」，
+#: 换类别时清掉上一个类别的已选商品——它们已经不在候选里了。
+_LAST_CATEGORY_KEY = "zg_compare_last_category"
 _MIRROR_NS = "compare_pick"
-_PICK_DEFAULTS = {_PICK_KEY: []}
+_PICK_DEFAULTS = {_PICK_KEY: [], _CATEGORY_KEY: ""}
 
 #: 表格里长文本的截断长度。
 #: 5 件商品同屏时每列只有 ~230px，优缺点的完整文本有 60 字以上，
@@ -49,36 +53,86 @@ def _apply_pending_pick() -> None:
     """
     requested = st.session_state.pop(state.KEY_COMPARE_PREFILL, None)
     if requested is not None:
-        st.session_state[_PICK_KEY] = requested
+        st.session_state[_CATEGORY_KEY] = requested["category"]
+        st.session_state[_PICK_KEY] = list(requested["labels"])
+        # 预填自带类别：同步「上次类别」，否则下面的换类别检测会把刚填好的
+        # 选择当成上一个类别的残留清掉。
+        st.session_state[_LAST_CATEGORY_KEY] = requested["category"]
         return
-    # 切页会清掉控件状态，这里恢复用户之前选好的商品
+    # 切页会清掉控件状态，这里恢复用户之前选好的类别与商品
     state.restore_widgets(_MIRROR_NS, _PICK_DEFAULTS)
 
 
 def _request_fill_from_analysis() -> None:
-    """用上一次分析的推荐结果填充选择框，省得手动一件件挑。"""
+    """用上一次分析的推荐结果填充选择框，省得手动一件件挑。
+
+    分析未指定类别时，推荐结果可能跨类别（例如「3000 元买什么」）。
+    比较只允许同类，所以这里**只取首选所在的类别**，保证预填进来的
+    是一组可比较商品。
+    """
     result = state.get(state.KEY_RESULT)
     if result is None:
         return
-    picks = result.all_items()[: config.MAX_COMPARE_COUNT]
-    st.session_state[state.KEY_COMPARE_PREFILL] = [_label(item.product) for item in picks]
+    items = result.all_items()
+    if not items:
+        return
+    leading_category = items[0].product.category
+    same_category = [item for item in items if item.product.category == leading_category]
+    picks = same_category[: config.MAX_COMPARE_COUNT]
+    st.session_state[state.KEY_COMPARE_PREFILL] = {
+        "category": leading_category,
+        "labels": [_label(item.product) for item in picks],
+    }
     st.rerun()
 
 
 def _render_picker(catalog: Catalog) -> list:
-    """商品选择区，返回选中的商品。"""
-    by_label = {_label(p): p.id for p in catalog.products}
+    """选择区：先选商品类别，再在该类别里选商品。
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
+    比较只在同类之间有意义的，所以这里**用「类别 → 商品」两步选择**
+    从结构上保证同类：候选里根本不会出现其他类别的商品。
+
+    不用「选中第一件后自动收窄候选」的做法：Streamlit 的多选框在
+    选项列表变化时会丢弃已选值，收窄会把用户刚选的那件也清掉。
+
+    返回选中的商品列表。
+    """
+    categories = catalog.present_categories()
+    label_by_category = {config.category_label(key): key for key in categories}
+
+    # 类别选择。镜像里恢复出来的类别可能已不在数据集中（数据换了），清掉走默认。
+    if st.session_state.get(_CATEGORY_KEY) not in label_by_category:
+        st.session_state.pop(_CATEGORY_KEY, None)
+
+    col_category, col_items, col_action = st.columns([1.4, 2.6, 1.1])
+    with col_category:
+        st.write("")
+        category_label = st.selectbox(
+            "商品类别", options=list(label_by_category), key=_CATEGORY_KEY
+        )
+    category = label_by_category[category_label]
+
+    # 换类别时清掉上一个类别的已选商品（此刻多选框还没创建，可以安全写它的键）
+    previous_category = st.session_state.get(_LAST_CATEGORY_KEY)
+    if previous_category is not None and previous_category != category:
+        st.session_state[_PICK_KEY] = []
+    st.session_state[_LAST_CATEGORY_KEY] = category
+
+    options = {_label(p): p.id for p in catalog.by_category(category)}
+
+    with col_items:
+        st.write("")
         chosen = st.multiselect(
             "选择要比较的商品",
-            options=list(by_label),
+            options=list(options),
             key=_PICK_KEY,
             max_selections=config.MAX_COMPARE_COUNT,
-            placeholder=f"至少选 {config.MIN_COMPARE_COUNT} 件，最多 {config.MAX_COMPARE_COUNT} 件",
+            placeholder=(
+                f"在本类别内至少选 {config.MIN_COMPARE_COUNT} 件、"
+                f"最多 {config.MAX_COMPARE_COUNT} 件"
+            ),
         )
-    with col2:
+    with col_action:
         st.write("")
         st.write("")
         if state.get(state.KEY_RESULT) is not None:
@@ -92,7 +146,9 @@ def _render_picker(catalog: Catalog) -> list:
             )
 
     state.snapshot_widgets(_MIRROR_NS, _PICK_DEFAULTS)
-    return [catalog.get(by_label[label]) for label in chosen]
+    # 防御：万一某个标签在当前候选里不存在（例如数据文件在两次运行之间换了），
+    # 丢掉那一项而不是整页报错。
+    return [catalog.get(options[label]) for label in chosen if label in options]
 
 
 def _shorten_prose_cells(records: list[dict]) -> None:
@@ -115,8 +171,9 @@ def render(catalog: Catalog) -> None:
 
     components.page_header(
         "商品比较",
-        f"选 {config.MIN_COMPARE_COUNT} 到 {config.MAX_COMPARE_COUNT} 件商品横向对比，"
-        "价格、核心参数、适用场景、优缺点和预算匹配度放在同一张表里看。",
+        f"在同一类别内选 {config.MIN_COMPARE_COUNT} 到 {config.MAX_COMPARE_COUNT} 件商品"
+        "横向对比，价格、核心参数、适用场景、优缺点和预算匹配度放在同一张表里看。"
+        "先选商品类别，再从该类别的商品里挑。",
     )
 
     demand = state.get(state.KEY_DEMAND) or Demand()
