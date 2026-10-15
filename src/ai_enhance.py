@@ -612,6 +612,93 @@ def explain_recommendations(
     return {"overview": overview, "per_product": per_product, "dropped": dropped}
 
 
+# --------------------------------------------------------------------------
+# 知识问答：基于检索片段组织回答
+# --------------------------------------------------------------------------
+
+_ANSWER_SYSTEM = """你是消费决策助手。用户问了一个选购问题，系统已经从知识库里\
+检索到若干资料片段。你的任务是把这些片段组织成一段通顺的回答。
+
+严格遵守：
+1. 只输出 JSON，不要任何解释文字，不要用 markdown 代码块。
+2. **只依据提供的片段作答。** 片段里没有的内容一律不说，即使你知道也不说。
+3. 片段不足以回答这个问题时，answer 里直接说明「现有资料没有覆盖这一点」，\
+不要用常识补全。
+4. 不要给结论性排名或口碑判断——不要出现「销量第一」「口碑最好」「全网最低」\
+这类说法，知识库里没有这些依据。
+5. 不要给出具体价格。片段里若出现参考价，那是商品数据里的记录值，\
+不是实时价格，也不要据此比较贵贱。
+6. 回答用中文，**控制在 200 字以内**，直接说要点，不要客套。
+
+输出格式：
+{"answer": "……", "used_fragment_indexes": [1, 2]}"""
+
+
+def _prices_in(text: str) -> set[float]:
+    """把一段文本里出现的价格抽出来，作为该校验的允许集。"""
+    prices: set[float] = set()
+    for match in _PRICE_PATTERN.finditer(text):
+        prices.add(float(match.group(1).replace(",", "")))
+    return prices
+
+
+def answer_from_knowledge(
+    query: str,
+    passages: Sequence[Any],
+    *,
+    service: AIService,
+) -> str:
+    """基于检索到的片段组织一段回答。
+
+    Raises:
+        领域异常。调用方应降级为**直接展示片段原文**——那是本地模式的形态，
+        已经能用了，不是「没得看」。
+
+    校验用的是 `harden-ai-enhancement` 落地的那条链：价格必须来自片段原文，
+    排他性结论一律拒绝。片段不足时要求模型自己说明，而不是补全。
+    """
+    if not passages:
+        raise UpstreamResponseError("没有可依据的资料片段。")
+
+    fragments = [
+        {
+            "index": index,
+            "title": passage.title,
+            "type": passage.type_label,
+            "content": passage.excerpt,
+        }
+        for index, passage in enumerate(passages, start=1)
+    ]
+    user = (
+        f"用户的问题：{query}\n\n"
+        f"检索到的资料片段：\n{json.dumps(fragments, ensure_ascii=False, indent=1)}\n\n"
+        f"请按要求输出 JSON。"
+    )
+
+    payload = service.complete_json(_ANSWER_SYSTEM, user)
+    answer = " ".join(str(payload.get("answer") or "").split()).strip()
+    if not answer:
+        raise UpstreamResponseError("模型没有给出回答内容。")
+
+    # 校验一：回答里出现的价格必须在片段原文里出现过。
+    # 允许集取全部片段的并集——模型可能引用任意一条。
+    allowed_prices: set[float] = set()
+    for passage in passages:
+        allowed_prices |= _prices_in(passage.excerpt)
+
+    invented = find_invented_prices(answer, allowed_prices)
+    if invented:
+        raise UpstreamResponseError(f"回答里出现了资料中没有的价格：{invented}")
+
+    # 校验二：排他性结论——与解读走同一张模式表。
+    absolute = find_unsupported_claims(answer)
+    if absolute:
+        raise UpstreamResponseError(f"回答里出现了无依据的排他性结论：{absolute}")
+
+    logger.info("知识问答作答完成：%d 个片段，回答 %d 字", len(passages), len(answer))
+    return answer
+
+
 #: 给界面用的数据共享说明。调用外部服务前必须展示。
 def data_sharing_notice(demand: Demand, item_count: int) -> str:
     """说明启用 AI 后会把哪些数据发出去。"""

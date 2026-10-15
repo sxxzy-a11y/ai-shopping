@@ -202,7 +202,7 @@ python -c "from src import ai_service; print(ai_service.probe())"
 | 1 | 用户询问数据库中不存在的商品 | ✅ | 无匹配时说明原因 + 放宽建议 |
 | 2 | 商品缺少某个参数 | ✅ | 缺失维度排除计算并注明 |
 | 3 | 用户预算低于所有候选商品的价格 | ✅ | 无结果处理 + 超预算单列 |
-| 4 | 知识库检索不到相关资料 | 📋 | 依赖 RAG（`add-knowledge-base`），尚未实现 |
+| 4 | 知识库检索不到相关资料 | ✅ | 相关度低于阈值判定为检索不到，不展示任何来源 |
 | 5 | 商品资料中出现互相矛盾的描述 | ✅ | `consistency.check_product()` 检测并标「资料存疑」 |
 | 6 | 用户要求模型提供没有数据依据的性能结论 | ✅ | 参数数值校验 + 排他性结论校验 |
 
@@ -264,6 +264,27 @@ python -c "from src import ai_service; print(ai_service.probe())"
 
 ---
 
+## 4.5 知识检索回归基线 ✅
+
+固定查询集写在 `tests/test_knowledge_search.py`，**11 条正例 + 4 条反例**。
+它不只是「能不能检索到」，还要求**排第一的是正确的那一类**文档——
+这是防「通用问题被答成具体商品」的关键。
+
+| 类别 | 例子 | 要求 |
+|---|---|---|
+| 术语类 | 主动降噪和被动降噪有什么区别 | 排第一为服务级或品类级 |
+| 通用选购类 | 通勤戴的耳机怎么选 / 机械键盘选什么轴 | 排第一为品类级 |
+| 具体商品类 | 静谷 ANC Pro 怎么样 | 排第一为商品级 |
+| 语料外（反例） | 今天天气怎么样 / 怎么给自行车补胎 | **返回空** |
+
+**调参之后跑一遍就知道是变好还是变坏**：改语料、改类型系数、改阈值，
+基线是唯一的客观依据。它也是「效果评测」子项目的雏形。
+
+配套的调参记录：商品级系数由实测校准得出（0.55 时 7/8，0.45 时 8/8 + 4/4），
+细节见 [architecture.md §8.3](architecture.md#83-两层加权) 与本变更的 tasks.md。
+
+---
+
 ## 5. 分阶段验收标准
 
 | 阶段 | 完成标准 | 状态 |
@@ -303,6 +324,6 @@ python -c "from src import ai_service; print(ai_service.probe())"
 | 文档 | 内容 |
 |---|---|
 | [requirements.md](requirements.md) | 需求规格与非功能需求 |
-| [architecture.md](architecture.md) | 架构与抗幻觉设计 |
+| [architecture.md](architecture.md) | 架构、知识库层与抗幻觉设计 |
 | [demo_script.md](demo_script.md) | 演示脚本 |
 | [spec-coverage.md](spec-coverage.md) | 规格覆盖追溯表（归档变更的 99 条 Scenario） |

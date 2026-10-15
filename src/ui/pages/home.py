@@ -19,8 +19,11 @@ _CAPABILITIES: list[tuple[str, str, str]] = [
 ]
 
 
-def _go_to_analysis(raw_text: str) -> None:
+def go_to_analysis(raw_text: str) -> None:
     """把需求交给分析页并**直接跑出结果**。
+
+    公开给知识问答页复用：那边的「涉及价格的问题请走筛选」引导，
+    要的就是同一个动作——带着问题原文跳到分析页去筛选。
 
     只记请求、不直接写分析页控件的键——那些控件属于另一个页面，
     直接写会埋下顺序依赖（Streamlit 不允许控件实例化后改它的键）。
@@ -74,7 +77,7 @@ def render(catalog: Catalog) -> None:
             if st.button("开始分析", type="primary", use_container_width=True):
                 text = st.session_state.get("zg_home_input", "").strip()
                 if text:
-                    _go_to_analysis(text)
+                    go_to_analysis(text)
                 else:
                     # 没填内容就直接跳过去，那边会给出「请先描述需求」的提示
                     state.clear_analysis()

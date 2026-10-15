@@ -16,7 +16,7 @@ import streamlit as st
 from src import config
 from src.errors import ZhigouError, to_user_message
 from src.ui import components, icons, state, theme
-from src.ui.pages import about, analysis, compare, history, home, settings
+from src.ui.pages import about, analysis, compare, history, home, knowledge, settings
 
 #: 导航项：(页面名, Material 图标名, 渲染函数)。
 #: 图标走 Streamlit 官方的 `icon=` 参数，这是最稳的接入方式。
@@ -24,6 +24,7 @@ NAV_ITEMS: list[tuple[str, str, callable]] = [
     ("首页", ":material/home:", home.render),
     ("智能分析", ":material/insights:", analysis.render),
     ("商品比较", ":material/view_column:", compare.render),
+    ("知识问答", ":material/menu_book:", knowledge.render),
     ("历史记录", ":material/history:", history.render),
     ("个人设置", ":material/tune:", settings.render),
     ("项目说明", ":material/info:", about.render),

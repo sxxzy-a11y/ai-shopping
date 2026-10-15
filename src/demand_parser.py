@@ -443,6 +443,20 @@ def _match_keywords(text: str, table: dict[str, tuple[str, ...]]) -> list[str]:
     return hits
 
 
+def detect_category_terms(text: str) -> list[str]:
+    """文本里提到的**全部**类别键，按关键词表顺序。
+
+    与 `_extract_category` 的区别是它不做「只取第一个」的决断——
+    知识检索需要知道用户提到了哪些品类（可能不止一个），
+    才能把对应品类的资料往前排。需求解析那边仍然只认第一个。
+    """
+    return [
+        key
+        for key, keywords in _CATEGORY_KEYWORDS.items()
+        if any(keyword in text for keyword in keywords)
+    ]
+
+
 def _extract_category(text: str) -> str:
     """识别商品类别。命中多个时按表顺序取第一个（笔记本优先于「电脑」泛称）。"""
     for key, keywords in _CATEGORY_KEYWORDS.items():

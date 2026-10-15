@@ -15,6 +15,8 @@ import streamlit as st
 
 from src import config
 from src.data_loader import Catalog, load_catalog
+from src.knowledge.corpus import build_corpus
+from src.knowledge.index import BM25Index
 
 # --- session_state 键名 -----------------------------------------------------
 # 集中定义，避免各页面随手写字符串导致拼错后静默失效。
@@ -114,6 +116,51 @@ def get_catalog() -> Catalog:
     """
     path = config.products_path()
     return _load_cached(str(path), _file_stamp(path))
+
+
+# --------------------------------------------------------------------------
+# 知识检索索引
+# --------------------------------------------------------------------------
+
+
+def _knowledge_stamp(directory: Path) -> float:
+    """语料目录的变更印戳。
+
+    目录自身的 mtime **只在增删文件时变，改内容不会变**——只取目录会让
+    「编辑了一份指南」这种最常见的改动无法触发重建。所以把目录下所有
+    `.md` 的 mtime 一并取最大值。
+    """
+    stamps = [_file_stamp(directory)]
+    try:
+        stamps.extend(_file_stamp(path) for path in directory.rglob("*.md"))
+    except OSError:  # 目录不存在或读不了——保持可用，走空语料的分支
+        pass
+    return max(stamps, default=0.0)
+
+
+@st.cache_resource(show_spinner=False, max_entries=4)
+def _load_index_cached(
+    dir_str: str, knowledge_stamp: float, products_stamp: float
+) -> BM25Index:
+    """按「语料目录 + 语料 mtime + 商品数据 mtime」缓存检索索引。
+
+    商品数据也要进缓存键：商品级知识条目是由商品字段**合成**的，
+    改了 `products.json` 而语料没动时，索引同样需要重建。
+
+    后两个参数不参与计算，只用于构造缓存键——与 `_load_cached` 同一手法。
+    """
+    documents = build_corpus(Path(dir_str), get_catalog().products)
+    return BM25Index(documents)
+
+
+def get_knowledge_index() -> BM25Index:
+    """取知识检索索引。改语料或改商品数据后自动重建，不需要重启应用。"""
+    directory = config.knowledge_dir()
+    return _load_index_cached(
+        str(directory),
+        _knowledge_stamp(directory),
+        _file_stamp(config.products_path()),
+    )
 
 
 def current_mode() -> tuple[str, str]:

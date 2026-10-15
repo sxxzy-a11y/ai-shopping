@@ -22,6 +22,7 @@ from src.errors import (
     UpstreamResponseError,
     UpstreamTimeout,
     UpstreamUnavailable,
+    ZhigouError,
 )
 
 FAKE_KEY = "sk-test-not-a-real-key-000000"
@@ -802,6 +803,126 @@ def test_issue_keyword_derivation(field, expected_has_keyword):
 def test_single_character_keywords_are_rejected():
     """单字关键词误杀风险太高，必须被过滤掉。"""
     assert all(len(kw) >= 2 for kw in ai_enhance._issue_keywords("foldable"))
+
+
+# --------------------------------------------------------------------------
+# 知识问答作答
+# --------------------------------------------------------------------------
+
+
+def _passage(excerpt: str, *, title: str = "耳机选购指南") -> "Passage":
+    from src.knowledge.search import Passage
+
+    return Passage(
+        doc_id="category:headphone",
+        title=title,
+        excerpt=excerpt,
+        doc_type="category",
+        type_label="品类级",
+        source="本项目整理",
+        updated_at="2026-10-15",
+        score=12.0,
+    )
+
+
+def _answer_service(answer: str):
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps({"answer": answer}, ensure_ascii=False)
+            ),
+        )
+
+    return make_service(handler)
+
+
+def test_answer_built_from_fragments_is_kept():
+    passages = [_passage("主动降噪对低频有效，通勤路上主要受低频噪音困扰。")]
+    answer = "通勤路上主要是低频噪音，主动降噪对它有效。"
+    assert (
+        ai_enhance.answer_from_knowledge(
+            "通勤耳机怎么选", passages, service=_answer_service(answer)
+        )
+        == answer
+    )
+
+
+def test_answer_may_repeat_a_price_that_appears_in_the_fragment():
+    """片段里写过的参考价，回答里复述是允许的——它不是编的。"""
+    passages = [_passage("参考价 1299 元。通勤场景优先看主动降噪。")]
+    answer = "这款参考价 1299 元，通勤场景建议优先看主动降噪。"
+    assert ai_enhance.answer_from_knowledge(
+        "怎么选", passages, service=_answer_service(answer)
+    )
+
+
+def test_answer_with_an_invented_price_is_rejected():
+    """数据里没有的价格一律拒绝——片段里根本没出现过这个数字。"""
+    passages = [_passage("通勤场景优先看主动降噪能力。")]
+    with pytest.raises(UpstreamResponseError):
+        ai_enhance.answer_from_knowledge(
+            "怎么选", passages, service=_answer_service("这款只要 299 元，很划算。")
+        )
+
+
+def test_answer_with_an_absolute_claim_is_rejected():
+    """排他性结论与解读走同一张模式表。"""
+    passages = [_passage("通勤场景优先看主动降噪能力。")]
+    with pytest.raises(UpstreamResponseError):
+        ai_enhance.answer_from_knowledge(
+            "怎么选", passages, service=_answer_service("这款销量第一，闭眼买。")
+        )
+
+
+def test_empty_answer_is_rejected():
+    passages = [_passage("通勤场景优先看主动降噪能力。")]
+    with pytest.raises(UpstreamResponseError):
+        ai_enhance.answer_from_knowledge(
+            "怎么选", passages, service=_answer_service("   ")
+        )
+
+
+def test_no_fragments_is_rejected_without_calling_the_model():
+    """没有片段就直接拒绝，**不发起请求**——没有依据就不该问模型。"""
+
+    def handler(request):  # pragma: no cover —— 不该被调到
+        raise AssertionError("没有片段时不应发起模型调用")
+
+    with pytest.raises(UpstreamResponseError):
+        ai_enhance.answer_from_knowledge(
+            "怎么选", [], service=make_service(handler)
+        )
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.Response(500, json={"error": "boom"}),
+        httpx.Response(401, json={"error": "bad key"}),
+        httpx.Response(200, json=ok_body(content="这不是 JSON")),
+        httpx.Response(200, json=ok_body(content="", finish_reason="length")),
+    ],
+)
+def test_transport_failures_propagate_for_degradation(failure):
+    """各种失败都抛领域异常，由界面降级为「只展示片段」。"""
+    passages = [_passage("通勤场景优先看主动降噪能力。")]
+
+    def handler(request):
+        return failure
+
+    with pytest.raises(ZhigouError):
+        ai_enhance.answer_from_knowledge(
+            "怎么选", passages, service=make_service(handler)
+        )
+
+
+def test_answer_is_whitespace_normalised():
+    passages = [_passage("通勤场景优先看主动降噪能力。")]
+    answer = ai_enhance.answer_from_knowledge(
+        "怎么选", passages, service=_answer_service("  通勤\n\n优先看   主动降噪。  ")
+    )
+    assert answer == "通勤 优先看 主动降噪。"
 
 
 def test_explanation_for_an_unknown_product_is_dropped(catalog):

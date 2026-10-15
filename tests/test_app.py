@@ -133,12 +133,28 @@ def test_sidebar_is_dark():
 
 
 @pytest.mark.parametrize(
-    "page", ["首页", "智能分析", "商品比较", "历史记录", "项目说明"]
+    "page",
+    ["首页", "智能分析", "商品比较", "知识问答", "历史记录", "个人设置", "项目说明"],
 )
 def test_every_page_renders_without_exception(page):
     at = _run()
     _go_to_page(at, page)
     _assert_clean(at)
+
+
+def test_navigation_lists_every_page():
+    """导航项与规格里的页面清单必须一致——加页忘挂导航是很容易漏的。"""
+    from app import NAV_ITEMS
+
+    assert [name for name, _icon, _renderer in NAV_ITEMS] == [
+        "首页",
+        "智能分析",
+        "商品比较",
+        "知识问答",
+        "历史记录",
+        "个人设置",
+        "项目说明",
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -450,6 +466,171 @@ def test_clean_catalog_shows_no_data_issue_marker():
     _assert_clean(at)
 
     assert "资料存疑" not in _all_text(at)
+
+
+# --------------------------------------------------------------------------
+# 知识问答页
+# --------------------------------------------------------------------------
+
+
+def _ask_knowledge(at: AppTest, question: str):
+    """在知识问答页提问并返回渲染后的页面对象。"""
+    _go_to_page(at, "知识问答")
+    at.text_area[0].set_value(question).run()
+    _button(at, "查找资料").click().run()
+    return at
+
+
+def test_knowledge_page_shows_passages_with_sources():
+    """本地模式展示**原文片段与来源**，不做生成。"""
+    at = _ask_knowledge(_run(), "主动降噪和被动降噪有什么区别")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "找到的资料" in body
+    assert "来源：" in body, "结果必须带出处"
+    assert "更新于" in body, "需求明确要求展示资料来源与更新时间"
+
+
+def test_knowledge_page_says_so_when_nothing_is_found():
+    """检索不到时明确说明，且**不展示任何来源**——没资料就没有可引用的来源。"""
+    at = _ask_knowledge(_run(), "今天天气怎么样")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "没有找到" in body
+    assert "来源：" not in body, "没有资料却给出了来源"
+    assert "更新于" not in body
+
+
+def test_knowledge_page_refuses_price_questions():
+    """价格类问题不给检索结论，改为引导去筛选——检索不理解数值约束。"""
+    at = _ask_knowledge(_run(), "500 元以内有什么降噪耳机")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "价格" in body and "筛选" in body
+    assert "找到的资料" not in body, "价格问题不该走检索"
+
+
+def test_knowledge_page_guides_to_analysis_on_click():
+    at = _ask_knowledge(_run(), "预算 2000 的耳机推荐")
+    _button(at, "带着这个问题去筛选商品").click().run()
+    _assert_clean(at)
+
+    assert _state(at, "zg_current_page") == "智能分析"
+
+
+def test_knowledge_page_empty_input_is_rejected():
+    at = _run()
+    _go_to_page(at, "知识问答")
+    _button(at, "查找资料").click().run()
+    _assert_clean(at)
+
+    assert "请先输入" in _all_text(at)
+
+
+def test_knowledge_page_example_buttons_work():
+    at = _run()
+    _go_to_page(at, "知识问答")
+    _button(at, "通勤戴的耳机怎么选").click().run()
+    _assert_clean(at)
+
+    assert "找到的资料" in _all_text(at)
+
+
+def test_knowledge_index_reloads_after_corpus_edit(tmp_path, monkeypatch):
+    """编辑语料后，应用下一次渲染就用新语料——不用重启。
+
+    缓存键里带着语料文件的修改时间。只取目录 mtime 是不够的：
+    **改文件内容不会改目录的 mtime**，那是最常见的编辑方式。
+    """
+    import os
+
+    knowledge = tmp_path / "knowledge"
+    knowledge.mkdir()
+
+    def write(body: str, stamp: float) -> None:
+        path = knowledge / "guide.md"
+        path.write_text(
+            "---\ntitle: 测试指南\ntype: service\nsource: 测试\n"
+            "updated_at: 2026-01-01\n---\n" + body,
+            encoding="utf-8",
+        )
+        os.utime(path, (stamp, stamp))
+
+    monkeypatch.setenv("ZHIGOU_KNOWLEDGE_DIR", str(knowledge))
+
+    def written_bodies() -> list[str]:
+        """只看**手写文档**的正文。
+
+        索引里还始终含 112 条商品级合成条目（它们来自商品数据，不受语料目录
+        影响），所以判断「语料换了没有」必须把手写部分单独拎出来。
+        """
+        return [
+            document.body
+            for document in corpus_documents()
+            if document.doc_type != "product"
+        ]
+
+    def corpus_documents():
+        import src.knowledge.corpus as corpus_module
+        from src import config as config_module
+
+        return corpus_module.load_documents(config_module.knowledge_dir())
+
+    write("关于折叠屏手机的转轴寿命。", 1_000_000)
+    state.get_knowledge_index()  # 建一次，让缓存生效
+    assert any("折叠屏" in body for body in written_bodies())
+
+    write("关于机械键盘的轴体手感。", 2_000_000)
+    state.get_knowledge_index()  # 缓存键变了，应当重建
+    bodies = written_bodies()
+    assert any("机械键盘" in body for body in bodies), "改语料后没有重新加载"
+    assert not any("折叠屏" in body for body in bodies), "旧语料还在索引里"
+
+
+def test_knowledge_index_survives_missing_corpus(tmp_path, monkeypatch):
+    """语料目录不存在时，手写部分为空、页面提示无资料，**其余功能不受影响**。
+
+    注意索引**不是空的**：112 条商品级条目来自商品数据，与语料目录无关。
+    """
+    monkeypatch.setenv("ZHIGOU_KNOWLEDGE_DIR", str(tmp_path / "不存在"))
+
+    import src.knowledge.corpus as corpus_module
+    from src import config as config_module
+
+    assert corpus_module.load_documents(config_module.knowledge_dir()) == []
+    assert state.get_knowledge_index().size == 112, "商品级条目不该受语料目录影响"
+
+
+def test_knowledge_page_degrades_when_ai_fails(monkeypatch):
+    """AI 作答失败时**降级为直接展示片段**，并说明已降级。
+
+    片段展示本来就是本地模式的形态——失败只丢掉「组织好的回答」，
+    不是把整个问答功能弄没了。
+    """
+    from src import ai_enhance, config
+    from src.errors import UpstreamUnavailable
+
+    monkeypatch.setenv(config.LLM_API_KEY_ENV, "sk-test-not-real")
+
+    def _boom(*_args, **_kwargs):
+        raise UpstreamUnavailable("模型服务暂时不可用。")
+
+    monkeypatch.setattr(ai_enhance, "answer_from_knowledge", _boom)
+
+    at = _run()
+    _go_to_page(at, "知识问答")
+    at.toggle[0].set_value(True).run()
+    at.text_area[0].set_value("通勤戴的耳机怎么选").run()
+    _button(at, "查找资料").click().run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "降级" in body, "没有告知用户已降级"
+    assert "找到的资料" in body, "AI 失败把片段展示也一起弄没了"
+    assert "基于资料的回答" not in body, "作答失败了却还是展示了回答区"
 
 
 def test_demo_data_disclaimer_is_visible_on_home():
