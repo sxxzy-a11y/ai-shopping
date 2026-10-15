@@ -503,11 +503,18 @@ def esc(value: object) -> str:
 _TONES = {"ok", "warn", "stop", "info", "brand", "neutral"}
 
 
-def chip(text: str, tone: str = "neutral", *, large: bool = False) -> str:
-    """小标签（徽章）。tone 取 ok / warn / stop / info / brand / neutral。"""
+def chip(
+    text: str, tone: str = "neutral", *, large: bool = False, title: str = ""
+) -> str:
+    """小标签（徽章）。tone 取 ok / warn / stop / info / brand / neutral。
+
+    `title` 可选，渲染成悬停提示。用于「资料存疑」这类需要能看到原因、
+    但不该让原因占满版面的标记。
+    """
     suffix = tone if tone in _TONES else "neutral"
     size = " zg-chip-lg" if large else ""
-    return f'<span class="zg-chip zg-chip-{suffix}{size}">{esc(text)}</span>'
+    tip = f' title="{esc(title)}"' if title else ""
+    return f'<span class="zg-chip zg-chip-{suffix}{size}"{tip}>{esc(text)}</span>'
 
 
 #: 提示条色调 → 图标名

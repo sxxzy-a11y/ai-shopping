@@ -321,6 +321,24 @@ def _highlight_chips(score: ScoreResult) -> str:
     return "".join(chunks)
 
 
+#: 「资料存疑」标记的文案。
+#: 刻意不用「数据错误」——规则是保守的，标记的用途是**提示核实**，不是判决。
+DATA_ISSUE_LABEL = "资料存疑"
+
+
+def data_issue_chip(product: Product) -> str:
+    """商品记录内部有矛盾时的标记；没有矛盾时返回空串。
+
+    悬停可看到具体是哪一项、为什么判为矛盾。标记**不影响**该商品参与
+    筛选、评分与比较——只是提醒这些属性不要直接采信。
+    """
+    issues = getattr(product, "data_issues", None)
+    if not issues:
+        return ""
+    detail = "；".join(f"{issue.reason}" for issue in issues)
+    return chip(DATA_ISSUE_LABEL, "warn", title=detail)
+
+
 def product_row(
     product: Product,
     score: ScoreResult,
@@ -353,6 +371,7 @@ def product_row(
         f'        {chip(budget_label, _budget_tone(budget_label))}'
         f'        {chip(score.match_level, _MATCH_TONE.get(score.match_level, "neutral"))}'
         f"        {_highlight_chips(score)}"
+        f"        {data_issue_chip(product)}"
         f"      </div>"
         f"    </div>"
         f'    <div style="text-align:right;flex-shrink:0">'

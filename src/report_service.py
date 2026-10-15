@@ -57,6 +57,9 @@ class ReportItem:
     cons: list[str] = field(default_factory=list)
     data_source: str = ""
     updated_at: str = ""
+    #: 该商品记录内部矛盾的说明（快照）。空列表表示没检测到矛盾。
+    #: 有默认值，因此老的历史报告（JSON 里没有这一项）仍能正常打开。
+    data_issues: list[str] = field(default_factory=list)
 
     @property
     def is_over_budget(self) -> bool:
@@ -141,6 +144,9 @@ def _to_report_item(
         cons=list(product.cons),
         data_source=product.data_source,
         updated_at=product.updated_at,
+        # 存疑说明一并写进快照：历史报告要能还原当时看到的东西，
+        # 不能等到打开历史时才用「当前」的商品数据重算。
+        data_issues=[issue.reason for issue in product.data_issues],
     )
 
 
@@ -215,7 +221,19 @@ def collect_verification_items(result: RecommendationResult, catalog: Catalog) -
             f"建议向卖家或厂商确认这几项。"
         )
 
-    # 2) 数据集时效
+    # 2) 字段都在、但记录内部互相矛盾的商品
+    #    与 1) 是两类问题：那里是「没说」，这里是「说岔了」。
+    for product in _touched_products(result):
+        issues = product.data_issues
+        if not issues:
+            continue
+        detail = "；".join(issue.reason for issue in issues)
+        items.append(
+            f"{product.name or product.id} 的记录内部存在互相矛盾的地方（{detail}），"
+            f"这几处描述建议以厂商或平台的实际信息为准，不要直接采信。"
+        )
+
+    # 3) 数据集时效
     days = _days_since(catalog.dataset_updated_at)
     if days is not None and days > STALE_DAYS:
         items.append(
@@ -223,7 +241,7 @@ def collect_verification_items(result: RecommendationResult, catalog: Catalog) -
             f"参考价格可能已经变化，下单前请以实际售价为准。"
         )
 
-    # 3) 演示数据本身没有的维度——这是数据边界，不是免责套话
+    # 4) 演示数据本身没有的维度——这是数据边界，不是免责套话
     items.append(
         "本次分析依据的数据不包含销量、真实用户评价、售后政策与保修信息。"
         "这些因素可能影响你的决定，建议另行核实。"
@@ -361,6 +379,9 @@ def _item_block(item: ReportItem, *, show_rank: bool = True) -> list[str]:
     if item.cons:
         lines.append("- 缺点：")
         lines.extend(f"    - {con}" for con in item.cons)
+    if item.data_issues:
+        lines.append("- ⚠️ **资料存疑**（以下几处记录内部互相矛盾，建议核实后再采信）：")
+        lines.extend(f"    - {issue}" for issue in item.data_issues)
     lines.append(f"- 数据来源：{item.data_source or '信息缺失'}（更新于 {item.updated_at or '未知'}）")
     lines.append("")
     return lines
@@ -451,6 +472,7 @@ def to_csv(report: DecisionReport) -> str:
             "缺点",
             "数据来源",
             "数据更新时间",
+            "资料存疑",
         ]
     )
 
@@ -472,6 +494,7 @@ def to_csv(report: DecisionReport) -> str:
                     "；".join(item.cons),
                     item.data_source,
                     item.updated_at,
+                    "；".join(item.data_issues),
                 ]
             )
 

@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src import config
+from src import config, consistency
 from src.errors import DataFileInvalid, DataFileMissing, EmptyCatalog
 
 #: 一条商品记录必须具备的字段。缺任意一项即视为「信息不完整」。
@@ -87,6 +87,24 @@ class Product(BaseModel):
     def is_complete(self) -> bool:
         """是否所有必填字段都在。"""
         return not self.missing_fields
+
+    @property
+    def data_issues(self) -> list[consistency.Issue]:
+        """当前记录**内部矛盾**的地方（字段都在、但互相打架）。
+
+        与 `missing_fields` 的分工：那个管「字段缺失」，这个管「字段矛盾」。
+        缺 `pros` 由前者报告，`pros` 说支持独显而参数写着 false 由后者报告。
+
+        同样刻意做成**派生属性**而不是存储字段，理由与 `missing_fields` 一致：
+        存下来的列表会在数据被改动后失效，直接构造 Product（不经过加载器）
+        时更会谎报为「没有问题」。检测规则见 `src/consistency.py`。
+        """
+        return consistency.check_product(self)
+
+    @property
+    def has_data_issues(self) -> bool:
+        """是否存在内部矛盾。界面据此决定要不要出「资料存疑」标记。"""
+        return bool(self.data_issues)
 
     @property
     def category_label(self) -> str:

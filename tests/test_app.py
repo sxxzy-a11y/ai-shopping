@@ -396,6 +396,62 @@ def test_catalog_reloads_after_the_data_file_is_refreshed(tmp_path, monkeypatch)
     assert len(state.get_catalog()) == 2, "数据文件刷新后应自动加载新数据"
 
 
+def test_data_issue_marker_reaches_the_screen(tmp_path, monkeypatch):
+    """记录内部矛盾的商品，界面上必须出现「资料存疑」标记。
+
+    只在业务层断言 `data_issues` 非空，不能说明它真的渲染出来了——
+    这个文件存在的理由就是这类「业务层看不见、只有跑页面才暴露」的问题。
+    """
+    import json
+
+    data_file = tmp_path / "products.json"
+    data_file.write_text(
+        json.dumps(
+            {
+                "products": [
+                    {
+                        "id": "FLAG1",
+                        "name": "存疑笔记本",
+                        "category": "laptop",
+                        "price": 3999,
+                        "brand": "测试品牌",
+                        "specs": {"cpu_tier": 3},
+                        "use_cases": ["办公"],
+                        "pros": ["续航长", "屏幕一般"],
+                        "cons": ["屏幕一般"],  # 与优点重复 → 触发内部矛盾
+                        "data_source": "演示数据 · 测试夹具",
+                        "updated_at": "2026-01-01",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ZHIGOU_PRODUCTS_PATH", str(data_file))
+
+    at = _run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value("预算 5000 元，买一台办公用的笔记本电脑").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "资料存疑" in body, "标记没有渲染到页面上"
+    assert "屏幕一般" in body, "标记只给了标签，没有说明为什么存疑"
+
+
+def test_clean_catalog_shows_no_data_issue_marker():
+    """正常数据不该出现标记——否则这个标记会变成人人都忽略的装饰。"""
+    at = _run()
+    _go_to_page(at, "首页")
+    at.text_area[0].set_value(EXAMPLE_TEXT).run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    assert "资料存疑" not in _all_text(at)
+
+
 def test_demo_data_disclaimer_is_visible_on_home():
     at = _run()
     body = _all_text(at)

@@ -420,3 +420,136 @@ def test_built_report_carries_signature(catalog, laptop_demand):
 
     assert report.signature
     assert report.signature == demand_signature(laptop_demand)
+
+
+# --------------------------------------------------------------------------
+# 「资料存疑」标记（字段都在、但记录内部矛盾）
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def flagged_product() -> Product:
+    """一条内部矛盾的笔记本：「屏幕一般」同时出现在优点和缺点里。"""
+    return Product(
+        id="FLAG1",
+        name="存疑笔记本",
+        category="laptop",
+        price=3999,
+        brand="测试品牌",
+        specs={"cpu_tier": 3},
+        use_cases=["办公"],
+        pros=["续航长", "屏幕一般"],
+        cons=["屏幕一般"],
+        data_source="演示数据",
+        updated_at="2026-10-01",
+    )
+
+
+@pytest.fixture
+def flagged_report(flagged_product, laptop_demand) -> DecisionReport:
+    catalog = Catalog(products=[flagged_product])
+    demand = laptop_demand.model_copy(update={"budget": 5000})
+    result = recommend(catalog, demand)
+    assert [item.product.id for item in result.within_budget] == ["FLAG1"]
+    return build_report(catalog, demand, result)
+
+
+def test_flagged_product_still_recommended(flagged_report):
+    """存疑商品照常出现在推荐里——标记不是排除。
+
+    标记若导致商品消失，就会诱使后来者「删数据解决校验」。
+    """
+    assert [item.product_id for item in flagged_report.recommendations] == ["FLAG1"]
+
+
+def test_data_issue_listed_in_verification_items(flagged_report):
+    """待核实清单里要说清楚**为什么**存疑，而不是只给一个标签。"""
+    joined = "\n".join(flagged_report.to_verify)
+    assert "存疑笔记本" in joined
+    assert "互相矛盾" in joined
+    assert "屏幕一般" in joined
+
+
+def test_data_issue_appears_in_markdown(flagged_report):
+    markdown = to_markdown(flagged_report)
+    assert "资料存疑" in markdown
+    assert "屏幕一般" in markdown
+
+
+def test_data_issue_gets_its_own_csv_column(flagged_report):
+    rows = list(csv.reader(io.StringIO(to_csv(flagged_report))))
+    header, first = rows[0], rows[1]
+    assert "资料存疑" in header
+
+    cell = first[header.index("资料存疑")]
+    assert "屏幕一般" in cell
+
+
+def test_clean_product_leaves_the_csv_column_empty(sample_report):
+    """没有矛盾的商品，该列为空——不能因为多了个字段就写占位文字。"""
+    rows = list(csv.reader(io.StringIO(to_csv(sample_report))))
+    header = rows[0]
+    index = header.index("资料存疑")
+    assert all(row[index] == "" for row in rows[1:])
+
+
+def test_data_issue_survives_snapshot_round_trip(flagged_report):
+    """报告是快照：重新打开历史记录时，存疑说明要原样还原。
+
+    不能等到打开历史时才用「当前」商品数据重算——那时数据可能已经变了。
+    """
+    restored = DecisionReport.from_dict(flagged_report.to_dict())
+    issues = restored.recommendations[0].data_issues
+    assert issues
+    assert "屏幕一般" in issues[0]
+
+
+def test_old_report_without_the_field_still_opens(flagged_report):
+    """老的历史报告 JSON 里没有这个字段，也要能正常打开（向前兼容）。"""
+    payload = flagged_report.to_dict()
+    for item in payload["recommendations"]:
+        item.pop("data_issues")
+
+    restored = DecisionReport.from_dict(payload)
+    assert restored.recommendations[0].data_issues == []
+
+
+# --------------------------------------------------------------------------
+# 报告不承载 AI 解读
+# --------------------------------------------------------------------------
+
+
+def test_report_carries_no_ai_generated_field(catalog, laptop_demand):
+    """报告是**规则算出的快照**，不承载任何 AI 解读文字。
+
+    AI 文字若进了报告，「同一条历史记录每次打开都不一样」就会发生——
+    模型换了、超时了、某条解读被断言校验丢弃了，历史结论都会跟着变。
+    这条断言把报告的字段集锁死：新增字段必须是有意的决定。
+    """
+    report = build_report(catalog, laptop_demand, recommend(catalog, laptop_demand))
+
+    assert set(report.to_dict()) == {
+        "created_at",
+        "demand_summary",
+        "demand_text",
+        "signature",
+        "demand_facts",
+        "filter_facts",
+        "recommendations",
+        "over_budget",
+        "relaxations",
+        "notes",
+        "to_verify",
+        "conclusion",
+        "dataset_disclaimer",
+    }
+
+
+def test_report_item_carries_no_ai_note_field(catalog, laptop_demand):
+    """同理，商品条目里也没有放 AI 解读的位置。"""
+    report = build_report(catalog, laptop_demand, recommend(catalog, laptop_demand))
+    item = report.to_dict()["recommendations"][0]
+
+    assert "ai_note" not in item
+    assert "why" not in item
+    assert "overview" not in item

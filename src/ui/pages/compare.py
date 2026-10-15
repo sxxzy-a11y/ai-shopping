@@ -256,6 +256,17 @@ def render(catalog: Catalog) -> None:
         else:
             components.show_notice("所选商品的数据字段完整。", "ok")
 
+        # 字段缺失之外的另一类问题：字段都在，但互相打架。
+        for product in products:
+            issues = product.data_issues
+            if not issues:
+                continue
+            detail = "；".join(issue.reason for issue in issues)
+            components.show_notice(
+                f"「{product.name or product.id}」{components.DATA_ISSUE_LABEL}：{detail}",
+                "warn",
+            )
+
     # --- 优缺点（平铺，不用逐个点开）--------------------------------------
     components.section_title("优缺点对照")
     components.caption("上面那张表用来横向比参数，这里竖着看每件的取舍。")

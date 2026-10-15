@@ -137,7 +137,7 @@ copy .env.example .env      # Windows CMD
 
 ### 2.1 大模型（可选）
 
-| 变量 | `.env.example` 中的值 | 说明 |
+| 变量 | 默认值 | 说明 |
 |---|---|---|
 | `ZHIGOU_LLM_API_KEY` | 空 | API 密钥。留空即本地演示模式 |
 | `ZHIGOU_LLM_BASE_URL` | `https://api.deepseek.com/v1` | OpenAI 兼容的服务端点 |
@@ -145,9 +145,8 @@ copy .env.example .env      # Windows CMD
 | `ZHIGOU_LLM_TIMEOUT` | `60` | 单次请求超时秒数，超时自动降级 |
 | `ZHIGOU_LLM_MAX_TOKENS` | `2000` | 单次回复 token 上限，见下方说明 |
 
-> ⚠️ **注意**：`src/config.py` 中代码内置的兜底默认值是
-> `https://api.openai.com/v1` + `gpt-4o-mini`，与 `.env.example` 不一致。
-> **漏配 `ZHIGOU_LLM_BASE_URL` 时会静默打向 OpenAI。** 建议始终显式配置。
+代码内置的默认值与 `.env.example` **保持一致**，并由测试锁死：
+改任何一边忘另一边，`pytest` 会直接失败。
 
 本项目用 `httpx` 直连 OpenAI 兼容接口，**换服务商只需要改环境变量**，不用动代码。
 
@@ -1020,10 +1019,22 @@ pytest
 
 ### 13.3 抗幻觉设计 ✅
 
+**AI 输出的四道校验**——解读生成后依次检查，任一失败即丢弃该条、保留规则结果：
+
+| # | 检查 | 实现 | 抓的是 |
+|---|---|---|---|
+| 1 | 价格 | `find_invented_prices()` | 顺口报一个数据里没有的价 |
+| 2 | 参数数值 | `find_unsupported_spec_claims()` | 编一个重量、续航或容量 |
+| 3 | 排他性结论 | `find_unsupported_claims()` | 「销量第一」「口碑最好」 |
+| 4 | 存疑属性 | `find_flagged_claims()` | 就记录内部矛盾的地方下结论 |
+
+**数据侧与展示侧**：
+
 | 防线 | 实现位置 | 机制 |
 |---|---|---|
-| 价格拦截 | `ai_enhance.find_invented_prices()` | 校验解读中每个价格是否来自传入数据 |
-| 失败即丢弃 | `ai_enhance` | 校验失败时整条解读作废，不展示 |
+| 记录自相矛盾 | `consistency.check_product()` | 6 条高精度规则，命中标「资料存疑」 |
+| 存疑不影响评分 | `Product.data_issues`（派生属性） | 数据质量问题不转嫁成商品劣势 |
+| 存疑不排除商品 | `recommender` | 标记只提示核实，照常参与筛选与排序 |
 | 排序隔离 | `recommender` + `scoring` | AI 不参与任何计算 |
 | 快照存档 | `database` + `report_service` | 报告不含 AI 文字，模型波动不影响历史 |
 | 缺失即排除 | `scoring` | 无数据维度不计分并注明原因 |
@@ -1036,9 +1047,13 @@ pytest
 | 1 | 用户询问数据库中不存在的商品 | ✅ |
 | 2 | 商品缺少某个参数 | ✅ |
 | 3 | 用户预算低于所有候选商品的价格 | ✅ |
-| 4 | 知识库检索不到相关资料 | 📋（无 RAG） |
-| 5 | 商品资料中出现互相矛盾的描述 | 📋 |
-| 6 | 用户要求模型提供没有数据依据的性能结论 | 🚧 |
+| 4 | 知识库检索不到相关资料 | 📋（待 `add-knowledge-base`） |
+| 5 | 商品资料中出现互相矛盾的描述 | ✅ |
+| 6 | 用户要求模型提供没有数据依据的性能结论 | ✅ |
+
+> **一致性检测的规则为什么只有 6 条**：一条不准的规则会把正常商品污名化，
+> 比不做更糟。全部规则经 112 条数据实测误报为 0，且都能识别否定表述——
+> 数据里真实存在「无独显」「不可折叠」这类**正确的否定句**。
 
 ---
 
@@ -1222,8 +1237,6 @@ pytest
   升级 Streamlit 把它改坏时测试会失败，而不是悄悄退化成浅色
 - `st.pills` 的多选模式可用，单选模式在 Streamlit 的测试框架 `AppTest` 下
   会报错（浏览器里正常），因此「价格取向」使用了 `st.radio`
-- `src/config.py` 的内置默认 LLM 端点是 `api.openai.com`，
-  与 `.env.example` 的 DeepSeek 配置不一致（见 [2.1](#21-大模型可选)）
 
 ---
 

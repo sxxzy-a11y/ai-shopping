@@ -443,6 +443,367 @@ def test_explanation_with_a_wrong_price_is_dropped(catalog):
     assert "LP002" in result["dropped"]
 
 
+# LP001 轻羽 AirBook 14 的真实参数：weight_kg 1.28 / battery_h 10 /
+# ram_gb 16 / storage_gb 512 / screen_size 14。下面用它做数值断言的基准。
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        # 与数据一致 —— 放过
+        ("续航约 10 小时，通勤够用", []),
+        ("整机 1.28 千克，背一天不累", []),
+        ("16GB 内存够跑开发环境", []),
+        ("14 英寸屏幕，放包里刚好", []),
+        # 四舍五入不算编造（1.28 写成 1.3 是正常表达）
+        ("重量约 1.3 千克", []),
+        # 参数族里压根没有数据时不判定——缺数据不等于编造
+        ("电池 5000mAh", []),
+        # 编造 —— 抓住
+        ("续航长达 20 小时", ["20 小时"]),
+        ("重量只有 0.9 千克", ["0.9 千克"]),
+        ("32GB 内存加 1TB 固态", ["32GB", "1TB"]),
+        # 裸数字不该被当成参数断言（序号、评分、年份）
+        ("在候选里排第 1，得分 88 分，2026 年的数据", []),
+    ],
+)
+def test_find_unsupported_spec_claims(catalog, text, expected):
+    allowed = ai_enhance.spec_claim_values([catalog.get("LP001")])
+    assert ai_enhance.find_unsupported_spec_claims(text, allowed) == expected
+
+
+def test_explanation_with_an_unsupported_spec_value_is_dropped(catalog):
+    """模型说了一个数据里没有的参数值——这条解读必须被丢掉。
+
+    价格对得上但参数是编的，同样属于「断言没有依据的东西」。
+    """
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps(
+                    {
+                        "overview": "总结",
+                        "per_product": [
+                            {"product_id": "LP001", "why": "续航 10 小时，够用"},
+                            {"product_id": "LP002", "why": "整机仅 1.1 千克，很轻"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        )
+
+    items = [_item(catalog.get("LP001")), _item(catalog.get("LP002"))]
+    result = ai_enhance.explain_recommendations(
+        Demand(category="laptop", budget=8000), items, service=make_service(handler)
+    )
+
+    assert "LP001" in result["per_product"], "有数据依据的解读被误杀了"
+    assert "LP002" not in result["per_product"], "编造参数的解读没有被丢掉"
+    assert "LP002" in result["dropped"]
+
+
+def test_explanations_using_only_real_values_survive(catalog):
+    """正例：解读里的数值全部能在数据里找到时，一条都不能被丢。
+
+    这条防的是「校验过严」——价格校验当初就在这上面踩过坑。
+    """
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps(
+                    {
+                        "overview": "两件都在预算内",
+                        "per_product": [
+                            {
+                                "product_id": "LP001",
+                                "why": "16GB 内存配 512GB 固态，3299 元",
+                            },
+                            {
+                                "product_id": "LP002",
+                                "why": "带独立显卡，适合游戏",
+                            },
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        )
+
+    items = [_item(catalog.get("LP001")), _item(catalog.get("LP002"))]
+    result = ai_enhance.explain_recommendations(
+        Demand(category="laptop", budget=8000), items, service=make_service(handler)
+    )
+
+    assert result["dropped"] == []
+    assert set(result["per_product"]) == {"LP001", "LP002"}
+    assert result["overview"], "总述不应被误丢"
+
+
+def test_overview_with_an_unsupported_spec_value_is_dropped(catalog):
+    """总述走同一条检查链，不能只查价格。"""
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps(
+                    {
+                        "overview": "这几款续航都在 20 小时以上",
+                        "per_product": [
+                            {"product_id": "LP001", "why": "续航 10 小时，够用"}
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        )
+
+    result = ai_enhance.explain_recommendations(
+        Demand(category="laptop", budget=8000),
+        [_item(catalog.get("LP001"))],
+        service=make_service(handler),
+    )
+
+    assert result["overview"] == "", "总述里的参数断言没有被校验"
+    assert result["per_product"], "总述被丢不该影响逐条解读"
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        # 断言的维度在数据集里根本不存在 —— 抓住
+        ("这款销量第一，值得买", ["销量第一"]),
+        ("口碑最好的一款", ["口碑最好"]),
+        ("续航在同类里遥遥领先", ["遥遥领先"]),
+        ("全网最低价", ["全网最低"]),
+        # 系统**确实**会排序，关于本次推荐的比较是真的 —— 不能误杀
+        ("在本次推荐中排名第一", []),
+        ("三款里它的评分最高", []),
+        ("预算匹配度最高", []),
+        # 正常有依据的表述
+        ("续航 10 小时，通勤够用", []),
+        ("性价比不错，适合学生", []),
+        ("", []),
+    ],
+)
+def test_find_unsupported_claims(text, expected):
+    assert ai_enhance.find_unsupported_claims(text) == expected
+
+
+def test_explanation_with_an_absolute_claim_is_dropped(catalog):
+    """「销量第一」这类结论在数据里查无实据——该条必须被丢掉。
+
+    数据集里没有销量、没有用户评价、没有行业排名，这些说法不可能从传入
+    数据推出来，只能是从模型的先验知识里编的。
+    """
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps(
+                    {
+                        "overview": "",
+                        "per_product": [
+                            {"product_id": "LP001", "why": "续航 10 小时，够用"},
+                            {"product_id": "LP002", "why": "销量第一，闭眼买"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        )
+
+    items = [_item(catalog.get("LP001")), _item(catalog.get("LP002"))]
+    result = ai_enhance.explain_recommendations(
+        Demand(category="laptop", budget=8000), items, service=make_service(handler)
+    )
+
+    assert "LP001" in result["per_product"]
+    assert "LP002" not in result["per_product"], "排他性结论没有被丢掉"
+    assert "LP002" in result["dropped"]
+
+
+def test_ranking_language_about_this_recommendation_survives(catalog):
+    """系统自己算出的排序结论不能被当成「排他性结论」误杀。
+
+    这是本条校验最容易踩的坑：`排名第一` 四个字本身没问题——
+    问题在于它断言的是**市场排名**还是**本次推荐内的排序**。
+    保守起见只收明确指向外部维度的说法。
+    """
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps(
+                    {
+                        "overview": "两款都在预算内，按匹配度排序如下",
+                        "per_product": [
+                            {"product_id": "LP001", "why": "在本次推荐中排名第一"},
+                            {"product_id": "LP002", "why": "三款里评分最高"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        )
+
+    items = [_item(catalog.get("LP001")), _item(catalog.get("LP002"))]
+    result = ai_enhance.explain_recommendations(
+        Demand(category="laptop", budget=8000), items, service=make_service(handler)
+    )
+
+    assert result["dropped"] == [], "有依据的排序表述被误杀"
+    assert set(result["per_product"]) == {"LP001", "LP002"}
+
+
+def test_overview_with_an_absolute_claim_is_dropped(catalog):
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps(
+                    {
+                        "overview": "这几款都是销量第一的爆款",
+                        "per_product": [
+                            {"product_id": "LP001", "why": "续航 10 小时，够用"}
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        )
+
+    result = ai_enhance.explain_recommendations(
+        Demand(category="laptop", budget=8000),
+        [_item(catalog.get("LP001"))],
+        service=make_service(handler),
+    )
+
+    assert result["overview"] == "", "总述里的排他性结论没有被校验"
+    assert result["per_product"], "总述被丢不该影响逐条解读"
+
+
+# --------------------------------------------------------------------------
+# 存疑属性：模型不能就数据打架的地方下结论
+# --------------------------------------------------------------------------
+
+
+def _flagged_product() -> Product:
+    """参数说没有独显、描述却说有——触发 R5，`has_dedicated_gpu` 被标记存疑。"""
+    return Product(
+        id="FLAG1",
+        name="存疑笔记本",
+        category="laptop",
+        price=3999,
+        brand="测试品牌",
+        specs={"cpu_tier": 3, "has_dedicated_gpu": False, "battery_h": 10},
+        use_cases=["办公"],
+        pros=["带独立显卡，游戏有加成"],
+        cons=["屏幕一般"],
+        data_source="演示数据 · 测试夹具",
+        updated_at="2026-01-01",
+    )
+
+
+def test_product_brief_carries_data_issues():
+    """传给模型的商品摘要里要带上存疑说明，让它主动避开。"""
+    product = _flagged_product()
+    brief = ai_enhance._product_brief(
+        product, rank=1, score_total=80.0, match_level="较为匹配",
+        dimensions=[], budget_label="预算内",
+    )
+
+    assert brief["data_issues"], "存疑说明没有传给模型"
+    assert "独立显卡" in brief["data_issues"][0]
+
+
+def test_claim_about_a_flagged_attribute_is_dropped():
+    """解读就存疑属性下结论——该条必须被丢掉。"""
+    product = _flagged_product()
+    assert product.data_issues, "夹具没有触发存疑标记"
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps(
+                    {
+                        "overview": "",
+                        "per_product": [
+                            {"product_id": "FLAG1", "why": "带独立显卡，游戏有加成"}
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        )
+
+    result = ai_enhance.explain_recommendations(
+        Demand(category="laptop", budget=6000),
+        [_item(product)],
+        service=make_service(handler),
+    )
+
+    assert result["per_product"] == {}, "就存疑属性下的结论没有被拦截"
+    assert "FLAG1" in result["dropped"]
+
+
+def test_claim_about_a_clean_attribute_survives():
+    """同一件商品**没被标记**的属性照常解读——拦截不能株连整件商品。"""
+    product = _flagged_product()
+    assert product.data_issues, "夹具没有触发存疑标记"
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=json.dumps(
+                    {
+                        "overview": "",
+                        "per_product": [
+                            {"product_id": "FLAG1", "why": "续航 10 小时，通勤够用"}
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        )
+
+    result = ai_enhance.explain_recommendations(
+        Demand(category="laptop", budget=6000),
+        [_item(product)],
+        service=make_service(handler),
+    )
+
+    assert "FLAG1" in result["per_product"], "未被标记的属性也被牵连了"
+    assert result["dropped"] == []
+
+
+@pytest.mark.parametrize(
+    "field, expected_has_keyword",
+    [
+        ("has_dedicated_gpu", True),   # 有 SPEC_LABELS
+        ("foldable", True),
+        ("cpu_tier", True),            # 标签「处理器档位」剥后缀 → 「处理器」
+        ("price", True),               # 手工补的关键词
+        ("pros", False),               # 无可靠文字特征，交提示词约束
+    ],
+)
+def test_issue_keyword_derivation(field, expected_has_keyword):
+    """被标记属性 → 关键词。取不到的属性返回空，交由提示词约束（保守优先）。"""
+    assert bool(ai_enhance._issue_keywords(field)) is expected_has_keyword
+
+
+def test_single_character_keywords_are_rejected():
+    """单字关键词误杀风险太高，必须被过滤掉。"""
+    assert all(len(kw) >= 2 for kw in ai_enhance._issue_keywords("foldable"))
+
+
 def test_explanation_for_an_unknown_product_is_dropped(catalog):
     def handler(request):
         return httpx.Response(

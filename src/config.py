@@ -115,8 +115,12 @@ LLM_MODEL_ENV: Final[str] = "ZHIGOU_LLM_MODEL"
 LLM_TIMEOUT_ENV: Final[str] = "ZHIGOU_LLM_TIMEOUT"
 LLM_MAX_TOKENS_ENV: Final[str] = "ZHIGOU_LLM_MAX_TOKENS"
 
-DEFAULT_LLM_BASE_URL: Final[str] = "https://api.openai.com/v1"
-DEFAULT_LLM_MODEL: Final[str] = "gpt-4o-mini"
+#: 默认端点与模型名**必须与 `.env.example` 登记的配置一致**。
+#: 二者不一致时，漏配环境变量的部署会静默打向另一个服务商——不报错、
+#: 只是失败，很难排查。`tests/test_config.py` 有断言锁死这层绑定，
+#: 改这里必须同步改 `.env.example`，否则测试会失败。
+DEFAULT_LLM_BASE_URL: Final[str] = "https://api.deepseek.com/v1"
+DEFAULT_LLM_MODEL: Final[str] = "deepseek-flash"
 DEFAULT_LLM_TIMEOUT_S: Final[float] = 60.0
 
 #: 单次回复的 token 上限。

@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from src import config
 from src.ai_service import AIService, redact
@@ -189,6 +189,11 @@ _EXPLAIN_SYSTEM = """你是一个消费决策助手。用户提出购买需求�
 这类没有信息量的套话。
 6. 解读要指出这件商品**为什么**匹配或不匹配用户的具体需求，扣住评分维度说。
 7. 提到商品时用**商品名称**，不要用商品 ID（不要出现 LP001 这种编号）。
+8. 不要给商品下「销量第一」「口碑最好」「全网最低」「遥遥领先」这类结论——\
+提供的数据里没有销量、用户评价、市场行情或行业排名，这些说法无据可依。
+9. 某件商品的 `data_issues` 非空时，说明该商品这几处记录内部互相矛盾。\
+**不要就这些方面下结论**，也不要把矛盾的属性当作事实复述；可以提醒用户\
+这几处需要核实。其他没被标记的方面照常解读。
 
 输出格式：
 {"overview": "一到两句总结", \
@@ -209,6 +214,8 @@ def _product_brief(product: Product, *, rank: int, score_total: float,
         "use_cases": product.use_cases,
         "pros": product.pros,
         "cons": product.cons,
+        # 记录内部有矛盾的地方。模型据此避开这些属性，输出侧还有程序化拦截兜底。
+        "data_issues": [issue.reason for issue in product.data_issues],
         "rank": rank,
         "score": round(score_total, 1),
         "match_level": match_level,
@@ -252,8 +259,224 @@ def find_invented_prices(text: str, allowed_prices: set[float]) -> list[float]:
     return invented
 
 
-def _sanitise_why(text: str, product: Product, allowed_prices: set[float]) -> str | None:
-    """清洗一条解读。不合法就返回 None，由调用方丢弃。"""
+# --------------------------------------------------------------------------
+# 参数数值断言校验
+# --------------------------------------------------------------------------
+
+#: 识别得出的单位 → (单位族, 换算成该族规范单位的倍数)。
+#: 同族的数值先换算到统一单位再比较，`1.28 千克` 与 `1280 克` 才能对上。
+#: 按字符串长度倒序参与正则，保证「千克」先于「克」、「小时」先于「时」命中。
+_UNIT_FACTORS: dict[str, tuple[str, float]] = {
+    "克": ("mass", 1.0),
+    "g": ("mass", 1.0),
+    "千克": ("mass", 1000.0),
+    "公斤": ("mass", 1000.0),
+    "kg": ("mass", 1000.0),
+    "小时": ("time", 1.0),
+    "时": ("time", 1.0),
+    "h": ("time", 1.0),
+    "gb": ("storage", 1.0),
+    "tb": ("storage", 1024.0),
+    "mah": ("battery", 1.0),
+    "英寸": ("length", 1.0),
+    "吋": ("length", 1.0),
+    "寸": ("length", 1.0),
+    "毫米": ("small_length", 1.0),
+    "mm": ("small_length", 1.0),
+}
+
+#: 商品参数键 → (单位族, 换算倍数)。只有列在这里的字段参与数值校验。
+_SPEC_UNIT_KEYS: dict[str, tuple[str, float]] = {
+    "weight_g": ("mass", 1.0),
+    "weight_kg": ("mass", 1000.0),
+    "battery_h": ("time", 1.0),
+    "ram_gb": ("storage", 1.0),
+    "storage_gb": ("storage", 1.0),
+    "battery_mah": ("battery", 1.0),
+    "screen_size": ("length", 1.0),
+    "driver_mm": ("small_length", 1.0),
+}
+
+_UNIT_ALTERNATION = "|".join(
+    re.escape(u) for u in sorted(_UNIT_FACTORS, key=len, reverse=True)
+)
+
+#: 「数字 + 明确单位」。**裸数字不匹配**——序号、评分、年份混在里面，
+#: 纳入校验会大量误杀。
+_SPEC_CLAIM_PATTERN = re.compile(
+    rf"(?<![\d.])(\d+(?:\.\d+)?)\s*({_UNIT_ALTERNATION})",
+    re.IGNORECASE,
+)
+
+
+#: 数值比较的**相对**容差，用于吸收四舍五入：1.28 千克写成 1.3 千克算对得上。
+#:
+#: 刻意不用「按写法精度取半径」——那个方案会把 `1TB` 视作区间 [0.5, 1.5] TB，
+#: 于是把数据里的 512GB 也包进去，等于放过了「1TB」这种量级级的高报。
+#: 相对容差只容忍 2% 以内的出入，四舍五入过得去，量级差异过不去。
+_SPEC_TOLERANCE_RATIO = 0.02
+
+#: 相对容差的绝对下限，避免极小的数值因比例容差过窄而误杀。
+_SPEC_TOLERANCE_FLOOR = 0.05
+
+
+def _matches_any_known(value: float, candidates: Sequence[float]) -> bool:
+    """该数值是否落在任一已知取值的容差范围内。"""
+    for known in candidates:
+        tolerance = max(_SPEC_TOLERANCE_FLOOR, abs(known) * _SPEC_TOLERANCE_RATIO)
+        if abs(value - known) <= tolerance:
+            return True
+    return False
+
+
+def spec_claim_values(products: Iterable[Product]) -> dict[str, list[float]]:
+    """从商品记录里收集「单位族 → 允许取值」，作为断言校验的依据集。"""
+    allowed: dict[str, list[float]] = {}
+    for product in products:
+        for key, (family, factor) in _SPEC_UNIT_KEYS.items():
+            raw = product.specs.get(key)
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                continue
+            allowed.setdefault(family, []).append(float(raw) * factor)
+    return allowed
+
+
+# --------------------------------------------------------------------------
+# 排他性结论校验
+# --------------------------------------------------------------------------
+
+#: 无数据支撑的排他性、绝对化表述。
+#:
+#: 共同特征：它们断言的**比较维度在数据集里根本不存在**——没有销量、
+#: 没有用户评价、没有市场行情、没有行业排名。这些说法不可能从传入数据推出。
+#:
+#: 刻意不收「排名第一」「同类第一」这类含糊说法：系统**确实**会排序，
+#: 「在本次推荐里排第一」是**真的**，收进来会误杀正确的解读。
+#: 宁可漏放，不可误杀。
+_ABSOLUTE_CLAIM_PATTERNS: tuple[str, ...] = (
+    # 销量——数据集不含销量字段
+    "销量第一",
+    "销量最高",
+    "销量冠军",
+    "销量领先",
+    "最畅销",
+    # 口碑与用户评价——数据集明确不含
+    "口碑最好",
+    "口碑最佳",
+    "口碑第一",
+    "评价最高",
+    "好评如潮",
+    "好评率",
+    "公认最好",
+    # 全网与市场价——数据集里只有项目自造的参考价
+    "全网最低",
+    "全网最便宜",
+    "历史最低价",
+    "市场最低",
+    # 行业地位
+    "遥遥领先",
+    "行业第一",
+    "业内第一",
+    "市场占有率",
+)
+
+
+def find_unsupported_claims(text: str) -> list[str]:
+    """找出解读中无数据支撑的排他性、绝对化结论，返回命中的表述。"""
+    if not text:
+        return []
+    return [pattern for pattern in _ABSOLUTE_CLAIM_PATTERNS if pattern in text]
+
+
+# --------------------------------------------------------------------------
+# 存疑属性校验
+# --------------------------------------------------------------------------
+
+#: 参数标签里的「程度词」后缀。剥掉之后才是模型真正会用的说法——
+#: 它会说「处理器」，不会说「处理器档位」。
+_LABEL_SUFFIXES = ("档位", "等级")
+
+#: 没有 `config.SPEC_LABELS` 可用的属性，手工补关键词。
+_ISSUE_FALLBACK_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "price": ("价格", "售价", "价位"),
+}
+
+
+def _issue_keywords(field: str) -> tuple[str, ...]:
+    """被标记存疑的属性 → 解读里出现即视为「在就它下结论」的关键词。
+
+    取不到关键词的属性（例如 R3 标记的 `pros`——优缺点重复，没有可靠的
+    文字特征）返回空元组，交由提示词约束，不做输出侧拦截。保守优先。
+    """
+    candidates: list[str] = []
+    label = config.SPEC_LABELS.get(field)
+    if label:
+        candidates.append(label)
+        for suffix in _LABEL_SUFFIXES:
+            if label.endswith(suffix) and len(label) > len(suffix):
+                candidates.append(label[: -len(suffix)])
+    candidates.extend(_ISSUE_FALLBACK_KEYWORDS.get(field, ()))
+
+    keywords: list[str] = []
+    for word in candidates:
+        # 单字关键词误杀风险太高，一律不要。
+        if len(word) >= 2 and word not in keywords:
+            keywords.append(word)
+    return tuple(keywords)
+
+
+def find_flagged_claims(text: str, product: Product) -> list[str]:
+    """找出解读中**断言了该商品被标记存疑属性**的表述。
+
+    只拦被标记的那几个属性，**不牵连**同一件商品的其他正常属性。
+    """
+    if not text:
+        return []
+    hits: list[str] = []
+    for issue in product.data_issues:
+        for keyword in _issue_keywords(issue.field):
+            if keyword in text and keyword not in hits:
+                hits.append(keyword)
+    return hits
+
+
+def find_unsupported_spec_claims(
+    text: str, allowed: Mapping[str, Sequence[float]]
+) -> list[str]:
+    """找出解读中**没有数据依据**的带单位数值断言。
+
+    Args:
+        text: 模型生成的解读文本。
+        allowed: 单位族 → 允许的规范化取值，由 `spec_claim_values()` 生成。
+
+    返回无法对应的原始片段（如 `"20 小时"`），便于日志与测试断言。
+    该族**完全没有数据**时不判定——缺数据不等于编造，宁可漏放。
+    """
+    unsupported: list[str] = []
+    for match in _SPEC_CLAIM_PATTERN.finditer(text):
+        raw_number, raw_unit = match.group(1), match.group(2)
+        family, factor = _UNIT_FACTORS[raw_unit.lower()]
+        candidates = allowed.get(family)
+        if not candidates:
+            continue  # 这一类数据压根没有，无从谈「与数据不符」
+        scaled = float(raw_number) * factor
+        if _matches_any_known(scaled, candidates):
+            continue
+        unsupported.append(match.group(0).strip())
+    return unsupported
+
+
+def _sanitise_why(
+    text: str,
+    product: Product,
+    allowed_prices: set[float],
+    allowed_specs: Mapping[str, Sequence[float]],
+) -> str | None:
+    """清洗一条解读。不合法就返回 None，由调用方丢弃。
+
+    检查链：**价格 → 参数数值 → 排他性结论**，任一环判定无依据即整条丢弃。
+    沿用价格校验的既有策略——丢弃单条、保留规则结果，不整段失败。
+    """
     cleaned = " ".join(str(text).split()).strip()
     if not cleaned:
         return None
@@ -266,6 +489,33 @@ def _sanitise_why(text: str, product: Product, allowed_prices: set[float]) -> st
             "AI 解读中出现数据里没有的价格 %s（商品 %s），已丢弃该条解读",
             invented,
             product.id,
+        )
+        return None
+
+    unsupported = find_unsupported_spec_claims(cleaned, allowed_specs)
+    if unsupported:
+        logger.warning(
+            "AI 解读中出现数据里没有的参数数值 %s（商品 %s），已丢弃该条解读",
+            unsupported,
+            product.id,
+        )
+        return None
+
+    absolute = find_unsupported_claims(cleaned)
+    if absolute:
+        logger.warning(
+            "AI 解读中出现无数据支撑的排他性结论 %s（商品 %s），已丢弃该条解读",
+            absolute,
+            product.id,
+        )
+        return None
+
+    flagged = find_flagged_claims(cleaned, product)
+    if flagged:
+        logger.warning(
+            "AI 解读就商品 %s 存疑的属性（%s）下了结论，已丢弃该条解读",
+            product.id,
+            "/".join(flagged),
         )
         return None
     return cleaned
@@ -323,6 +573,9 @@ def explain_recommendations(
 
     by_id = {item.product.id: item.product for item in items}
 
+    # 参数数值的允许集同样取候选商品的并集——模型可能拿另一件商品做对比。
+    allowed_specs = spec_claim_values(by_id.values())
+
     per_product: dict[str, str] = {}
     dropped: list[str] = []
     raw_items = payload.get("per_product")
@@ -334,19 +587,27 @@ def explain_recommendations(
             product = by_id.get(product_id)
             if product is None:
                 continue  # 模型编了一个不存在的商品 ID，丢掉
-            cleaned = _sanitise_why(entry.get("why", ""), product, allowed_prices)
+            cleaned = _sanitise_why(
+                entry.get("why", ""), product, allowed_prices, allowed_specs
+            )
             if cleaned is None:
                 dropped.append(product_id)
             else:
                 per_product[product_id] = cleaned
 
     overview = " ".join(str(payload.get("overview") or "").split())[:300]
-    if overview and find_invented_prices(overview, allowed_prices):
-        logger.warning("AI 总述里出现数据中没有的价格，已丢弃总述")
+    if overview and (
+        find_invented_prices(overview, allowed_prices)
+        or find_unsupported_spec_claims(overview, allowed_specs)
+        or find_unsupported_claims(overview)
+    ):
+        logger.warning("AI 总述里出现无数据依据的内容，已丢弃总述")
         overview = ""
 
     logger.info(
-        "AI 解读完成：%d 条采用，%d 条因价格不符被丢弃", len(per_product), len(dropped)
+        "AI 解读完成：%d 条采用，%d 条因无数据依据被丢弃",
+        len(per_product),
+        len(dropped),
     )
     return {"overview": overview, "per_product": per_product, "dropped": dropped}
 
