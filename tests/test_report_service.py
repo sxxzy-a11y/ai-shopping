@@ -606,3 +606,51 @@ def test_old_report_without_over_budget_total_still_opens(catalog):
 
     restored = DecisionReport.from_dict(payload)
     assert restored.over_budget_total == 0
+
+
+# --------------------------------------------------------------------------
+# 溯源信息进导出（变更 migrate-products-to-sqlite）
+# --------------------------------------------------------------------------
+
+
+def test_markdown_export_carries_verification_status(catalog, laptop_demand):
+    """**导出件会脱离界面单独流传**——只在界面上标未核验是不够的。
+
+    别人拿到导出的报告时，看不到界面，必须能从文件本身知道这条没核实过。
+    """
+    report = build_report(catalog, laptop_demand, recommend(catalog, laptop_demand))
+    markdown = to_markdown(report)
+
+    assert "核验状态" in markdown
+    assert "未核验" in markdown, "自造数据必须标出未核验"
+
+
+def test_csv_export_carries_verification_status(catalog, laptop_demand):
+    rows = list(csv.reader(io.StringIO(to_csv(
+        build_report(catalog, laptop_demand, recommend(catalog, laptop_demand))
+    ))))
+    header = rows[0]
+    assert "核验状态" in header
+
+    index = header.index("核验状态")
+    assert all(row[index] == "未核验" for row in rows[1:]), "演示数据不该被标成已核验"
+
+
+def test_export_shows_model_when_present(catalog, laptop_demand):
+    """有型号的商品在导出里带出型号——它是原始数据的一部分。"""
+    report = build_report(catalog, laptop_demand, recommend(catalog, laptop_demand))
+    assert "- 型号：" in to_markdown(report)
+
+
+def test_verified_status_is_preserved_in_export(catalog, laptop_demand):
+    """反向：真标了已核验的也要如实导出，不能一律压成未核验。"""
+    from src import config
+
+    products = [dict(p.model_dump()) for p in catalog.products]
+    for record in products:
+        record["data_status"] = config.STATUS_VERIFIED
+    # 直接用真实数据集的副本构造不了 Catalog，这里改用报告条目的属性断言
+    report = build_report(catalog, laptop_demand, recommend(catalog, laptop_demand))
+    item = report.recommendations[0]
+    item.data_status = config.STATUS_VERIFIED
+    assert "已核验" in to_markdown(report)

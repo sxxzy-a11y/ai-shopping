@@ -122,7 +122,7 @@ def render(catalog: Catalog) -> None:
                 ("运行模式", mode),
                 ("说明", detail),
                 ("分值名称", config.SCORE_DISPLAY_NAME),
-                ("商品数据", str(config.products_path())),
+                ("商品数据库", config.display_path(config.products_db_path())),
             ]
         ),
         unsafe_allow_html=True,

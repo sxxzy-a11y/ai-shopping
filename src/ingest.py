@@ -292,6 +292,66 @@ def normalize_category(
 # --------------------------------------------------------------------------
 
 
+#: 型号里的「型号特征」——几乎都含阿拉伯数字。
+#: 靠它区分「AirBook 14」与「纯棉 T恤」：后者虽然含拉丁字母，但不是型号。
+_MODEL_DIGIT = re.compile(r"\d")
+
+#: 纯中文的词块。型号一般是拉丁字母与数字，纯中文的多半是品类词或修饰语。
+_PURE_CJK = re.compile(r"^[一-鿿]+$")
+
+
+def derive_model(name: str, brand: str) -> str:
+    """从商品名里派生出型号。**拿不准就返回空串。**
+
+    做法很保守：去掉品牌名，再剥掉首尾的纯中文词块，剩下的**必须含阿拉伯数字**
+    才算型号。这条数字要求是用来挡「纯棉 T恤」这类假阳性的——它含拉丁字母，
+    但那不是型号。
+
+    宁可少派生也不造错：一个错的型号比没有型号更糟，它会被当成事实展示，
+    而系统无从知道它是错的。
+
+    Examples:
+        「轻羽 AirBook 14」→「AirBook 14」·「锋刃 X15 游戏本」→「X15」
+        「云梯 可折叠婴儿车」→「」（全中文，没有型号概念）
+        「织风 纯棉 T恤」→「」（有拉丁字母但不含数字，不是型号）
+    """
+    if not name:
+        return ""
+
+    rest = name.replace(brand, " ").strip() if brand else name.strip()
+    if not rest:
+        return ""
+
+    tokens = rest.split()
+    # 剥掉首尾的纯中文词块：「冰箱 BCD-318」→「BCD-318」
+    while tokens and _PURE_CJK.match(tokens[0]):
+        tokens.pop(0)
+    while tokens and _PURE_CJK.match(tokens[-1]):
+        tokens.pop()
+
+    candidate = " ".join(tokens).strip()
+    if not candidate or not _MODEL_DIGIT.search(candidate):
+        return ""
+    return candidate
+
+
+def fill_derived_fields(record: dict) -> dict:
+    """补上能从现有字段派生出来的东西。
+
+    目前只有**型号**：从名称里派生。名称里没有就留空——
+    「没有型号」是事实，不是待填的空。
+
+    这个函数被两条入口共用：外部数据接入（`normalize_record`）与
+    种子导入（`product_store.seed_from_json`）。**两条入口都要过它**，
+    否则「型号有没有」会取决于数据是怎么进来的——那种不一致最难查。
+    """
+    if not record.get("model"):
+        record["model"] = derive_model(
+            str(record.get("name") or ""), str(record.get("brand") or "")
+        )
+    return record
+
+
 def normalize_record(
     raw: Mapping[str, Any],
     *,
@@ -344,6 +404,8 @@ def normalize_record(
         "data_source": f"{source_label} · 抓取于 {moment.isoformat()}",
         "updated_at": moment.isoformat(),
     }
+    # 补上能从名称派生的型号——入口一（外部数据接入）
+    fill_derived_fields(record)
     return record, issues
 
 

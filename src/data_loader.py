@@ -59,6 +59,16 @@ class Product(BaseModel):
     cons: list[str] = Field(default_factory=list)
     data_source: str = ""
     updated_at: str = ""
+    #: 型号。**可空**——服装、家具这类品类本来就没有型号概念，
+    #: 给一件 T 恤编个型号是造数据。空值如实表达「这个信息不存在」。
+    model: str = ""
+    #: 逐条的原始资料链接。自造数据没有真实来源，因此为空。
+    source_url: str = ""
+    #: 核验状态：verified / unverified。默认未核验——没核实过就不该说是已核实。
+    data_status: str = "unverified"
+    #: 价格的来源与采集时间（来自价格记录）。价格是单独记录的，这几项随之而来。
+    price_source: str = ""
+    price_collected_at: str = ""
 
     @property
     def missing_fields(self) -> list[str]:
@@ -100,6 +110,20 @@ class Product(BaseModel):
         时更会谎报为「没有问题」。检测规则见 `src/consistency.py`。
         """
         return consistency.check_product(self)
+
+    @property
+    def is_verified(self) -> bool:
+        """该记录是否已核验。"""
+        return self.data_status == "verified"
+
+    @property
+    def status_label(self) -> str:
+        """核验状态的中文名，界面直接展示。"""
+        return "已核验" if self.is_verified else "未核验"
+
+    @property
+    def has_source_url(self) -> bool:
+        return bool(self.source_url.strip())
 
     @property
     def has_data_issues(self) -> bool:
@@ -245,6 +269,13 @@ def _build_product(record: Any) -> Product | None:
         cons=_coerce_str_list(record.get("cons")),
         data_source=_coerce_text(record.get("data_source")),
         updated_at=_coerce_text(record.get("updated_at")),
+        # 溯源字段：型号、来源链接、核验状态，以及价格记录带来的来源与时间。
+        # 空值一律落到空串——「没填」与「填了空」在展示上是一回事。
+        model=_coerce_text(record.get("model")),
+        source_url=_coerce_text(record.get("source_url")),
+        data_status=_coerce_text(record.get("data_status")) or config.STATUS_UNVERIFIED,
+        price_source=_coerce_text(record.get("price_source")),
+        price_collected_at=_coerce_text(record.get("price_collected_at")),
     )
 
 
@@ -253,20 +284,32 @@ def _build_product(record: Any) -> Product | None:
 # --------------------------------------------------------------------------
 
 
-def _read_raw(path: Path) -> Any:
-    """读文件并解析 JSON，把两类失败翻译成领域异常。"""
-    if not path.is_file():
+def read_seed(path: Path | None = None) -> tuple[list[Any], dict[str, Any]]:
+    """读种子数据文件，返回 (记录列表, 数据集元信息)。
+
+    商品数据已改存数据库，这个文件**只在库为空时导入一次**。
+    所以它的错误文案也变了：文件缺失意味着「库空且没有种子可用」，
+    而不是「商品数据不见了」。
+
+    Raises:
+        DataFileMissing: 文件不存在。
+        DataFileInvalid: 内容不是合法 JSON，或顶层结构不符合约定。
+    """
+    target = Path(path) if path is not None else config.products_path()
+    if not target.is_file():
         raise DataFileMissing(
-            f"商品数据文件不存在：{path}。请确认 data/products.json 是否就位。",
-            detail=str(path),
+            f"商品库为空，且找不到种子数据文件：{target}。"
+            f"请确认 data/products.json 是否就位。",
+            detail=str(target),
         )
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(target.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
         raise DataFileInvalid(
-            f"商品数据文件解析失败：{path.name}。请检查该文件是否为合法 JSON。",
+            f"种子数据文件解析失败：{target.name}。请检查该文件是否为合法 JSON。",
             detail=f"{type(exc).__name__}: {exc}",
         ) from exc
+    return _extract_records(raw)
 
 
 def _extract_records(raw: Any) -> tuple[list[Any], dict[str, Any]]:
@@ -282,36 +325,64 @@ def _extract_records(raw: Any) -> tuple[list[Any], dict[str, Any]]:
             )
         return records, raw
     raise DataFileInvalid(
-        "商品数据文件的顶层结构应为数组或包含 products 数组的对象。",
+        "商品数据的顶层结构应为数组或包含 products 数组的对象。",
         detail=f"got {type(raw).__name__}",
     )
 
 
+#: 数据集级元信息的字段名 → 数据库里的键。
+_META_KEYS = {
+    "dataset_name": "dataset_name",
+    "disclaimer": "disclaimer",
+    "updated_at": "updated_at",
+    "spec_tier_note": "spec_tier_note",
+}
+
+
 def load_catalog(path: Path | None = None) -> Catalog:
-    """加载商品数据集。
+    """加载商品目录。
+
+    Args:
+        path: **数据库**文件路径。省略时取项目配置的数据库。
+            注意语义变化：此前这个参数指的是商品 JSON 文件，
+            数据入数据库后商品数据与历史共用同一个库。
+
+    数据来自数据库。**库为空时自动导入种子数据**（`data/products.json`）——
+    这是「开箱即用」与「单一数据源」之间的折中：没有它，用户克隆下来
+    必须先跑一个迁移命令才能启动应用。
+
+    库里已有商品时**不导入、不覆盖**：用户的录入永远优先于种子。
 
     Raises:
-        DataFileMissing: 文件不存在。
-        DataFileInvalid: 内容不是合法 JSON，或顶层结构不符合约定。
-        EmptyCatalog: 文件合法但没有任何可用商品。
+        DataFileMissing: 库为空且种子文件不存在。
+        DataFileInvalid: 种子文件非法（只可能发生在首次导入时）。
+        EmptyCatalog: 库与种子里都没有可用商品。
+        ProductStoreReadError: 数据库损坏。
     """
-    target = Path(path) if path is not None else config.products_path()
-    raw = _read_raw(target)
-    records, meta = _extract_records(raw)
+    from src import product_store
+
+    db_path = Path(path) if path is not None else config.products_db_path()
+
+    records = product_store.load_product_records(db_path)
+    if not records:
+        # 空库 → 导入种子。种子缺失时 DataFileMissing 自然抛出，
+        # 文案已经改成「库为空且找不到种子文件」。
+        product_store.seed_from_json(config.products_path(), path=db_path)
+        records = product_store.load_product_records(db_path)
+
+    meta = product_store.load_dataset_meta(db_path)
 
     products: list[Product] = []
     issues: list[str] = []
-    seen_ids: set[str] = set()
 
+    # 这里不再查重：商品表的主键已经保证 ID 唯一，仓储层也在写入时为无 ID 的
+    # 记录把关。加载层的重复检查成了不可达代码，留着只会让人以为还有另一条
+    # 可能出错的路径。
     for index, record in enumerate(records):
         product = _build_product(record)
         if product is None:
             issues.append(f"第 {index + 1} 条记录缺少 id，已跳过")
             continue
-        if product.id in seen_ids:
-            issues.append(f"商品 id 重复：{product.id}（第 {index + 1} 条），已跳过")
-            continue
-        seen_ids.add(product.id)
         if not product.is_complete:
             issues.append(
                 f"商品 {product.id}（{product.name or '未命名'}）缺少字段："
@@ -321,7 +392,7 @@ def load_catalog(path: Path | None = None) -> Catalog:
 
     if not products:
         raise EmptyCatalog(
-            f"商品数据文件中没有可用的商品记录：{target}。",
+            "商品库中没有可用的商品记录，请先导入商品数据。",
             detail=f"{len(records)} 条原始记录，全部不可用",
         )
 

@@ -449,10 +449,39 @@ def product_row(
             if ai_note
             else ""
         )
-        + f'  <div class="zg-source">数据来源：{esc(product.data_source or "信息缺失")}'
-        f"　·　更新时间：{esc(product.updated_at or '信息缺失')}</div>"
-        f"</div>"
+        + "  " + _source_line(product)
+        + f"</div>"
     )
+
+
+def _source_line(product) -> str:
+    """商品卡片底部的来源信息行。
+
+    需求硬性要求「看到资料来源与更新时间」，这个变更又加了核验状态与
+    逐条来源链接。**未核验要显眼**——不标注的话，用户会把演示数据
+    当成核实过的信息。
+
+    价格来自价格记录，所以它有自己的来源与采集时间；与整条记录的来源
+    不同时才单独列出，避免同一句话重复两遍。
+    """
+    parts = [f"数据来源：{esc(product.data_source or '信息缺失')}"]
+    parts.append(f"更新时间：{esc(product.updated_at or '信息缺失')}")
+
+    status = "已核验" if getattr(product, "is_verified", False) else "未核验"
+    tone = "ok" if status == "已核验" else "warn"
+    parts.append(chip(status, tone))
+
+    if getattr(product, "has_source_url", False):
+        url = esc(product.source_url)
+        parts.append(f'<a href="{url}" target="_blank" rel="noopener">来源链接</a>')
+
+    price_source = getattr(product, "price_source", "")
+    if price_source and price_source != product.data_source:
+        collected = getattr(product, "price_collected_at", "")
+        suffix = f"（{esc(collected)}）" if collected else ""
+        parts.append(f"价格来自：{esc(price_source)}{suffix}")
+
+    return '<div class="zg-source">' + "　·　".join(parts) + "</div>"
 
 
 def render_product_row(
@@ -625,8 +654,7 @@ def report_item_card(item, *, show_rank: bool = True) -> str:
         f'      <div class="zg-score-name">{esc(config.SCORE_DISPLAY_NAME)}</div>'
         f"    </div>"
         f"  </div>"
-        f'  <div class="zg-source">数据来源：{esc(item.data_source or "信息缺失")}'
-        f"　·　更新时间：{esc(item.updated_at or '信息缺失')}</div>"
+        f"  {_source_line(item)}"
         f"</div>"
     )
 

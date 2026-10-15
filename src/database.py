@@ -41,6 +41,57 @@ CREATE TABLE IF NOT EXISTS favorites (
     product_id TEXT PRIMARY KEY,
     added_at   TEXT NOT NULL
 );
+
+-- 商品主表：**运行时的唯一商品数据源**。
+-- `data/products.json` 只在库为空时作为种子导入一次，之后不再参与运行时读取。
+-- specs / use_cases / pros / cons 存 JSON 文本：它们的键按品类异构
+-- （笔记本有 cpu_tier，服饰有 comfort_tier），消费方本来就按 dict 读，
+-- 拆成 EAV 需要三张表加一次重组，收益为零。
+CREATE TABLE IF NOT EXISTS products (
+    product_id   TEXT PRIMARY KEY,
+    name         TEXT NOT NULL DEFAULT '',
+    brand        TEXT NOT NULL DEFAULT '',
+    category     TEXT NOT NULL DEFAULT '',
+    model        TEXT,                                -- 可空：服装家具没有型号概念
+    specs        TEXT NOT NULL DEFAULT '{}',
+    use_cases    TEXT NOT NULL DEFAULT '[]',
+    pros         TEXT NOT NULL DEFAULT '[]',
+    cons         TEXT NOT NULL DEFAULT '[]',
+    data_source  TEXT NOT NULL DEFAULT '',
+    source_url   TEXT,                                -- 可空：自造数据没有真实来源
+    data_status  TEXT NOT NULL DEFAULT 'unverified',  -- verified / unverified
+    updated_at   TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_products_category ON products (category);
+CREATE INDEX IF NOT EXISTS idx_products_brand ON products (brand);
+
+-- 价格记录：价格**单独成表**并带来源与采集时间。
+-- 它是最需要核实的字段，却曾经只是商品表上一个无来源、无时效的孤立数值。
+-- 商品当前价格取自 is_current = 1 的那条；没有记录时价格视为缺失，
+-- 不默认符合预算（与「缺数据不猜」的既有立场一致）。
+CREATE TABLE IF NOT EXISTS product_prices (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id   TEXT NOT NULL,
+    price        REAL NOT NULL,
+    currency     TEXT NOT NULL DEFAULT 'CNY',
+    source_note  TEXT NOT NULL DEFAULT '',
+    collected_at TEXT NOT NULL DEFAULT '',
+    verified_at  TEXT,
+    is_current   INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_prices_current
+    ON product_prices (product_id, is_current);
+
+-- 数据集级元信息：免责声明、档位说明这类整批数据共有的说明。
+-- 单独存表而不是挂在某条商品上，是因为它属于**数据集**而不是商品；
+-- 也不能留在种子文件里——种子删掉之后免责声明不能跟着消失。
+CREATE TABLE IF NOT EXISTS dataset_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
 """
 
 #: 同一组条件只存一条的唯一索引。
@@ -85,7 +136,7 @@ def _ensure_parent(path: Path) -> None:
 
 
 @contextmanager
-def _connect(path: Path | None = None):
+def connect(path: Path | None = None):
     """打开连接并保证关闭。
 
     把 sqlite3 的各类错误翻译成领域异常——界面只认领域异常，
@@ -104,6 +155,9 @@ def _connect(path: Path | None = None):
 
     try:
         connection.row_factory = sqlite3.Row
+        # SQLite 默认**不启用**外键约束，必须逐连接打开，
+        # 否则 `product_prices` 上的 ON DELETE CASCADE 只是一句摆设。
+        connection.execute("PRAGMA foreign_keys = ON")
         yield connection
     finally:
         connection.close()
@@ -111,7 +165,7 @@ def _connect(path: Path | None = None):
 
 def init_db(path: Path | None = None) -> None:
     """建表并做轻量迁移。可重复调用，已存在时不做任何改动。"""
-    with _connect(path) as connection:
+    with connect(path) as connection:
         try:
             connection.executescript(_SCHEMA)
             _migrate(connection)
@@ -162,7 +216,7 @@ def check_health(path: Path | None = None) -> tuple[bool, str]:
     """
     try:
         init_db(path)
-        with _connect(path) as connection:
+        with connect(path) as connection:
             connection.execute("SELECT COUNT(*) FROM analysis_history").fetchone()
     except (HistoryReadError, HistoryWriteError) as exc:
         return False, exc.user_message
@@ -204,7 +258,7 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
     signature = (report.signature or "").strip() or None
 
     try:
-        with _connect(path) as connection:
+        with connect(path) as connection:
             if signature is not None:
                 existing = connection.execute(
                     "SELECT id FROM analysis_history WHERE signature = ? LIMIT 1",
@@ -255,7 +309,7 @@ def list_analyses(limit: int = 50, path: Path | None = None) -> list[HistoryEntr
     """列出历史记录，按时间由新到旧。"""
     try:
         _ensure_ready(path)
-        with _connect(path) as connection:
+        with connect(path) as connection:
             rows = connection.execute(
                 """
                 SELECT id, created_at, demand_summary, top_product,
@@ -288,7 +342,7 @@ def list_analyses(limit: int = 50, path: Path | None = None) -> list[HistoryEntr
 def get_analysis(entry_id: int, path: Path | None = None) -> DecisionReport | None:
     """按 ID 取回完整报告。不存在返回 None。"""
     try:
-        with _connect(path) as connection:
+        with connect(path) as connection:
             row = connection.execute(
                 "SELECT report_json FROM analysis_history WHERE id = ?", (entry_id,)
             ).fetchone()
@@ -313,7 +367,7 @@ def get_analysis(entry_id: int, path: Path | None = None) -> DecisionReport | No
 def delete_analysis(entry_id: int, path: Path | None = None) -> bool:
     """删除一条历史记录。返回是否真的删掉了。"""
     try:
-        with _connect(path) as connection:
+        with connect(path) as connection:
             cursor = connection.execute(
                 "DELETE FROM analysis_history WHERE id = ?", (entry_id,)
             )
@@ -329,7 +383,7 @@ def delete_analysis(entry_id: int, path: Path | None = None) -> bool:
 def count_analyses(path: Path | None = None) -> int:
     try:
         _ensure_ready(path)
-        with _connect(path) as connection:
+        with connect(path) as connection:
             row = connection.execute(
                 "SELECT COUNT(*) AS n FROM analysis_history"
             ).fetchone()
@@ -350,7 +404,7 @@ def add_favorite(product_id: str, path: Path | None = None) -> None:
     """收藏一件商品。重复收藏不报错。"""
     try:
         init_db(path)
-        with _connect(path) as connection:
+        with connect(path) as connection:
             connection.execute(
                 "INSERT OR REPLACE INTO favorites (product_id, added_at) VALUES (?, ?)",
                 (product_id, now_local().isoformat(timespec="seconds")),
@@ -370,7 +424,7 @@ def remove_favorite(product_id: str, path: Path | None = None) -> None:
         raise HistoryWriteError("取消收藏失败。", detail=exc.detail) from exc
 
     try:
-        with _connect(path) as connection:
+        with connect(path) as connection:
             connection.execute(
                 "DELETE FROM favorites WHERE product_id = ?", (product_id,)
             )
@@ -386,7 +440,7 @@ def list_favorites(path: Path | None = None) -> list[tuple[str, str]]:
     """返回 [(product_id, added_at)]，按收藏时间由新到旧。"""
     try:
         _ensure_ready(path)
-        with _connect(path) as connection:
+        with connect(path) as connection:
             rows = connection.execute(
                 "SELECT product_id, added_at FROM favorites ORDER BY added_at DESC"
             ).fetchall()
@@ -402,7 +456,7 @@ def list_favorites(path: Path | None = None) -> list[tuple[str, str]]:
 def is_favorite(product_id: str, path: Path | None = None) -> bool:
     try:
         _ensure_ready(path)
-        with _connect(path) as connection:
+        with connect(path) as connection:
             row = connection.execute(
                 "SELECT 1 FROM favorites WHERE product_id = ?", (product_id,)
             ).fetchone()

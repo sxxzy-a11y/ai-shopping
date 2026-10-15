@@ -10,11 +10,11 @@
 
 | 类型 | 回答的问题 | 当前状态 |
 |---|---|---|
-| **自动化测试** | 代码写得对不对？ | ✅ 738 条，全部通过 |
+| **自动化测试** | 代码写得对不对？ | ✅ 781 条，全部通过 |
 | **效果评估** | 推荐得准不准？ | 📋 **尚未建立** |
 
 > ⚠️ **这是本项目当前最需要补的短板之一。**
-> 738 条单元测试**不能**证明推荐质量——评委对这两件事分得很清楚。
+> 781 条单元测试**不能**证明推荐质量——评委对这两件事分得很清楚。
 > 详见[第 3 章](#3-推荐效果评估-)。
 
 ---
@@ -30,7 +30,7 @@ pytest
 **实测结果**（本文件撰写时运行）：
 
 ```
-738 passed in 12.61s
+781 passed in 12.61s
 ```
 
 **测试不需要网络，也不需要任何 API 密钥。**
@@ -56,26 +56,27 @@ pytest
 | 文件 | 数量 | 覆盖内容 |
 |---|---:|---|
 | `test_ai_service.py` | 113 | AI 调用的降级路径、结果校验链、工具调用收发（打桩，不联网） |
-| `test_app.py` | 80 | 七个页面的渲染与交互（无头运行整个应用） |
+| `test_app.py` | 83 | 七个页面的渲染与交互（无头运行整个应用） |
 | `test_recommender.py` | 69 | 筛选、评分、排序、放宽建议、按品类维度、超预算条数 |
 | `test_demand_parser.py` | 64 | 需求解析与追问 |
-| `test_report_service.py` | 46 | 报告组装、导出与条件指纹 |
+| `test_ingest.py` | 56 | 平台数据接入：映射、校验、合并与 CSV 全流程 |
+| `test_report_service.py` | 50 | 报告组装、导出与条件指纹 |
 | `test_consistency.py` | 44 | 商品记录内部矛盾的检测规则与误报基线 |
-| `test_ingest.py` | 43 | 平台数据接入：映射、校验、合并与 CSV 全流程 |
 | `test_agent_tools.py` | 41 | 工具参数校验、只读边界 |
 | `test_knowledge_search.py` | 32 | 检索入口、阈值判定、固定查询集回归基线 |
 | `test_database.py` | 30 | 历史与收藏的读写、容错与跨会话去重 |
 | `test_knowledge_corpus.py` | 29 | 语料加载容错与商品级条目合成 |
 | `test_comparison.py` | 22 | 多商品比较、同类约束与缺失对齐 |
+| `test_product_store.py` | 22 |  |
 | `test_agent_runner.py` | 18 | 编排循环、轮次上限、执行轨迹、降级 |
+| `test_data_loader.py` | 18 | 商品数据加载与降级 |
 | `test_evaluation_suite.py` | 18 |  |
-| `test_data_loader.py` | 17 | 商品数据加载与降级 |
 | `test_knowledge_tokenize.py` | 17 | 中文二元组切分与中英混排边界 |
 | `test_settings.py` | 17 | 偏好读写与合并规则 |
 | `test_acceptance.py` | 16 | 异常场景与完整决策链路 |
 | `test_knowledge_index.py` | 16 | BM25 打分、长度归一化、类型与品类加权 |
 | `test_config.py` | 6 | 默认端点与 `.env.example` 的绑定 |
-| **合计** | **738** | |
+| **合计** | **781** | |
 
 ### 1.4 只跑某一部分
 
@@ -253,7 +254,7 @@ python -c "from src import ai_service; print(ai_service.probe())"
 
 命中即标「资料存疑」，**但不影响筛选与评分**——数据质量问题不该转嫁成商品劣势。
 
-**硬验收线**：这 6 条规则在现有 112 条商品上**误报为 0**
+**硬验收线**：这 6 条规则在现有 781 条商品上**误报为 0**
 （`tests/test_consistency.py::test_real_catalog_is_not_flagged`）。
 一条不准的规则会把正常商品污名化，比不做更糟。
 

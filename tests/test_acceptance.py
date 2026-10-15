@@ -141,15 +141,20 @@ def test_malformed_budget_is_rejected_with_an_example():
 # --------------------------------------------------------------------------
 
 
-def test_missing_product_file_shows_a_hint_and_keeps_the_app_alive(tmp_path, monkeypatch):
+def test_missing_seed_shows_a_hint_and_keeps_the_app_alive(tmp_path, monkeypatch):
+    """库为空且种子文件也不在——这时应用仍要能打开，并说清缺什么。
+
+    商品数据入数据库后，这个场景的意思变成了「没有任何来源能初始化商品库」：
+    conftest 给的是空库，种子又被指到了不存在的位置。
+    """
     monkeypatch.setenv("ZHIGOU_PRODUCTS_PATH", str(tmp_path / "nope.json"))
 
     at = _run()
-    _assert_no_leak(at, "数据文件缺失")
+    _assert_no_leak(at, "商品数据缺失")
 
     body = _text(at)
-    assert "数据" in body and ("不存在" in body or "缺失" in body)
-    assert "products.json" in body, "应告知期望的文件路径"
+    assert "商品" in body and ("找不到" in body or "为空" in body or "缺失" in body)
+    assert "products.json" in body, "应告知期望的种子文件路径"
 
 
 def test_corrupt_product_file_shows_a_hint(tmp_path, monkeypatch):

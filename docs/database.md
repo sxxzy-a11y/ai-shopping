@@ -57,7 +57,72 @@
 
 ## 3. 当前实际表结构 ✅
 
-`storage/zhigou.db`（SQLite），由 `src/database.py` 用标准库 `sqlite3` 管理。
+现在有**两个 SQLite 库**，都由 `src/database.py` 用标准库 `sqlite3` 管理。
+
+| 库 | 文件 | 内容 | 谁来写 |
+|---|---|---|---|
+| 商品库 | `storage/products.db` | `products` / `product_prices` / `dataset_meta` | 接入脚本、迁移脚本 |
+| 历史库 | `storage/zhigou.db` | `analysis_history` / `favorites` | 应用运行时 |
+
+**为什么分成两个文件**：共用一个文件时，文件一旦损坏，商品数据与历史会同时
+读不出来，整个应用直接不可用；分开之后损坏是局部的——历史坏了仍能做分析，
+商品库坏了历史仍在。这与「不因某一处失败而整体不可用」的既有立场一致。
+
+### 3.1 商品库（`storage/products.db`）
+
+```sql
+CREATE TABLE IF NOT EXISTS products (
+    product_id   TEXT PRIMARY KEY,
+    name         TEXT NOT NULL DEFAULT '',
+    brand        TEXT NOT NULL DEFAULT '',
+    category     TEXT NOT NULL DEFAULT '',
+    model        TEXT,                                -- 可空：服装家具没有型号概念
+    specs        TEXT NOT NULL DEFAULT '{}',          -- JSON 列，按品类异构
+    use_cases    TEXT NOT NULL DEFAULT '[]',
+    pros         TEXT NOT NULL DEFAULT '[]',
+    cons         TEXT NOT NULL DEFAULT '[]',
+    data_source  TEXT NOT NULL DEFAULT '',
+    source_url   TEXT,                                -- 可空：自造数据没有真实来源
+    data_status  TEXT NOT NULL DEFAULT 'unverified',  -- verified / unverified
+    updated_at   TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS product_prices (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id   TEXT NOT NULL,
+    price        REAL NOT NULL,
+    currency     TEXT NOT NULL DEFAULT 'CNY',
+    source_note  TEXT NOT NULL DEFAULT '',
+    collected_at TEXT NOT NULL DEFAULT '',
+    verified_at  TEXT,
+    is_current   INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS dataset_meta (      -- 数据集级说明：免责声明、档位说明
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
+```
+
+**三处值得说明的设计**：
+
+1. **价格单独成表**：价格是最需要核实的字段，却曾经只是商品表上一个无来源、
+   无时效的孤立数值。成表之后，重新录入变成「新增一条记录 + 旧的置为非当前」，
+   历史不丢；没有价格记录时价格**视为缺失**，不默认符合预算。
+2. **`specs` 保持 JSON 列不拆 EAV**：键按品类异构，消费方（`scoring`）本来就按
+   dict 读，拆成三张表再拼回去收益为零。需要按参数做 SQL 级筛选时才是该拆的信号。
+3. **`dataset_meta` 单独存**：免责声明这类整批数据共有的说明，不能留在种子文件里——
+   种子删掉之后它不能跟着消失。
+
+> ⚠️ **外键要显式开启**：SQLite 默认不启用外键约束，必须逐连接
+> `PRAGMA foreign_keys = ON`，否则 `ON DELETE CASCADE` 只是一句摆设。
+>
+> ⚠️ **写入用 UPSERT 而不是 `INSERT OR REPLACE`**：后者在 SQLite 里是
+> **先删后插**，会触发外键级联、把该商品的价格记录一起删掉，价格历史因此永远
+> 累积不起来。这个坑实际踩过一次。
+
+### 3.2 历史库（`storage/zhigou.db`）
 
 ```sql
 -- 对应目标表 recommendation_sessions
@@ -89,7 +154,7 @@ CREATE TABLE IF NOT EXISTS favorites (
 );
 ```
 
-### 3.1 字段说明
+### 3.3 字段说明
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -102,7 +167,7 @@ CREATE TABLE IF NOT EXISTS favorites (
 | `report_json` | TEXT | **完整 `DecisionReport` 的 JSON 快照** |
 | `signature` | TEXT | 需求条件指纹，用于跨会话去重 |
 
-### 3.2 为什么报告存 JSON 快照
+### 3.4 为什么报告存 JSON 快照
 
 需求要求「再次打开历史记录时还原当时的结论」。
 如果用当前商品数据重算，**商品价格变了、参数改了、权重调了，
@@ -110,7 +175,7 @@ CREATE TABLE IF NOT EXISTS favorites (
 
 JSON 快照保证：**报告一旦生成，永久不变。**
 
-### 3.3 为什么用部分唯一索引
+### 3.5 为什么用部分唯一索引
 
 普通的 `UNIQUE` 索引会把多个 `NULL` 视为互不相同（SQLite 语义），
 但需求是「同一组条件只存一条」。部分索引 `WHERE signature IS NOT NULL`

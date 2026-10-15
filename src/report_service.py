@@ -60,6 +60,21 @@ class ReportItem:
     #: 该商品记录内部矛盾的说明（快照）。空列表表示没检测到矛盾。
     #: 有默认值，因此老的历史报告（JSON 里没有这一项）仍能正常打开。
     data_issues: list[str] = field(default_factory=list)
+    #: 溯源信息也进快照：历史记录要能还原**当时看到的**核验状态与来源，
+    #: 而不是用今天的数据状态去解释当时那条记录。
+    model: str = ""
+    source_url: str = ""
+    data_status: str = ""
+    price_source: str = ""
+    price_collected_at: str = ""
+
+    @property
+    def is_verified(self) -> bool:
+        return self.data_status == "verified"
+
+    @property
+    def has_source_url(self) -> bool:
+        return bool(self.source_url.strip())
 
     @property
     def is_over_budget(self) -> bool:
@@ -150,6 +165,11 @@ def _to_report_item(
         cons=list(product.cons),
         data_source=product.data_source,
         updated_at=product.updated_at,
+        model=product.model,
+        source_url=product.source_url,
+        data_status=product.data_status,
+        price_source=product.price_source,
+        price_collected_at=product.price_collected_at,
         # 存疑说明一并写进快照：历史报告要能还原当时看到的东西，
         # 不能等到打开历史时才用「当前」的商品数据重算。
         data_issues=[issue.reason for issue in product.data_issues],
@@ -398,6 +418,14 @@ def _item_block(item: ReportItem, *, show_rank: bool = True) -> list[str]:
         lines.append("- ⚠️ **资料存疑**（以下几处记录内部互相矛盾，建议核实后再采信）：")
         lines.extend(f"    - {issue}" for issue in item.data_issues)
     lines.append(f"- 数据来源：{item.data_source or '信息缺失'}（更新于 {item.updated_at or '未知'}）")
+    # 核验状态：导出结果也要标。只在界面上标是不够的——
+    # 导出件会脱离界面单独流传，那时就没人知道这条没核实过。
+    status = "已核验" if item.is_verified else "**未核验**（该记录尚未人工核实，请以厂商或平台信息为准）"
+    lines.append(f"- 核验状态：{status}")
+    if item.model:
+        lines.append(f"- 型号：{item.model}")
+    if item.source_url:
+        lines.append(f"- 原始来源：{item.source_url}")
     lines.append("")
     return lines
 
@@ -488,6 +516,9 @@ def to_csv(report: DecisionReport) -> str:
             "数据来源",
             "数据更新时间",
             "资料存疑",
+            "核验状态",
+            "型号",
+            "价格来源",
         ]
     )
 
@@ -510,6 +541,9 @@ def to_csv(report: DecisionReport) -> str:
                     item.data_source,
                     item.updated_at,
                     "；".join(item.data_issues),
+                    "已核验" if item.is_verified else "未核验",
+                    item.model,
+                    item.price_source,
                 ]
             )
 

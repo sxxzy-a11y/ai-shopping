@@ -30,6 +30,9 @@ def isolated_local_state(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("ZHIGOU_SETTINGS_PATH", str(tmp_path / "settings.json"))
     monkeypatch.setenv("ZHIGOU_DB_PATH", str(tmp_path / "zhigou.db"))
+    # 商品库与历史库分开，测试也要把它隔离到临时目录，
+    # 否则测试会往开发机的真实商品库里写。
+    monkeypatch.setenv("ZHIGOU_PRODUCTS_DB_PATH", str(tmp_path / "products.db"))
 
     # 断掉密钥，保证测试**永远不会**真的调外部 API。
     # 开发机上 .env 里放着真密钥，这一步不做的话，跑测试就会消耗额度、

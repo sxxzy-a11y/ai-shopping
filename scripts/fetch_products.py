@@ -53,9 +53,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src import config, data_loader, ingest  # noqa: E402
+from src import config, data_loader, ingest, product_store  # noqa: E402
+from src.errors import ZhigouError  # noqa: E402
 
-DEFAULT_PRODUCTS_PATH = PROJECT_ROOT / "data" / "products.json"
+#: 默认写入目标。商品数据存在数据库里，不再是 JSON 文件。
+DEFAULT_DB_PATH = PROJECT_ROOT / "storage" / "zhigou.db"
 
 
 # --------------------------------------------------------------------------
@@ -275,21 +277,16 @@ def _source_label(source: ProductSource, explicit: str | None) -> str:
 
 
 def _load_existing(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """读现有数据集。文件不存在或损坏时返回空集合并说明。"""
+    """读现有商品数据。库不存在或读不出来时返回空集合并说明。"""
     if not path.is_file():
         return [], {}
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"警告：现有数据集无法解析（{exc}），将按空数据集处理。")
+        records = product_store.load_product_records(path)
+        meta = product_store.load_dataset_meta(path)
+    except ZhigouError as exc:
+        print(f"警告：现有商品数据无法读取（{exc}），将按空数据集处理。")
         return [], {}
-    if isinstance(raw, dict):
-        products = raw.get("products", [])
-        meta = {k: v for k, v in raw.items() if k != "products"}
-        return [p for p in products if isinstance(p, dict)], meta
-    if isinstance(raw, list):
-        return [p for p in raw if isinstance(p, dict)], {}
-    return [], {}
+    return records, meta
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -301,8 +298,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--source", choices=["csv", "api"], default="csv",
                         help="数据源类型（默认 csv）")
     parser.add_argument("--input", help="CSV 模式下的输入文件路径")
-    parser.add_argument("--out", default=str(DEFAULT_PRODUCTS_PATH),
-                        help="输出文件（默认 data/products.json）")
+    parser.add_argument("--out", default=str(DEFAULT_DB_PATH),
+                        help="写入的数据库（默认 storage/zhigou.db）")
     parser.add_argument("--mode", choices=["merge", "replace"], default="merge",
                         help="与现有数据的合并方式（默认 merge：同 id 覆盖，新 id 追加）")
     parser.add_argument("--limit", type=int, default=0,
@@ -350,18 +347,26 @@ def main(argv: Iterable[str] | None = None) -> int:
     _print_report(source=source, products=products, skipped=skipped, issues=issues)
 
     if issues:
-        print("\n发现不合格数据，**未写入文件**。修好数据后重试。")
+        print("\n发现不合格数据，**未写入数据库**。修好数据后重试。")
         return 1
 
     if args.dry_run:
-        print("\n--dry-run：校验通过，未写文件。")
+        print("\n--dry-run：校验通过，未写库。")
         return 0
 
     out_path = Path(args.out)
     existing, meta = _load_existing(out_path)
     merged = ingest.merge_products(existing, products, mode=args.mode)
+    # build_document 仍然用来组装**数据集级说明**（免责声明、档位说明、抓取时间），
+    # 它们不属于任何单条商品，单独存进 dataset_meta 表。
     document = ingest.build_document(merged, meta=meta, source_label=label)
-    ingest.write_document(out_path, document)
+    dataset_meta = {k: v for k, v in document.items() if k != "products"}
+
+    if args.mode == "replace":
+        product_store.replace_all(merged, path=out_path)
+    else:
+        product_store.save_products(merged, path=out_path)
+    product_store.save_dataset_meta(dataset_meta, path=out_path)
     print(f"\n已写入 {out_path}：共 {len(merged)} 条商品"
           f"（本次转换 {len(products)} 条，模式 {args.mode}）。")
 

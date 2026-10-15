@@ -35,15 +35,20 @@ class ZhigouError(Exception):
 
 
 class DataFileMissing(ZhigouError):
-    default_message = "商品数据文件不存在，请确认 data/products.json 是否就位。"
+    """种子数据文件缺失。商品数据已改存数据库，这个错误现在只在
+    「库为空、且没有种子文件可导入」时出现。"""
+
+    default_message = (
+        "商品库为空，且找不到种子数据文件 data/products.json，无法初始化商品数据。"
+    )
 
 
 class DataFileInvalid(ZhigouError):
-    default_message = "商品数据文件解析失败，请检查该文件是否为合法 JSON。"
+    default_message = "商品数据解析失败，请检查数据内容是否合法。"
 
 
 class EmptyCatalog(ZhigouError):
-    default_message = "当前没有可用于分析的商品数据，请先向数据文件中补充商品。"
+    default_message = "当前没有可用于分析的商品数据，请先向商品库中补充商品。"
 
 
 class FieldValidationError(ZhigouError):
@@ -109,6 +114,16 @@ class HistoryReadError(ZhigouError):
 
 class HistoryWriteError(ZhigouError):
     default_message = "本次分析记录保存失败，结果仍可在当前页面查看。"
+
+
+class ProductStoreReadError(ZhigouError):
+    """商品库读取失败。与历史记录读取失败分开——两者可独立恢复。"""
+
+    default_message = "商品数据读取失败，可能是本地数据库文件损坏。"
+
+
+class ProductStoreWriteError(ZhigouError):
+    default_message = "商品数据写入失败，本次变更未生效。"
 
 
 class ExportError(ZhigouError):

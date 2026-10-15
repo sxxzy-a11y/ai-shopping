@@ -239,7 +239,8 @@ def test_csv_pipeline_end_to_end(tmp_path: Path):
     csv_path = tmp_path / "export.csv"
     fetch_products.write_csv_template(csv_path)
 
-    out_path = tmp_path / "products.json"
+    # `--out` 现在是**数据库**路径——商品数据落库，不再写 JSON 文件
+    out_path = tmp_path / "products.db"
     exit_code = fetch_products.main(
         [
             "--source", "csv",
@@ -250,19 +251,23 @@ def test_csv_pipeline_end_to_end(tmp_path: Path):
     )
 
     assert exit_code == 0
-    document = json.loads(out_path.read_text(encoding="utf-8"))
-    assert len(document["products"]) == 1
-    product = document["products"][0]
+
+    from src import product_store
+
+    records = product_store.load_product_records(out_path)
+    assert len(records) == 1
+    product = records[0]
     assert product["id"] == "EX0001"
     assert product["category"] == "appliance"
     assert product["specs"]["energy_grade"] == 5
-    assert document["source"] == "来自测试平台"
+    # 数据集级说明落在 dataset_meta 表里，与商品记录分开存
+    assert product_store.load_dataset_meta(out_path)["source"] == "来自测试平台"
 
 
 def test_csv_pipeline_dry_run_writes_nothing(tmp_path: Path):
     csv_path = tmp_path / "export.csv"
     fetch_products.write_csv_template(csv_path)
-    out_path = tmp_path / "products.json"
+    out_path = tmp_path / "products.db"
 
     exit_code = fetch_products.main(
         ["--source", "csv", "--input", str(csv_path),
@@ -279,12 +284,66 @@ def test_csv_pipeline_blocks_invalid_data(tmp_path: Path, capsys):
         "商品ID,标题,商品类目,价格\nX1,没有价格的商品,家用电器,面议\n",
         encoding="utf-8",
     )
-    out_path = tmp_path / "products.json"
+    out_path = tmp_path / "products.db"
 
     exit_code = fetch_products.main(
         ["--source", "csv", "--input", str(csv_path), "--out", str(out_path)]
     )
 
     assert exit_code == 1, "校验不过必须拒绝写入"
-    assert not out_path.exists()
-    assert "未写入文件" in capsys.readouterr().out
+    assert not out_path.exists(), "校验不过时不该建库"
+    assert "未写入" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# 型号派生（变更 migrate-products-to-sqlite）
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name, brand, expected",
+    [
+        ("轻羽 AirBook 14", "轻羽", "AirBook 14"),
+        ("锋刃 X15 游戏本", "锋刃", "X15"),
+        ("键语 K87 机械键盘", "键语", "K87"),
+        ("清澜 冰箱 BCD-318", "清澜", "BCD-318"),
+        ("磐石 A5", "磐石", "A5"),
+        ("清水 Note 12", "清水", "Note 12"),
+    ],
+)
+def test_model_is_derived_when_the_name_has_one(name, brand, expected):
+    assert ingest.derive_model(name, brand) == expected
+
+
+@pytest.mark.parametrize(
+    "name, brand",
+    [
+        # 全中文——这类品类本来就没有型号概念
+        ("云梯 可折叠婴儿车", "云梯"),
+        ("木言 人体工学椅 网布款", "木言"),
+        ("沐光 负离子吹风机", "沐光"),
+        # 含拉丁字母但不含数字——「T恤」不是型号
+        ("织风 纯棉 T恤", "织风"),
+        ("乐章 Studio", "乐章"),
+    ],
+)
+def test_model_is_empty_when_there_is_none(name, brand):
+    """**宁可留空也不造错。** 一个错的型号比没有型号更糟——它会被当成事实展示。
+
+    判据是「剩下的部分必须含阿拉伯数字」：这条挡住的正是「纯棉 T恤」这类
+    含字母但不是型号的情况。
+    """
+    assert ingest.derive_model(name, brand) == ""
+
+
+def test_derive_model_handles_missing_input():
+    assert ingest.derive_model("", "") == ""
+    assert ingest.derive_model("没有品牌前缀的型号 X1", "") == "没有品牌前缀的型号 X1".replace("没有品牌前缀的型号 ", "")
+
+
+def test_every_derived_model_contains_a_digit(catalog):
+    """全量核对：派生出来的型号**一律含数字**——规则不允许例外。"""
+    for product in catalog.products[:20]:
+        model = ingest.derive_model(product.name, product.brand)
+        if model:
+            assert any(ch.isdigit() for ch in model), f"{product.id} 派生出无数字的型号：{model}"

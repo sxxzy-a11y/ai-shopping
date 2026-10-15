@@ -67,50 +67,89 @@ def test_all_products_are_complete(catalog):
 
 
 # --------------------------------------------------------------------------
-# 容错
+# 种子导入（只在库为空时发生一次）
 # --------------------------------------------------------------------------
+#
+# 商品数据现在存在数据库里，`data/products.json` 只在**库为空时导入一次**。
+# 所以文件层的容错——缺失、非法、结构不对——都归到「首次导入」这条路径上。
+#
+# 库里已经有数据时不会再碰种子文件，因此这些失败只可能发生在第一次。
 
 
-def test_missing_file_raises_domain_error(tmp_path: Path):
+def _point_seed_at(monkeypatch, tmp_path: Path, payload) -> Path:
+    """把种子文件指到临时目录。配合 conftest 给的临时空库用。"""
+    seed = tmp_path / "products.json"
+    seed.write_text(
+        payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ZHIGOU_PRODUCTS_PATH", str(seed))
+    return seed
+
+
+def test_missing_seed_raises_domain_error(tmp_path: Path, monkeypatch):
+    """库为空且种子文件不存在——这时才该报「商品数据缺失」。"""
+    monkeypatch.setenv("ZHIGOU_PRODUCTS_PATH", str(tmp_path / "does-not-exist.json"))
     with pytest.raises(DataFileMissing):
-        load_catalog(tmp_path / "does-not-exist.json")
+        load_catalog()
 
 
-def test_invalid_json_raises_domain_error(tmp_path: Path):
-    bad = tmp_path / "products.json"
-    bad.write_text("{ this is not json", encoding="utf-8")
+def test_invalid_seed_raises_domain_error(tmp_path: Path, monkeypatch):
+    _point_seed_at(monkeypatch, tmp_path, "{ this is not json")
     with pytest.raises(DataFileInvalid):
-        load_catalog(bad)
+        load_catalog()
 
 
-def test_empty_product_list_raises_empty_catalog(tmp_path: Path):
-    empty = tmp_path / "products.json"
-    empty.write_text(json.dumps({"products": []}), encoding="utf-8")
+def test_empty_seed_raises_empty_catalog(tmp_path: Path, monkeypatch):
+    _point_seed_at(monkeypatch, tmp_path, {"products": []})
     with pytest.raises(EmptyCatalog):
-        load_catalog(empty)
+        load_catalog()
 
 
-def test_non_array_products_field_raises(tmp_path: Path):
-    bad = tmp_path / "products.json"
-    bad.write_text(json.dumps({"products": "oops"}), encoding="utf-8")
+def test_seed_with_non_array_products_raises(tmp_path: Path, monkeypatch):
+    _point_seed_at(monkeypatch, tmp_path, {"products": "oops"})
     with pytest.raises(DataFileInvalid):
-        load_catalog(bad)
+        load_catalog()
+
+
+def test_bare_array_seed_is_accepted(tmp_path: Path, monkeypatch):
+    """顶部结构允许是裸数组——导入流程产出的就是这种形式。"""
+    _point_seed_at(monkeypatch, tmp_path, [{"id": "B1", "name": "裸数组"}])
+    assert load_catalog().get("B1").name == "裸数组"
+
+
+def test_seed_is_only_imported_once(tmp_path: Path, monkeypatch):
+    """库里已有数据时不再导入种子——否则用户录入的商品会被示例数据盖掉。"""
+    _point_seed_at(monkeypatch, tmp_path, [{"id": "SEED1", "name": "种子里"}])
+    assert load_catalog().get("SEED1") is not None
+
+    # 换一份「种子」，再加载：库非空，不该受影响
+    _point_seed_at(monkeypatch, tmp_path, [{"id": "SEED2", "name": "另一份"}])
+    catalog = load_catalog()
+    assert catalog.get("SEED1") is not None
+    assert catalog.get("SEED2") is None
 
 
 # --------------------------------------------------------------------------
-# 单条记录的降级
+# 单条记录的降级（记录已在库中）
 # --------------------------------------------------------------------------
 
 
-def _write(tmp_path: Path, payload) -> Path:
-    target = tmp_path / "products.json"
-    target.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    return target
+def _seed_db(tmp_path: Path, records: list[dict]) -> Path:
+    """把记录写进临时数据库，返回库路径。
+
+    商品数据在库里，所以「坏记录」要造在库里，而不是造在文件里。
+    """
+    from src import product_store
+
+    db = tmp_path / "products.db"
+    product_store.save_products(records, path=db)
+    return db
 
 
 def test_record_missing_specs_is_degraded_not_rejected(tmp_path: Path):
-    """一条缺 spec 的记录不应让整批加载失败。"""
-    path = _write(
+    """一条缺字段的记录不应让整批加载失败——沿用既有的逐条容错。"""
+    db = _seed_db(
         tmp_path,
         [
             {
@@ -129,7 +168,7 @@ def test_record_missing_specs_is_degraded_not_rejected(tmp_path: Path):
             {"id": "A2", "name": "残次品", "price": 2000},
         ],
     )
-    result = load_catalog(path)
+    result = load_catalog(db)
 
     assert len(result) == 2
     assert result.get("A1").is_complete is True
@@ -142,8 +181,11 @@ def test_record_missing_specs_is_degraded_not_rejected(tmp_path: Path):
     assert any("A2" in issue for issue in result.issues)
 
 
-def test_unparseable_price_counts_as_missing(tmp_path: Path):
-    path = _write(
+def test_unparseable_price_has_no_price_record(tmp_path: Path):
+    """价格解析不出来时**不建价格记录**——记录里没有记录，价格就是缺失。"""
+    from src import product_store
+
+    db = _seed_db(
         tmp_path,
         [
             {
@@ -161,52 +203,71 @@ def test_unparseable_price_counts_as_missing(tmp_path: Path):
             }
         ],
     )
-    product = load_catalog(path).get("P1")
+    assert product_store.current_price("P1", path=db) is None
 
+    product = load_catalog(db).get("P1")
     assert product.price is None
     assert product.price_label == "价格未知"
     assert "price" in product.missing_fields
 
 
 def test_negative_price_is_rejected_as_unusable(tmp_path: Path):
-    path = _write(tmp_path, [{"id": "P2", "name": "负价", "price": -100}])
-    product = load_catalog(path).get("P2")
-    assert product.price is None
+    """非正数价格在**构造商品时**被挡掉——价格记录可以存，但用的时候不认。"""
+    db = _seed_db(tmp_path, [{"id": "P2", "name": "负价", "price": -100}])
+    assert load_catalog(db).get("P2").price is None
 
 
-def test_record_without_id_is_skipped(tmp_path: Path):
-    path = _write(tmp_path, [{"name": "没有 ID"}, {"id": "OK1", "name": "有 ID"}])
-    result = load_catalog(path)
-
-    assert len(result) == 1
-    assert result.products[0].id == "OK1"
-    assert any("缺少 id" in issue for issue in result.issues)
+# --------------------------------------------------------------------------
+# 写入侧的门槛（由仓储层承担）
+# --------------------------------------------------------------------------
 
 
-def test_duplicate_id_is_skipped(tmp_path: Path):
-    path = _write(
-        tmp_path,
-        [{"id": "D1", "name": "甲"}, {"id": "D1", "name": "乙"}],
+def test_record_without_id_is_skipped_on_write(tmp_path: Path):
+    """没有商品 ID 的记录在**写入时**就被跳过——库的主键不接受空 ID。
+
+    这道门槛从加载层挪到了仓储层：以前是「读进来再丢掉」，
+    现在是「压根不写进去」，更早也更彻底。
+    """
+    from src import product_store
+
+    db = tmp_path / "products.db"
+    written = product_store.save_products(
+        [{"name": "没有 ID"}, {"id": "OK1", "name": "有 ID"}], path=db
     )
-    result = load_catalog(path)
 
-    assert len(result) == 1
-    assert result.products[0].name == "甲"
-    assert any("重复" in issue for issue in result.issues)
-
-
-def test_bare_array_top_level_is_accepted(tmp_path: Path):
-    path = _write(tmp_path, [{"id": "B1", "name": "裸数组"}])
-    assert load_catalog(path).get("B1").name == "裸数组"
+    assert written == 1
+    assert product_store.count_products(db) == 1
+    assert load_catalog(db).get("OK1") is not None
 
 
-def test_editing_the_file_changes_the_result(tmp_path: Path):
-    """对应「修改数据文件即刻生效」——数据不在代码里，改文件即可。"""
-    original = _write(tmp_path, [{"id": "E1", "name": "原来的名字"}])
-    assert load_catalog(original).get("E1").name == "原来的名字"
+def test_duplicate_id_overwrites_instead_of_duplicating(tmp_path: Path):
+    """同一个 ID 写两次是覆盖，不是新增——导入可重复执行而不会产生重复商品。
 
-    original.write_text(
-        json.dumps([{"id": "E1", "name": "改过的名字"}], ensure_ascii=False),
-        encoding="utf-8",
-    )
-    assert load_catalog(original).get("E1").name == "改过的名字"
+    唯一性由**主键**保证，比在加载层比对更可靠：那种约束是可以被绕过的，
+    主键不行。
+    """
+    from src import product_store
+
+    db = tmp_path / "products.db"
+    product_store.save_products([{"id": "D1", "name": "甲"}], path=db)
+    product_store.save_products([{"id": "D1", "name": "乙"}], path=db)
+
+    assert product_store.count_products(db) == 1
+    assert load_catalog(db).get("D1").name == "乙"
+
+
+# --------------------------------------------------------------------------
+# 改数据即刻生效
+# --------------------------------------------------------------------------
+
+
+def test_editing_the_database_changes_the_result(tmp_path: Path):
+    """对应「修改数据即刻生效」——数据不在代码里，改数据源即可。
+
+    数据源从文件换成了数据库，这条要求本身没变。
+    """
+    db = _seed_db(tmp_path, [{"id": "E1", "name": "原来的名字"}])
+    assert load_catalog(db).get("E1").name == "原来的名字"
+
+    _seed_db(tmp_path, [{"id": "E1", "name": "改过的名字"}])
+    assert load_catalog(db).get("E1").name == "改过的名字"

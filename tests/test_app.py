@@ -371,20 +371,17 @@ def test_two_products_can_be_compared():
 # --------------------------------------------------------------------------
 
 
-def test_catalog_reloads_after_the_data_file_is_refreshed(tmp_path, monkeypatch):
-    """接入脚本刷新数据文件后，应用应自动加载新数据，不用重启。
+def test_catalog_reloads_after_the_database_is_refreshed(tmp_path, monkeypatch):
+    """接入脚本刷新商品库后，应用应自动加载新数据，不用重启。
 
-    缓存键里带着文件修改时间，所以同一个进程内也能观察到重新加载。
+    缓存键里带着**数据库文件**的修改时间——数据源从文件换成库之后，
+    盯的还是「数据源变了没有」这件事，只是换了个文件盯。
     """
-    import json
     import os
 
-    data_file = tmp_path / "products.json"
+    from src import product_store
 
-    def write(products):
-        data_file.write_text(
-            json.dumps({"products": products}, ensure_ascii=False), encoding="utf-8"
-        )
+    db = tmp_path / "products.db"
 
     def product(pid: str, name: str) -> dict:
         return {
@@ -401,15 +398,15 @@ def test_catalog_reloads_after_the_data_file_is_refreshed(tmp_path, monkeypatch)
             "updated_at": "2026-01-01",
         }
 
-    monkeypatch.setenv("ZHIGOU_PRODUCTS_PATH", str(data_file))
+    monkeypatch.setenv("ZHIGOU_PRODUCTS_DB_PATH", str(db))
 
-    write([product("T1", "一号")])
-    os.utime(data_file, (1_000_000, 1_000_000))
+    product_store.save_products([product("T1", "一号")], path=db)
+    os.utime(db, (1_000_000, 1_000_000))
     assert len(state.get_catalog()) == 1
 
-    write([product("T1", "一号"), product("T2", "二号")])
-    os.utime(data_file, (2_000_000, 2_000_000))
-    assert len(state.get_catalog()) == 2, "数据文件刷新后应自动加载新数据"
+    product_store.save_products([product("T2", "二号")], path=db)
+    os.utime(db, (2_000_000, 2_000_000))
+    assert len(state.get_catalog()) == 2, "商品库刷新后应自动加载新数据"
 
 
 def test_data_issue_marker_reaches_the_screen(tmp_path, monkeypatch):
@@ -1548,3 +1545,67 @@ def test_analysis_shows_a_processing_indicator():
     assert _state(at, state.KEY_RESULT) is None, "还没点分析就有结果了"
     _button(at, "开始分析").click().run()
     assert _state(at, state.KEY_RESULT) is not None, "点击后结果没有同步产出"
+
+
+# --------------------------------------------------------------------------
+# 溯源信息在界面上的呈现（变更 migrate-products-to-sqlite）
+# --------------------------------------------------------------------------
+
+
+def test_product_card_shows_verification_status():
+    """核验状态必须显眼——不标注的话，用户会把演示数据当成核实过的信息。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("预算 5000 元，买一台办公用的笔记本电脑").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "未核验" in body, "演示数据必须标出未核验状态"
+    assert "数据来源：" in body, "来源说明仍在"
+    assert "更新时间：" in body
+
+
+def test_demo_data_cards_are_never_marked_verified():
+    """反向断言：自造数据**不能**被标成已核验。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("预算 5000 元，买一台办公用的笔记本电脑").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    assert "已核验" not in _all_text(at), "演示数据被标成了已核验"
+
+
+def test_product_without_price_record_is_marked_as_missing(tmp_path, monkeypatch):
+    """没有价格记录的商品标注为信息缺失，**不当成 0 或任何数值**。"""
+    from src import product_store
+
+    db = tmp_path / "products.db"
+    product_store.save_products(
+        [
+            {
+                "id": "NOPRICE1",
+                "name": "没有价格的商品",
+                "brand": "测试品牌",
+                "category": "laptop",
+                "specs": {"cpu_tier": 3},
+                "use_cases": ["办公"],
+                "pros": ["测试"],
+                "cons": ["测试"],
+                "data_source": "演示数据 · 测试夹具",
+                "updated_at": "2026-01-01",
+            }
+        ],
+        path=db,
+    )
+    monkeypatch.setenv("ZHIGOU_PRODUCTS_DB_PATH", str(db))
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("预算 5000 元，买一台办公用的笔记本电脑").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "价格未知" in body, "没有价格记录时应标注为价格未知"

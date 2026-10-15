@@ -175,8 +175,8 @@ def render(catalog: Catalog) -> None:
             facts(
                 [
                     ("设置文件", config.display_path(settings.settings_path())),
-                    ("商品数据", config.display_path(config.products_path())),
-                    ("数据库", "阶段四接入，用于保存分析历史与收藏"),
+                    ("商品数据库", config.display_path(config.products_db_path())),
+                    ("历史数据库", config.display_path(config.database_path())),
                 ]
             ),
             unsafe_allow_html=True,

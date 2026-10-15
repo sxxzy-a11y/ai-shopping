@@ -67,7 +67,12 @@ def _env_float(name: str, default: float) -> float:
 
 
 def products_path() -> Path:
-    """商品数据文件路径。"""
+    """种子数据文件路径。
+
+    商品数据已存进数据库（见 `products_db_path`），这个文件只在**库为空时**
+    被导入一次。保留它而不是删掉，是为了「克隆下来直接能跑」——
+    没有种子就得先执行迁移命令才能启动。
+    """
     override = _env_str("ZHIGOU_PRODUCTS_PATH")
     return Path(override) if override else PROJECT_ROOT / "data" / "products.json"
 
@@ -87,6 +92,28 @@ def settings_path() -> Path:
     """
     override = _env_str("ZHIGOU_SETTINGS_PATH")
     return Path(override) if override else PROJECT_ROOT / "storage" / "settings.json"
+
+
+#: 商品核验状态。
+#: 放在 config 而不是 product_store：`data_loader` 也要用它，而
+#: `product_store` 会经 `database` 间接引到 `report_service`，那条链上回头引
+#: `data_loader` 会成环。config 是叶子模块，两边都能引它。
+STATUS_VERIFIED: Final[str] = "verified"
+STATUS_UNVERIFIED: Final[str] = "unverified"
+
+
+def products_db_path() -> Path:
+    """商品数据库文件路径。
+
+    **与历史记录分开是两个文件**，理由不是洁癖：共用一个文件时，
+    文件一旦损坏，商品数据与历史会同时读不出来，整个应用直接不可用。
+    分开之后损坏是局部的——历史坏了仍能做分析，商品库坏了历史仍在。
+
+    这也对应数据分工：商品是**外部录入**的数据，历史是**程序产生**的记录，
+    两者的写入节奏、备份需求、损坏后果都不一样。
+    """
+    override = _env_str("ZHIGOU_PRODUCTS_DB_PATH")
+    return Path(override) if override else PROJECT_ROOT / "storage" / "products.db"
 
 
 def knowledge_dir() -> Path:
@@ -442,8 +469,10 @@ def describe_runtime() -> dict[str, object]:
     """返回当前运行配置摘要，**不含密钥明文**。"""
     return {
         "project_root": str(PROJECT_ROOT),
-        "products_path": str(products_path()),
-        "products_exists": products_path().is_file(),
+        "products_db_path": str(products_db_path()),
+        "products_db_exists": products_db_path().is_file(),
+        "seed_path": str(products_path()),
+        "seed_exists": products_path().is_file(),
         "database_path": str(database_path()),
         "mode": "AI 增强模式" if is_ai_configured() else "本地演示模式",
         "llm_model": llm_model() if is_ai_configured() else None,
