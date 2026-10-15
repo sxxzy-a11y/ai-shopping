@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from src import config
-from src.database import connect, init_db
+from src.database import connect, init_product_db
 from src.errors import ProductStoreReadError, ProductStoreWriteError, ZhigouError
 
 logger = logging.getLogger("zhigou.store")
@@ -76,7 +76,7 @@ def _ensure_for_read(path: Path | None) -> None:
     而问题在商品数据上。
     """
     try:
-        init_db(path)
+        init_product_db(path)
     except ZhigouError as exc:
         raise ProductStoreReadError(detail=exc.detail) from exc
 
@@ -84,7 +84,7 @@ def _ensure_for_read(path: Path | None) -> None:
 def _ensure_for_write(path: Path | None) -> None:
     """同上，用于写入路径。"""
     try:
-        init_db(path)
+        init_product_db(path)
     except ZhigouError as exc:
         raise ProductStoreWriteError(detail=exc.detail) from exc
 

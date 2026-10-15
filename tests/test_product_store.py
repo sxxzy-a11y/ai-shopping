@@ -335,3 +335,48 @@ def test_seed_import_also_derives_the_model(db: Path, tmp_path: Path):
     records = {r["id"]: r for r in product_store.load_product_records(db)}
     assert records["S1"]["model"] == "AirBook 14"
     assert records["S2"]["model"] == "", "没有型号概念的品类要留空"
+
+
+# --------------------------------------------------------------------------
+# 建表要按库的范围来
+# --------------------------------------------------------------------------
+
+
+def _table_names(path: Path) -> set[str]:
+    import sqlite3
+
+    with sqlite3.connect(path) as connection:
+        return {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+
+
+def test_product_database_has_only_product_tables(tmp_path: Path):
+    """商品库里**不该有历史表**。
+
+    建表函数一度把知道的表全建在任何一个碰到的库文件上，于是两个库
+    都装着彼此的数据——拆库白拆了，而且那份重复数据是过期的，
+    谁打开那个文件都会被误导。
+    """
+    db = tmp_path / "products.db"
+    product_store.save_products([_product("A1")], path=db)
+
+    names = _table_names(db)
+    assert {"products", "product_prices", "dataset_meta"} <= names
+    assert "analysis_history" not in names
+    assert "favorites" not in names
+
+
+def test_history_database_has_only_history_tables(tmp_path: Path):
+    from src import database as db_module
+
+    db = tmp_path / "zhigou.db"
+    db_module.init_history_db(db)
+
+    names = _table_names(db)
+    assert {"analysis_history", "favorites"} <= names
+    assert "products" not in names, "历史库里不该出现商品表"
+    assert "product_prices" not in names

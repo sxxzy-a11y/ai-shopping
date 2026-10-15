@@ -1,4 +1,12 @@
-"""SQLite 持久化：分析历史与收藏。
+"""SQLite 持久化：分析历史、收藏与商品数据。
+
+有两个库文件，**各自只建自己那部分表**：
+
+- 历史库 `storage/zhigou.db`：分析历史、收藏
+- 商品库 `storage/products.db`：商品、价格记录、数据集元信息
+
+分成两个文件是为了让损坏变成局部的：共用一个文件时，文件一坏商品与历史
+会同时读不出来，整个应用直接不可用。
 
 设计要点（design.md D7）
 -----------------------
@@ -22,7 +30,8 @@ from src import config
 from src.errors import HistoryReadError, HistoryWriteError, ZhigouError
 from src.report_service import DecisionReport, now_local
 
-_SCHEMA = """
+#: 历史库的表结构：分析历史与收藏。
+_SCHEMA_HISTORY = """
 CREATE TABLE IF NOT EXISTS analysis_history (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at     TEXT    NOT NULL,
@@ -41,7 +50,11 @@ CREATE TABLE IF NOT EXISTS favorites (
     product_id TEXT PRIMARY KEY,
     added_at   TEXT NOT NULL
 );
+"""
 
+#: 商品库的表结构。**只建在与商品相关的库文件里**——
+#: 建在历史库上会让那个文件看起来也装着商品数据，误导打开它的人。
+_SCHEMA_PRODUCTS = """
 -- 商品主表：**运行时的唯一商品数据源**。
 -- `data/products.json` 只在库为空时作为种子导入一次，之后不再参与运行时读取。
 -- specs / use_cases / pros / cons 存 JSON 文本：它们的键按品类异构
@@ -163,11 +176,10 @@ def connect(path: Path | None = None):
         connection.close()
 
 
-def init_db(path: Path | None = None) -> None:
-    """建表并做轻量迁移。可重复调用，已存在时不做任何改动。"""
+def _run_schema(path: Path | None, script: str) -> None:
     with connect(path) as connection:
         try:
-            connection.executescript(_SCHEMA)
+            connection.executescript(script)
             _migrate(connection)
             connection.commit()
         except sqlite3.Error as exc:
@@ -177,13 +189,44 @@ def init_db(path: Path | None = None) -> None:
             ) from exc
 
 
+def init_db(path: Path | None = None) -> None:
+    """建**全部**表。
+
+    测试与迁移脚本用——它们通常只对付一个库文件。
+    应用自己的读写在下面两个**按范围**的入口里，别用这个：
+    把商品表建到历史库上，会让那个文件看起来也装着商品数据，
+    误导打开它的人（这个坑实际踩过一次）。
+    """
+    _run_schema(path, _SCHEMA_HISTORY + _SCHEMA_PRODUCTS)
+
+
+def init_history_db(path: Path | None = None) -> None:
+    """只建历史库的表。读历史时用它。"""
+    _run_schema(path, _SCHEMA_HISTORY)
+
+
+def init_product_db(path: Path | None = None) -> None:
+    """只建商品库的表。商品仓储层用它。"""
+    _run_schema(path, _SCHEMA_PRODUCTS)
+
+
 def _migrate(connection: sqlite3.Connection) -> None:
     """老库升级。当前唯一的一步：给没有 signature 列的 analysis_history 补列。
 
     `CREATE TABLE IF NOT EXISTS` 对已存在的表不生效，所以老库的
     signature 列只能在这里补。列加了之后签名是 NULL，配合
     `_SIGNATURE_INDEX` 的部分索引，历史数据不需要回填也不会冲突。
+
+    **只在表存在时才动。** 这个函数会被两种建表路径调用，而商品库那条路上
+    根本没有 analysis_history——不加这道判断就会在商品库上抛「表不存在」。
     """
+    tables = {
+        row["name"]
+        for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "analysis_history" not in tables:
+        return
+
     columns = {
         row["name"] for row in connection.execute("PRAGMA table_info(analysis_history)")
     }
@@ -200,7 +243,7 @@ def _ensure_ready(path: Path | None) -> None:
     所以这里把写异常翻译成读异常。
     """
     try:
-        init_db(path)
+        init_history_db(path)
     except HistoryWriteError as exc:
         raise HistoryReadError(
             "历史记录读取失败，可能是本地数据库文件损坏。当前仍可进行新的分析。",
