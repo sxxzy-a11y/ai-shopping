@@ -425,6 +425,13 @@ MIN_COMPARE_COUNT: Final[int] = 2
 MAX_COMPARE_COUNT: Final[int] = 5
 DEFAULT_RECOMMEND_LIMIT: Final[int] = 6
 
+#: 超预算候选最多展示几条。**与 `DEFAULT_RECOMMEND_LIMIT` 相互独立**。
+#:
+#: 曾经两处共用同一个 `limit`，导致「10 件超预算只显示 6 件、界面还说成 6 件」——
+#: 而 `limit` 的语义本来就是「预算内推荐条数上限」。截断本身可以接受
+#: （无类别限制 + 低预算时超预算候选可能上百条），但**必须如实告知还有多少**。
+MAX_OVER_BUDGET_SHOWN: Final[int] = 10
+
 
 # --------------------------------------------------------------------------
 # 环境体检（供启动时与诊断脚本使用）

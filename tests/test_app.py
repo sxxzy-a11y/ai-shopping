@@ -787,6 +787,62 @@ def test_local_mode_does_not_show_any_ai_section():
     assert "AI 的分析结论" not in body
 
 
+
+
+# --------------------------------------------------------------------------
+# 超预算条数如实展示（变更 fix-over-budget-count）
+# --------------------------------------------------------------------------
+
+
+def test_over_budget_count_shown_is_the_real_total(catalog):
+    """界面展示的是**真实总数**，不是截断后的列表长度。
+
+    原问题：10 件超预算只显示 6 件，界面还说成 6 件，账面对不上。
+    """
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("预算 500 元的通勤降噪耳机").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    result = _state(at, "zg_result")
+    assert result is not None
+    body = _all_text(at)
+
+    # 统计行与小节标题都用真实总数
+    assert f"{result.over_budget_total} 件" in body
+    # 预算内 + 超预算真实总数 == 候选总数（账面要闭合）
+    assert len(result.within_budget) + result.over_budget_total == result.candidate_count
+
+
+def test_no_extra_note_when_all_over_budget_shown(catalog):
+    """全部展示时不出「还有 N 件未列出」——那是噪音。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("预算 500 元的通勤降噪耳机").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    result = _state(at, "zg_result")
+    assert result.over_budget_hidden == 0
+    assert "没有列出" not in _all_text(at)
+
+
+def test_truncation_is_disclosed(catalog):
+    """截断时说明还有多少件未列出。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("预算 100 元的耳机").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    result = _state(at, "zg_result")
+    assert result.over_budget_hidden > 0
+    body = _all_text(at)
+    assert "没有列出" in body
+    assert str(result.over_budget_hidden) in body
+    assert "调高" in body, "要告诉用户怎么办"
+
 def test_demo_data_disclaimer_is_visible_on_home():
     at = _run()
     body = _all_text(at)

@@ -107,6 +107,15 @@ class RecommendationResult:
     notes: list[str] = field(default_factory=list)
     #: 通过类别与硬性限制筛选后的候选总数（未做预算切分前）。
     candidate_count: int = 0
+    #: 超出预算的商品**真实条数**（截断展示之前）。
+    #: 界面与导出展示条数时一律用它，不用 `len(over_budget)`——
+    #: 截断之后列表长度就不再等于总数了。
+    over_budget_total: int = 0
+
+    @property
+    def over_budget_hidden(self) -> int:
+        """被截断掉、没有展示出来的超预算商品条数。"""
+        return max(0, self.over_budget_total - len(self.over_budget))
 
     @property
     def has_results(self) -> bool:
@@ -339,7 +348,10 @@ def recommend(
     result = RecommendationResult(
         demand=demand,
         within_budget=within[:limit],
-        over_budget=over[:limit],
+        # 超预算列表用**自己的**上限：`limit` 是「预算内推荐条数上限」，
+        # 拿它截断超预算列表会让界面上报出比实际少的条数。
+        over_budget=over[: config.MAX_OVER_BUDGET_SHOWN],
+        over_budget_total=len(over),
         notes=notes,
         candidate_count=len(candidates),
     )

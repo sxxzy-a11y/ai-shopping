@@ -81,6 +81,10 @@ class DecisionReport:
     filter_facts: list[tuple[str, str]] = field(default_factory=list)
     recommendations: list[ReportItem] = field(default_factory=list)
     over_budget: list[ReportItem] = field(default_factory=list)
+    #: 超出预算商品的**真实条数**（截断展示之前）。
+    #: 报告是快照，条数也要固化——否则打开历史时要靠列表长度反推，
+    #: 而截断之后那个长度已经不等于总数了。
+    over_budget_total: int = 0
     relaxations: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     to_verify: list[str] = field(default_factory=list)
@@ -190,7 +194,7 @@ def _filter_facts(result: RecommendationResult) -> list[tuple[str, str]]:
     return [
         ("候选商品", f"{result.candidate_count} 件"),
         ("预算内", f"{len(result.within_budget)} 件"),
-        ("超出预算", f"{len(result.over_budget)} 件"),
+        ("超出预算", f"{result.over_budget_total} 件"),
         ("排序依据", config.SCORE_DISPLAY_NAME),
     ]
 
@@ -250,9 +254,16 @@ def collect_verification_items(result: RecommendationResult, catalog: Catalog) -
     # 4) 超预算商品的价格尤其需要确认
     if result.over_budget:
         items.append(
-            f"有 {len(result.over_budget)} 件商品超出预算，"
+            f"有 {result.over_budget_total} 件商品超出预算，"
             f"报价浮动会直接影响它们是否进入可选范围，建议确认当前实际价格。"
         )
+        # 只列了一部分时说清楚——报告是拿去核对的东西，条数不能含糊
+        hidden = result.over_budget_hidden
+        if hidden:
+            items.append(
+                f"本报告只列出了其中按需求匹配度排序的前 {len(result.over_budget)} 件，"
+                f"另有 {hidden} 件超出预算更多的商品未列出。"
+            )
 
     # 5) 没有任何匹配时，说清是数据覆盖不到，而不是「不存在这样的商品」
     if not result.has_results:
@@ -344,6 +355,7 @@ def build_report(
         filter_facts=_filter_facts(result),
         recommendations=recommendations,
         over_budget=over_budget,
+        over_budget_total=result.over_budget_total,
         relaxations=list(result.relaxations),
         notes=list(result.notes),
         to_verify=collect_verification_items(result, catalog),

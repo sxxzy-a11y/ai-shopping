@@ -415,3 +415,72 @@ def _demand():
     from src.demand_parser import Demand
 
     return Demand(category="laptop", budget=3000)
+
+
+# --------------------------------------------------------------------------
+# 超预算条数如实展示（变更 fix-over-budget-count）
+# --------------------------------------------------------------------------
+
+
+def test_over_budget_total_is_the_real_count(catalog):
+    """超预算条数是**真实总数**，不是截断后的列表长度。
+
+    原问题：10 件超预算只显示 6 件，界面还把 6 说成总数。账面对不上——
+    6 + 6 = 12 ≠ 16 件候选。
+    """
+    demand = Demand(category="headphone", budget=500)
+    result = recommend(catalog, demand)
+
+    assert result.over_budget_total > 0
+    assert (
+        len(result.within_budget) + result.over_budget_total == result.candidate_count
+    ), "预算内 + 超预算真实总数应当等于候选总数"
+
+
+def test_within_budget_limit_does_not_truncate_over_budget(catalog):
+    """预算内推荐条数上限**不作用于**超预算列表——两者是各自独立的上限。
+
+    这条针对的是根因：曾经两处共用同一个 `limit`，而它的文档写的是
+    「预算内推荐条数上限」。钉死这个耦合，免得以后有人图省事又合回去。
+    """
+    demand = Demand(category="headphone", budget=500)
+
+    small = recommend(catalog, demand, limit=2)
+    large = recommend(catalog, demand, limit=8)
+
+    # limit 只管预算内：调大它，预算内条数变多（预算内只有 6 件，所以 8 也只得 6）
+    assert len(small.within_budget) == 2
+    assert len(large.within_budget) > len(small.within_budget)
+
+    # 而超预算列表完全不受影响
+    assert len(small.over_budget) == len(large.over_budget)
+    assert small.over_budget_total == large.over_budget_total
+
+
+def test_over_budget_list_respects_its_own_cap(catalog):
+    """超预算列表有自己的上限，且真实总数不受它影响。"""
+    result = recommend(catalog, Demand(category="headphone", budget=1))
+
+    assert len(result.over_budget) <= config.MAX_OVER_BUDGET_SHOWN
+    assert result.over_budget_total == result.candidate_count
+    assert result.over_budget_total > len(result.over_budget)
+
+
+def test_over_budget_hidden_counts_the_gap(catalog):
+    result = recommend(catalog, Demand(category="headphone", budget=500))
+    assert result.over_budget_hidden == (
+        result.over_budget_total - len(result.over_budget)
+    )
+
+
+def test_over_budget_hidden_is_zero_when_everything_shown(catalog):
+    result = recommend(catalog, Demand(category="headphone", budget=500))
+    assert len(result.over_budget) == result.over_budget_total
+    assert result.over_budget_hidden == 0
+
+
+def test_over_budget_total_defaults_to_zero():
+    """有默认值——老的历史快照没有这个字段也能反序列化。"""
+    from src.recommender import RecommendationResult
+
+    assert RecommendationResult(demand=Demand()).over_budget_total == 0

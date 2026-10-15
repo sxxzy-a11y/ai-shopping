@@ -453,7 +453,7 @@ def _render_left_column(demand: Demand, result) -> None:
         f'<div class="zg-card is-flat">{facts([
             ("候选商品", f"{result.candidate_count} 件"),
             ("预算内", f"{len(result.within_budget)} 件"),
-            ("超出预算", f"{len(result.over_budget)} 件"),
+            ("超出预算", f"{result.over_budget_total} 件"),
             ("排序依据", config.SCORE_DISPLAY_NAME),
         ])}</div>',
         unsafe_allow_html=True,
@@ -518,11 +518,22 @@ def _render_right_column(result) -> None:
         components.render_notes(result.notes)
 
     if result.over_budget:
-        components.section_title("超出预算的候选", len(result.over_budget))
+        # 条数用**真实总数**，不是列表长度——截断之后两者不再相等。
+        components.section_title("超出预算的候选", result.over_budget_total)
         components.caption(
             "以下商品超出你设定的预算，已逐条标出超出金额。"
             "它们不在上面的排序里，只用来判断「加多少钱能买到什么」。"
         )
+        hidden = result.over_budget_hidden
+        if hidden:
+            # 藏了东西就要说。默认沉默，只在确实没展示全的时候开口。
+            components.show_notice(
+                f"还有 {hidden} 件超出预算的商品没有列出。"
+                f"上面这些是按需求匹配度排序的前 {len(result.over_budget)} 件——"
+                f"超预算越多通常越不划算，所以只列最接近的一档。"
+                f"想看得更全，把预算上限调高再跑一次。",
+                "info",
+            )
         for item in result.over_budget:
             components.render_product_row(
                 item.product,

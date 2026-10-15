@@ -537,6 +537,9 @@ def test_report_carries_no_ai_generated_field(catalog, laptop_demand):
         "filter_facts",
         "recommendations",
         "over_budget",
+        # 超预算商品的真实条数（截断展示之前）。加它是有意的：
+        # 快照要能自证「当时一共几件超预算」，不能靠列表长度反推。
+        "over_budget_total",
         "relaxations",
         "notes",
         "to_verify",
@@ -553,3 +556,51 @@ def test_report_item_carries_no_ai_note_field(catalog, laptop_demand):
     assert "ai_note" not in item
     assert "why" not in item
     assert "overview" not in item
+
+
+# --------------------------------------------------------------------------
+# 超预算条数如实展示（变更 fix-over-budget-count）
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def truncated_report(catalog):
+    """预算压到很低，超预算候选多到被截断。"""
+    demand = Demand(category="headphone", budget=100)
+    result = recommend(catalog, demand)
+    assert result.over_budget_hidden > 0, "夹具没有产生截断"
+    return build_report(catalog, demand, result)
+
+
+def test_filter_facts_use_the_real_total(truncated_report):
+    facts = dict(truncated_report.filter_facts)
+    assert facts["超出预算"] == f"{truncated_report.over_budget_total} 件"
+    assert truncated_report.over_budget_total > len(truncated_report.over_budget)
+
+
+def test_verification_items_disclose_what_is_hidden(truncated_report):
+    joined = "\n".join(truncated_report.to_verify)
+    assert "未列出" in joined
+    assert str(truncated_report.over_budget_total) in joined
+
+
+def test_markdown_export_carries_the_disclosure(truncated_report):
+    markdown = to_markdown(truncated_report)
+    assert "未列出" in markdown
+    assert str(truncated_report.over_budget_total) in markdown
+
+
+def test_report_without_truncation_has_no_extra_note(catalog):
+    demand = Demand(category="headphone", budget=500)
+    report = build_report(catalog, demand, recommend(catalog, demand))
+    assert "未列出" not in "\n".join(report.to_verify)
+
+
+def test_old_report_without_over_budget_total_still_opens(catalog):
+    """老快照没有 over_budget_total，反序列化时取默认值。"""
+    demand = Demand(category="headphone", budget=500)
+    payload = build_report(catalog, demand, recommend(catalog, demand)).to_dict()
+    payload.pop("over_budget_total", None)
+
+    restored = DecisionReport.from_dict(payload)
+    assert restored.over_budget_total == 0
