@@ -101,7 +101,7 @@
 - [x] 8.3 更新 `docs/architecture.md`：新增第八章「知识库层」（架构位置、不用向量库的理由、两层加权、BM25 分数随语料规模变化这条性质、与抗幻觉的关系），后续章节顺移并同步了跨文件锚点
 - [x] 8.4 更新 `docs/testing.md`：新增 4.5「知识检索回归基线」，幻觉场景 4 状态改为 ✅
 - [x] 8.5 更新 `docs/demo_script.md`：新增 3.5「知识问答」演示环节，含「主动讲技术取舍」的话术
-- [ ] 8.6 补全 `openspec/specs/knowledge-base/spec.md` 的 Purpose —— **归档后执行**，留待 `/opsx:archive`
+- [x] 8.6 补全 `openspec/specs/knowledge-base/spec.md` 的 Purpose —— 归档生成规格后已补写（能力定位 + 三条贯穿需求的立场）
 
 > **README 第七章整体改写**：原文还在描述 LangChain + Chroma 的**计划**，
 > 而实际实现是另一套路线。留着会让读者以为实现与方案一致。

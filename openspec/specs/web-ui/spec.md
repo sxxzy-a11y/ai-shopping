@@ -5,12 +5,12 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 ## Requirements
 ### Requirement: 页面构成
 
-系统 SHALL 以 Streamlit 提供中文 Web 界面，页面至少包含：首页、智能分析页、商品比较页、历史记录页、项目说明页。用户 SHALL 能够在页面之间切换。
+系统 SHALL 以 Streamlit 提供中文 Web 界面，页面至少包含：首页、智能分析页、商品比较页、历史记录页、个人设置页、知识问答页、项目说明页。用户 SHALL 能够在页面之间切换。
 
-#### Scenario: 五个页面均可打开
+#### Scenario: 七个页面均可打开
 
 - **WHEN** 用户启动应用并依次打开各导航项
-- **THEN** 首页、智能分析、商品比较、历史记录、项目说明五个页面均可正常渲染且无报错
+- **THEN** 首页、智能分析、商品比较、历史记录、个人设置、知识问答、项目说明七个页面均可正常渲染且无报错
 
 #### Scenario: 首页提供入口与说明
 
@@ -22,6 +22,11 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 - **WHEN** 用户在首页输入需求后点击「开始分析」
 - **THEN** 系统跳转到智能分析页并**直接完成本次分析**，用户无需再点一次
 - **AND** 首页未填写任何内容时，跳转后停留在等待输入的状态，不弹出错误提示
+
+#### Scenario: 知识问答页可提问并展示来源
+
+- **WHEN** 用户打开知识问答页并输入一个商品知识类问题
+- **THEN** 页面展示检索到的资料与来源，或明确说明未找到相关资料
 
 #### Scenario: 项目说明页披露数据限制
 
