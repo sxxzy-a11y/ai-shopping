@@ -452,7 +452,7 @@ def _render_left_column(demand: Demand, result) -> None:
     st.markdown(
         f'<div class="zg-card is-flat">{facts([
             ("候选商品", f"{result.candidate_count} 件"),
-            ("预算内", f"{len(result.within_budget)} 件"),
+            ("预算内", f"{result.within_budget_total} 件"),
             ("超出预算", f"{result.over_budget_total} 件"),
             ("排序依据", config.SCORE_DISPLAY_NAME),
         ])}</div>',
@@ -516,6 +516,15 @@ def _render_right_column(result) -> None:
     if result.notes:
         st.write("")
         components.render_notes(result.notes)
+
+    # 预算内被截断时也要说明——与超预算同一类问题，成对处理。
+    if result.within_budget_hidden:
+        components.show_notice(
+            f"还有 {result.within_budget_hidden} 件商品也在预算内、但没有列出来。"
+            f"上面是按需求匹配度排序的前 {len(result.within_budget)} 件——"
+            f"想看更多可以把预算范围收窄一点再跑一次。",
+            "info",
+        )
 
     if result.over_budget:
         # 条数用**真实总数**，不是列表长度——截断之后两者不再相等。

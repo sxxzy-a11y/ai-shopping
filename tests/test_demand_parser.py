@@ -303,3 +303,68 @@ def test_parsing_makes_no_network_calls(monkeypatch, catalog):
 
     demand = parse_demand(FULL_EXAMPLE, known_brands=catalog.brands())
     assert demand.budget == 3000
+
+
+# --------------------------------------------------------------------------
+# 预算提取：单位在数字之后、小额、以及省位写法（变更 fix-budget-parsing）
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        # 单位在数字之后——中文数字因此能认出来（此前完全认不出）
+        ("三千元以内的手机", 3000.0),
+        ("三千块以内的耳机", 3000.0),
+        ("两千元的键盘", 2000.0),
+        # 小额预算（此前兜底要求至少三位数字）
+        ("50 元以内的耳机", 50.0),
+        ("10 元以内的手机", 10.0),
+        ("5 元的商品", 5.0),
+        # 既有写法不受影响
+        ("预算三千的手机", 3000.0),
+        ("预算 3000 元的手机", 3000.0),
+        ("3000 元以内的手机", 3000.0),
+        ("预算 3000-4000 的笔记本", 4000.0),
+    ],
+)
+def test_budget_with_unit_after_the_number(text, expected):
+    assert parse_demand(text).budget == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "14 寸的笔记本电脑",       # 尺寸不是预算
+        "5.3 蓝牙的耳机",          # 参数不是预算
+        "重量 1.28kg 的笔记本",    # 参数不是预算
+    ],
+)
+def test_numbers_without_currency_unit_are_not_budget(text):
+    """不含货币单位的数字不该被当成预算——新增的识别路径只认货币单位。"""
+    assert parse_demand(text).budget is None
+
+
+@pytest.mark.parametrize("text", ["预算两千五的耳机", "一百五元的商品", "预算一万二的本子"])
+def test_omitted_place_notation_is_not_guessed(text):
+    """省位写法判为**未识别**，由界面追问。
+
+    「两千五」口语里是 2500，但字面上与「两千零五」只差一个零。
+    系统无从确定意图，猜错的代价是给出偏窄预算并静默筛选——
+    用户不会知道结果少了一截。所以宁可不猜。
+    """
+    assert parse_demand(text).budget is None
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("预算两千零五的耳机", 2005.0),   # 带零标记，意图明确
+        ("预算两千五百的耳机", 2500.0),   # 单位完整
+        ("预算十五元的商品", 15.0),       # 十后面的数字不算歧义
+        ("预算一百五十元的商品", 150.0),
+    ],
+)
+def test_unambiguous_chinese_numbers_still_parse(text, expected):
+    """**反例比正例更重要**：把「两千零五」也一起拒掉同样是错的。"""
+    assert parse_demand(text).budget == expected

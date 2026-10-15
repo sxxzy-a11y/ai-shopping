@@ -81,6 +81,8 @@ class DecisionReport:
     filter_facts: list[tuple[str, str]] = field(default_factory=list)
     recommendations: list[ReportItem] = field(default_factory=list)
     over_budget: list[ReportItem] = field(default_factory=list)
+    #: 预算内商品的**真实条数**（截断展示之前）。与 `over_budget_total` 对称。
+    within_budget_total: int = 0
     #: 超出预算商品的**真实条数**（截断展示之前）。
     #: 报告是快照，条数也要固化——否则打开历史时要靠列表长度反推，
     #: 而截断之后那个长度已经不等于总数了。
@@ -193,7 +195,7 @@ def demand_signature(demand: Demand) -> str:
 def _filter_facts(result: RecommendationResult) -> list[tuple[str, str]]:
     return [
         ("候选商品", f"{result.candidate_count} 件"),
-        ("预算内", f"{len(result.within_budget)} 件"),
+        ("预算内", f"{result.within_budget_total} 件"),
         ("超出预算", f"{result.over_budget_total} 件"),
         ("排序依据", config.SCORE_DISPLAY_NAME),
     ]
@@ -355,6 +357,7 @@ def build_report(
         filter_facts=_filter_facts(result),
         recommendations=recommendations,
         over_budget=over_budget,
+        within_budget_total=result.within_budget_total,
         over_budget_total=result.over_budget_total,
         relaxations=list(result.relaxations),
         notes=list(result.notes),

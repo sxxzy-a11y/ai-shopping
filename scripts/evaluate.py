@@ -139,12 +139,14 @@ def _run_demand_case(case: dict, catalog) -> Outcome:
             ("无匹配时如实说明", not within or bool(result.relaxations), "不应伪造结果"),
         )
 
-    # 账面必须闭合：预算内 + 超预算真实总数 == 候选总数
+    # 账面必须闭合：预算内 + 超预算的**真实总数** == 候选总数。
+    # 两边都要用真实总数——用展示条数会永远对不上（它们是被截断过的）。
     if demand.budget is not None:
-        total = len(within) + result.over_budget_total
+        total = result.within_budget_total + result.over_budget_total
         checks.append(
             ("条数账面闭合", total == result.candidate_count,
-             f"{len(within)}+{result.over_budget_total}={total} vs 候选 {result.candidate_count}"),
+             f"{result.within_budget_total}+{result.over_budget_total}={total} "
+             f"vs 候选 {result.candidate_count}"),
         )
 
     # 人工复核材料：首推商品与它的推荐理由。任务完成率与证据支持率要靠人读这些。
@@ -451,6 +453,17 @@ def render_markdown(outcomes: list[Outcome], meta: dict, cases: list[dict]) -> s
     lines.append("   复用被测代码的中间结果等于自己测自己。")
     lines.append("3. **只报告实测值**：未执行的项目标注「尚未测量」，不写目标值或参考值。")
     lines.append("4. **不合成总分**：自动指标与人工指标分列，避免主观判断被误读成测量结果。")
+    lines.append("")
+    lines.append("### 关于「全绿」该怎么读")
+    lines.append("")
+    lines.append("**评测集一旦被用来驱动修复，其后再全绿就是预期结果，不是独立验证。**")
+    lines.append("")
+    lines.append("本项目的实际情况是：评测套件建成当天跑第一遍就找出四个缺陷，")
+    lines.append("修复后重跑全绿。这条链路本身是健康的（评测起作用了），")
+    lines.append("但**当前的 100% 不能读成「系统质量 100%」**——它只说明「这套题现在都会做了」。")
+    lines.append("")
+    lines.append("要打破这个循环，只能靠**新增**用例（尤其是能想到的失败情形），")
+    lines.append("而不是反复跑同一套。人工复核的两项也是为此而留。")
     lines.append("")
     return "\n".join(lines)
 

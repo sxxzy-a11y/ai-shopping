@@ -537,8 +537,10 @@ def test_report_carries_no_ai_generated_field(catalog, laptop_demand):
         "filter_facts",
         "recommendations",
         "over_budget",
-        # 超预算商品的真实条数（截断展示之前）。加它是有意的：
-        # 快照要能自证「当时一共几件超预算」，不能靠列表长度反推。
+        # 预算内与超预算商品的真实条数（截断展示之前）。加它们是有意的：
+        # 快照要能自证「当时一共几件」，不能靠列表长度反推——截断之后那个长度
+        # 已经不等于总数了。两者对称，避免以后只修一边。
+        "within_budget_total",
         "over_budget_total",
         "relaxations",
         "notes",

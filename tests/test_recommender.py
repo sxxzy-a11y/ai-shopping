@@ -484,3 +484,46 @@ def test_over_budget_total_defaults_to_zero():
     from src.recommender import RecommendationResult
 
     assert RecommendationResult(demand=Demand()).over_budget_total == 0
+
+
+def test_within_budget_total_is_the_real_count(catalog):
+    """预算内条数同样是**真实总数**——与超预算对称。
+
+    前一变更修了超预算条数的截断问题，漏了预算内：统计行「预算内 6 件」
+    在 17 件都在预算内时同样误导读者。两者对称，测试也成对。
+    """
+    result = recommend(catalog, Demand(category="laptop", budget=10000))
+
+    assert result.within_budget_total == result.candidate_count
+    assert result.within_budget_total > len(result.within_budget), "夹具没有产生截断"
+    assert result.within_budget_hidden == (
+        result.within_budget_total - len(result.within_budget)
+    )
+
+
+def test_both_totals_close_the_books(catalog):
+    """预算内真实总数 + 超预算真实总数 == 候选总数。两边都是真实值才对得上。"""
+    for budget in (100, 500, 3000, 10000):
+        for category in ("headphone", "laptop", "phone"):
+            result = recommend(catalog, Demand(category=category, budget=budget))
+            assert (
+                result.within_budget_total + result.over_budget_total
+                == result.candidate_count
+            ), f"{category} 预算 {budget} 的账面不闭合"
+
+
+def test_within_budget_hidden_is_zero_when_nothing_truncated(catalog):
+    result = recommend(catalog, Demand(category="headphone", budget=500))
+    assert result.within_budget_total == len(result.within_budget)
+    assert result.within_budget_hidden == 0
+
+
+def test_limit_only_changes_what_is_shown(catalog):
+    """推荐条数上限只影响**展示**，不影响任何一类的真实总数。"""
+    demand = Demand(category="laptop", budget=10000)
+    small = recommend(catalog, demand, limit=2)
+    large = recommend(catalog, demand, limit=8)
+
+    assert len(small.within_budget) == 2
+    assert len(large.within_budget) == 8
+    assert small.within_budget_total == large.within_budget_total

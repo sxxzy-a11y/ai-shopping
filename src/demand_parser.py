@@ -267,13 +267,33 @@ AVAILABLE_CORE_NEEDS: tuple[str, ...] = tuple(_CORE_NEED_KEYWORDS)
 # --------------------------------------------------------------------------
 
 
-def _chinese_to_number(text: str) -> float | None:
-    """把「三千」「两千五百」「一万二」「十五」这类中文数字转成数值。
+def _is_ambiguous_omission(text: str) -> bool:
+    """是否是「省位」写法——数字紧跟在 百/千/万 之后且到此结束。
 
-    只处理按位书写的规范形式。口语省略式（「两千五」＝2500）识别不了，
-    返回 None 由调用方按「未识别」处理——猜错一个预算比不猜更糟。
+    「两千五」在口语里是 2500（省略了「百」），但字面上与「两千零五」的
+    结构差别只有一个「零」。系统**无从确定意图**，而猜错的代价是给出一个
+    偏窄的预算并静默筛选——用户不会知道结果少了一截。
+
+    「十」不算：十五就是 15，是规范写法不是省略式。
+    """
+    if len(text) < 2:
+        return False
+    last, prev = text[-1], text[-2]
+    return last in _CN_DIGITS and prev in _CN_UNITS and _CN_UNITS[prev] != 10
+
+
+def _chinese_to_number(text: str) -> float | None:
+    """把「三千」「两千五百」「十五」这类中文数字转成数值。
+
+    只处理按位书写的规范形式。口语省略式（「两千五」＝2500）**返回 None**，
+    由调用方按「未识别」处理——猜错一个预算比不猜更糟。
+
+    注意不能误伤：带零标记的「两千零五」＝2005、带完整单位的「两千五百」＝2500、
+    以及「十五」＝15 都必须照常解析。判据只看末两位，见 `_is_ambiguous_omission`。
     """
     if not text:
+        return None
+    if _is_ambiguous_omission(text):
         return None
     total = 0.0
     section = 0.0
@@ -344,6 +364,29 @@ def _extract_budget(text: str) -> float | None:
         rf"(-?\s*负?\s*(?:\d+(?:\.\d+)?\s*[千万]?|[{_CN_CHARS}]+))"
     )
     for match in re.finditer(pattern, lowered):
+        amount = _parse_signed_amount(match.group(1))
+        if amount is None:
+            continue
+        if amount < 0:
+            raise InvalidBudget(
+                "预算不能为负数，请填写一个大于 0 的金额，例如 3000。"
+            )
+        if amount > 0:
+            return amount
+
+    # 其次：数字紧跟货币单位（「50 元」「三千块」）。
+    #
+    # 上面那条上下文词匹配假设**词在数字前**（「预算三千」），但「三千元」是同样
+    # 自然的写法，此时单位在数字后——中文数字因此完全认不出。这里认的是
+    # 「数字紧跟货币单位」这个**无歧义的模式**：元/块/rmb 跟在数字后面本身就是强信号。
+    #
+    # 位置在上下文词之后、兜底之前：既有写法优先级更高，「预算 3000-4000 元」
+    # 这种既带区间又带单位的写法必须先被区间策略处理。
+    currency_pattern = (
+        rf"(-?\s*负?\s*(?:\d+(?:\.\d+)?\s*[千万]?|[{_CN_CHARS}]+))"
+        rf"\s*(?:元|块|rmb|人民币)"
+    )
+    for match in re.finditer(currency_pattern, lowered):
         amount = _parse_signed_amount(match.group(1))
         if amount is None:
             continue
