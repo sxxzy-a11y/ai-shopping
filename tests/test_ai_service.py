@@ -806,6 +806,234 @@ def test_single_character_keywords_are_rejected():
 
 
 # --------------------------------------------------------------------------
+# 工具调用（tools / tool_calls）
+# --------------------------------------------------------------------------
+
+
+def _tool_call(name: str, arguments: str, *, call_id: str = "call_1") -> dict:
+    return {
+        "id": call_id,
+        "type": "function",
+        "function": {"name": name, "arguments": arguments},
+    }
+
+
+def _tool_response(calls: list[dict], *, content: str = ""):
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content=content,
+                message={"tool_calls": calls},
+                finish_reason="tool_calls",
+            ),
+        )
+
+    return make_service(handler)
+
+
+TOOL_DECL = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_products",
+            "description": "按条件筛选商品",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    }
+]
+
+
+def test_tools_are_sent_in_the_request_body():
+    """传了 tools 就按 OpenAI 兼容格式带上，且请求仍经该模块统一发出。"""
+    seen: dict = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json=ok_body(content="好"))
+
+    service = make_service(handler)
+    service.complete("sys", "usr", tools=TOOL_DECL)
+
+    assert seen["tools"] == TOOL_DECL
+
+
+def test_request_omits_tools_when_not_provided():
+    """不传 tools 时请求体里不出现该字段——既有调用行为完全不变。
+
+    空列表在部分服务商上会被当成「不允许调用工具」，
+    而这里是「这次不需要工具」，两者语义不同，所以是整个字段都不带。
+    """
+    seen: dict = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json=ok_body(content="好"))
+
+    make_service(handler).complete("sys", "usr")
+
+    assert "tools" not in seen
+    assert "tool_choice" not in seen
+
+
+def test_tool_choice_is_forwarded_only_with_tools():
+    seen: dict = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json=ok_body(content="好"))
+
+    make_service(handler).complete("sys", "usr", tools=TOOL_DECL, tool_choice="auto")
+    assert seen["tool_choice"] == "auto"
+
+
+def test_tool_calls_are_parsed_with_decoded_arguments():
+    service = _tool_response(
+        [_tool_call("search_products", '{"category": "headphone", "budget_max": 500}')]
+    )
+    response = service.complete("sys", "usr", tools=TOOL_DECL)
+
+    assert response.wants_tools
+    assert response.tool_calls[0].name == "search_products"
+    assert response.tool_calls[0].arguments == {
+        "category": "headphone",
+        "budget_max": 500,
+    }
+    assert response.tool_calls[0].call_id == "call_1"
+
+
+def test_empty_content_with_tool_calls_is_not_a_failure():
+    """请求工具时 content 本来就是空的——**那不是失败，是模型在工作**。
+
+    这一条如果写反了，工具调用永远走不通：模型每请求一次工具就被当成
+    「返回了空内容」而报错降级。
+    """
+    service = _tool_response([_tool_call("get_product_detail", '{"product_id": "LP001"}')])
+    response = service.complete("sys", "usr", tools=TOOL_DECL)
+
+    assert response.content == ""
+    assert response.wants_tools
+
+
+def test_multiple_tool_calls_are_all_returned():
+    service = _tool_response(
+        [
+            _tool_call("search_products", "{}", call_id="c1"),
+            _tool_call("search_knowledge", '{"query": "降噪"}', call_id="c2"),
+        ]
+    )
+    response = service.complete("sys", "usr", tools=TOOL_DECL)
+
+    assert [call.name for call in response.tool_calls] == [
+        "search_products",
+        "search_knowledge",
+    ]
+
+
+def test_arguments_given_as_object_are_accepted():
+    """有些服务商直接给对象而不是 JSON 字符串，一并接受。"""
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content="",
+                message={
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {
+                                "name": "search_products",
+                                "arguments": {"category": "phone"},
+                            },
+                        }
+                    ]
+                },
+                finish_reason="tool_calls",
+            ),
+        )
+
+    response = make_service(handler).complete("sys", "usr", tools=TOOL_DECL)
+    assert response.tool_calls[0].arguments == {"category": "phone"}
+
+
+def test_missing_arguments_defaults_to_empty_object():
+    """部分服务商在无参数时省略 arguments 字段。"""
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content="",
+                message={
+                    "tool_calls": [
+                        {"id": "c1", "type": "function", "function": {"name": "list"}}
+                    ]
+                },
+                finish_reason="tool_calls",
+            ),
+        )
+
+    response = make_service(handler).complete("sys", "usr", tools=TOOL_DECL)
+    assert response.tool_calls[0].arguments == {}
+
+
+@pytest.mark.parametrize(
+    "bad_arguments",
+    ['{"category": ', "不是 JSON", "[1, 2, 3]", '"字符串"', "123"],
+)
+def test_malformed_tool_arguments_raise_instead_of_half_parsing(bad_arguments):
+    """参数解析不出来就报错降级，**不做「尽力修复」**。
+
+    与 `complete_json` 同一立场：残缺的结果往下传，上层会当成有效数据用。
+    """
+    service = _tool_response([_tool_call("search_products", bad_arguments)])
+    with pytest.raises(UpstreamResponseError):
+        service.complete("sys", "usr", tools=TOOL_DECL)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"id": "c1"},                                  # 缺 function
+        {"id": "c1", "function": {}},                  # 缺 name
+        {"function": {"name": "x", "arguments": "{}"}},  # 缺 id
+        "不是对象",
+    ],
+)
+def test_malformed_tool_call_entries_raise(entry):
+    service = _tool_response([entry])
+    with pytest.raises(UpstreamResponseError):
+        service.complete("sys", "usr", tools=TOOL_DECL)
+
+
+def test_tool_calls_not_a_list_raises():
+    def handler(request):
+        return httpx.Response(
+            200,
+            json=ok_body(
+                content="",
+                message={"tool_calls": "oops"},
+                finish_reason="tool_calls",
+            ),
+        )
+
+    with pytest.raises(UpstreamResponseError):
+        make_service(handler).complete("sys", "usr", tools=TOOL_DECL)
+
+
+def test_plain_answer_still_has_no_tool_calls():
+    """普通作答路径不受影响：没有 tool_calls 字段时为空元组。"""
+    response = make_service(
+        lambda request: httpx.Response(200, json=ok_body(content="你好"))
+    ).complete("sys", "usr")
+
+    assert response.tool_calls == ()
+    assert response.wants_tools is False
+
+
+# --------------------------------------------------------------------------
 # 知识问答作答
 # --------------------------------------------------------------------------
 

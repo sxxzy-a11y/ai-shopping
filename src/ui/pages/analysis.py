@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from src import ai_enhance, ai_service, config, database, report_service, settings
+from src.agent.runner import run_agent
 from src.data_loader import Catalog
 from src.demand_parser import (
     AVAILABLE_CORE_NEEDS,
@@ -95,6 +96,29 @@ def _category_options(catalog: Catalog) -> dict[str, str]:
     for key in catalog.present_categories():
         mapping[config.category_label(key)] = key
     return mapping
+
+
+
+def _agent_question(demand) -> str:
+    """把需求还原成一句自然语言问题交给编排层。
+
+    有原始输入就用原文——那是用户真实的说法，信息最全。
+    只在用户全程用结构化控件时（没有原文）才拼一句，
+    拼的字段与解析层产出的一致，不额外补充任何信息。
+    """
+    if demand.raw_text.strip():
+        return demand.raw_text.strip()
+
+    parts: list[str] = []
+    if demand.category_label:
+        parts.append(f"想买{demand.category_label}")
+    if demand.budget is not None:
+        parts.append(f"预算 {demand.budget:.0f} 元")
+    if demand.use_cases:
+        parts.append("主要用于" + "、".join(demand.use_cases))
+    if demand.core_needs:
+        parts.append("看重" + "、".join(demand.core_needs))
+    return "，".join(parts) if parts else "帮我推荐一件商品"
 
 
 def _input_signature() -> str:
@@ -298,16 +322,30 @@ def _run_analysis(catalog: Catalog) -> None:
     if not prefs.show_over_budget:
         result.over_budget = []
 
-    # AI 解读：失败只丢掉解读，规则算出的推荐结果照常保留
-    explanation: dict | None = None
+    # AI 增强：走 Agent 编排（自己决定调哪些工具）。
+    #
+    # 失败只丢掉编排产物——规则算出的筛选、评分、排序与报告照常保留，
+    # 那本来就是本地演示模式的形态，不是「降级成空白」。
+    #
+    # 这条路径下**不再调用 explain_recommendations**：两者都在生成自然语言解释，
+    # 同时跑会出现两段口径不同的说明，用户看到两个「为什么推荐」就砸了可解释性。
+    agent_run = None
     if ai_enabled and result.within_budget:
         try:
-            explanation = ai_enhance.explain_recommendations(
-                applied, result.within_budget[:3], service=ai_service.get_service()
+            agent_run = run_agent(
+                _agent_question(applied),
+                catalog=catalog,
+                service=ai_service.get_service(),
+                knowledge_index=state.get_knowledge_index(),
             )
+            if agent_run.degraded:
+                ai_notes.append(agent_run.degrade_reason)
         except ZhigouError as exc:
             ai_notes.append(to_user_message(exc))
-    state.put("zg_ai_explanation", explanation)
+            agent_run = None
+    state.put("zg_agent_run", agent_run)
+    # 保留这个键并显式置空：模板里若无条件读它，缺键会直接报错。
+    state.put("zg_ai_explanation", None)
     state.put("zg_ai_notes", ai_notes)
 
     signature = _input_signature()
@@ -558,6 +596,10 @@ def _render_results() -> None:
 
     for note in state.get("zg_ai_notes") or []:
         components.show_notice(note, "warn")
+
+    # AI 执行轨迹：调了什么工具、依据什么得出结论。
+    # 与「分析过程说明」同栏，紧跟降级提示——它们是同一类信息（怎么算出来的）。
+    components.render_agent_trace(state.get("zg_agent_run"))
 
     engine = state.get("zg_parse_engine")
     if engine == "ai":

@@ -321,6 +321,65 @@ def _highlight_chips(score: ScoreResult) -> str:
     return "".join(chunks)
 
 
+#: 执行轨迹里状态的展示文案与色调。
+_TRACE_TONES: dict[str, tuple[str, str]] = {
+    "ok": ("ok", "成功"),
+    "rejected": ("stop", "参数被拒"),
+    "error": ("warn", "执行出错"),
+}
+
+
+def render_agent_trace(run) -> None:
+    """渲染一次 Agent 编排的执行轨迹。
+
+    展示的是**真实发生过的工具调用**——工具名、模型给的参数、结果摘要。
+    刻意不展示模型的思考文字：那才是「看起来像 Agent、实际只是聊天」的形态。
+
+    被参数校验拒绝的调用同样展示，并且用醒目的色调标出来。那不是失败展示，
+    而是**校验在起作用的证据**：模型给错了参数、系统拦住了、模型换了说法。
+    """
+    if run is None:
+        return
+
+    if run.answer:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="zg-card-title">AI 的分析结论</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(run.answer)
+            caption(
+                "这段结论由 AI 调用下列工具后得出，请以工具返回的数据为准。"
+            )
+
+    section_title("AI 执行过程", len(run.trace))
+
+    if not run.trace:
+        show_notice("本次未使用工具，AI 直接依据已有数据作答。", "info")
+        return
+
+    caption(
+        f"共 {run.rounds} 轮、{len(run.trace)} 次工具调用。"
+        "下面是实际发生过的调用记录，不是模型的思考过程。"
+    )
+
+    for index, step in enumerate(run.trace, start=1):
+        tone, status_text = _TRACE_TONES.get(step.status, ("neutral", step.status))
+        st.markdown(
+            f'<div class="zg-card is-flat" style="margin-bottom:8px">'
+            f'  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'
+            f"    <strong>{index}. {esc(step.tool)}</strong>"
+            f"    {chip(f'第 {step.round} 轮', 'neutral')}"
+            f"    {chip(status_text, tone)}"
+            f"  </div>"
+            f'  <div class="zg-caption" style="margin-top:6px">'
+            f"    参数：{esc(step.arguments_label)}</div>"
+            f'  <div class="zg-caption">结果：{esc(step.summary)}</div>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+
 #: 「资料存疑」标记的文案。
 #: 刻意不用「数据错误」——规则是保守的，标记的用途是**提示核实**，不是判决。
 DATA_ISSUE_LABEL = "资料存疑"

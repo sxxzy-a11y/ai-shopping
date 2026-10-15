@@ -25,7 +25,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -57,6 +59,20 @@ def redact(text: str) -> str:
 
 
 @dataclass(frozen=True)
+class ToolCall:
+    """模型请求的一次工具调用。
+
+    参数在这里是**已解析的字典**——`arguments` 在传输层是个 JSON 字符串，
+    解析失败属于格式错误，按项目一贯做法报错降级，不把残缺结果往下传
+    （与 `complete_json` 同样的立场）。
+    """
+
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class LLMResponse:
     """一次模型调用的结果。"""
 
@@ -66,6 +82,14 @@ class LLMResponse:
     reasoning_tokens: int = 0
     #: 是否因为 token 用尽被截断。为真时 content 不可信。
     truncated: bool = False
+    #: 模型请求调用的工具。非空时 content 通常为空字符串——**那不是失败**，
+    #: 是模型正在请求工具。解析与降级判断都要把这一点区分开。
+    tool_calls: tuple[ToolCall, ...] = ()
+
+    @property
+    def wants_tools(self) -> bool:
+        """模型这轮是在请求工具，而不是给出最终回答。"""
+        return bool(self.tool_calls)
 
 
 class AIService:
@@ -128,13 +152,50 @@ class AIService:
         *,
         max_tokens: int | None = None,
         temperature: float = 0.2,
+        tools: Sequence[dict[str, Any]] | None = None,
+        tool_choice: str | None = None,
     ) -> LLMResponse:
-        """发一次对话补全请求。
+        """发一次对话补全请求（系统提示 + 单条用户消息）。
+
+        Args:
+            tools: OpenAI 兼容的工具声明列表。省略时请求体里不出现该字段，
+                既有调用行为完全不变。
+            tool_choice: 可选，透传给上游（如 `"auto"`）。仅在给了 tools 时才有意义。
 
         Raises:
             AINotConfigured: 没配密钥。**在发请求之前**就抛出。
             UpstreamTimeout / UpstreamAuthError / UpstreamUnavailable /
             UpstreamResponseError: 上游各种失败。
+        """
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        return self.complete_messages(
+            messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+
+    def complete_messages(
+        self,
+        messages: Sequence[dict[str, Any]],
+        *,
+        max_tokens: int | None = None,
+        temperature: float = 0.2,
+        tools: Sequence[dict[str, Any]] | None = None,
+        tool_choice: str | None = None,
+    ) -> LLMResponse:
+        """发一次对话补全请求，消息历史由调用方给全。
+
+        工具调用需要它：OpenAI 兼容协议要求把 assistant 的 `tool_calls` 消息
+        与随后的 `role: "tool"` 结果一并回传，才能继续下一轮。
+        单轮的 `complete()` 只是它的一层包装。
+
+        Raises:
+            与 `complete()` 相同。
         """
         if not self.configured:
             raise AINotConfigured(
@@ -142,16 +203,19 @@ class AIService:
                 f"已使用本地规则模式。"
             )
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": self._model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": list(messages),
             "max_tokens": max_tokens or self._max_tokens,
             "temperature": temperature,
             "stream": False,
         }
+        # 只在有工具时才带这个字段：空列表在部分服务商上会被当成「不允许调用工具」，
+        # 而这里是「这次不需要工具」——两者语义不同。
+        if tools:
+            payload["tools"] = list(tools)
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
 
         client = self._build_client()
         owned = self._client is None
@@ -240,7 +304,11 @@ class AIService:
         )
         truncated = finish_reason == "length"
 
-        if truncated and not content.strip():
+        tool_calls = self._parse_tool_calls(message.get("tool_calls"))
+
+        # 请求工具时 content 本来就是空的——**那不是失败，是模型在工作**。
+        # 下面两条「空内容即失败」的判断都要把这种情况排除掉。
+        if truncated and not content.strip() and not tool_calls:
             # 推理模型把额度吃光了。这是失败，不是「模型没话说」——
             # 当成成功返回空串会让上层以为「AI 认为没有可提取的信息」。
             raise UpstreamResponseError(
@@ -249,7 +317,7 @@ class AIService:
                 detail=f"finish_reason=length, reasoning_tokens={reasoning_tokens}",
             )
 
-        if not content.strip():
+        if not content.strip() and not tool_calls:
             raise UpstreamResponseError(
                 "AI 返回了空内容，已回退到本地规则模式。",
                 detail=f"finish_reason={finish_reason}",
@@ -263,7 +331,61 @@ class AIService:
             total_tokens=int(usage.get("total_tokens") or 0),
             reasoning_tokens=reasoning_tokens,
             truncated=truncated,
+            tool_calls=tool_calls,
         )
+
+    @staticmethod
+    def _parse_tool_calls(raw: Any) -> tuple[ToolCall, ...]:
+        """解析响应里的 `tool_calls`。
+
+        `arguments` 在传输层是 JSON **字符串**（OpenAI 兼容格式如此），
+        这里解析成字典再往下传。解析不出来就报错降级——与 `complete_json`
+        同样的立场：不把残缺结果当成有效数据用，也不做「尽力修复」。
+
+        有些服务商会直接给对象而不是字符串，一并接受。
+        """
+        if not raw:
+            return ()
+        if not isinstance(raw, list):
+            raise UpstreamResponseError(
+                "AI 返回的工具调用结构不符合预期，已回退到本地规则模式。",
+                detail=f"tool_calls 不是列表：{type(raw).__name__}",
+            )
+
+        calls: list[ToolCall] = []
+        for entry in raw:
+            try:
+                call_id = str(entry["id"])
+                function = entry["function"]
+                name = str(function["name"])
+                raw_arguments = function.get("arguments")
+            except (KeyError, TypeError, AttributeError) as exc:
+                raise UpstreamResponseError(
+                    "AI 返回的工具调用缺少必需字段，已回退到本地规则模式。",
+                    detail=f"{type(exc).__name__}: {str(entry)[:120]}",
+                ) from exc
+
+            if isinstance(raw_arguments, dict):
+                arguments = raw_arguments
+            else:
+                try:
+                    arguments = json.loads(raw_arguments or "{}")
+                except (json.JSONDecodeError, ValueError, TypeError) as exc:
+                    raise UpstreamResponseError(
+                        "AI 返回的工具调用参数不是合法 JSON，已回退到本地规则模式。",
+                        detail=f"{type(exc).__name__}: {str(raw_arguments)[:120]}",
+                    ) from exc
+
+            if not isinstance(arguments, dict):
+                raise UpstreamResponseError(
+                    "AI 返回的工具调用参数不是对象，已回退到本地规则模式。",
+                    detail=f"arguments 类型：{type(arguments).__name__}",
+                )
+
+            calls.append(
+                ToolCall(call_id=call_id, name=name, arguments=arguments)
+            )
+        return tuple(calls)
 
     # --- JSON 便捷方法 ----------------------------------------------------
 

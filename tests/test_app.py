@@ -633,6 +633,160 @@ def test_knowledge_page_degrades_when_ai_fails(monkeypatch):
     assert "基于资料的回答" not in body, "作答失败了却还是展示了回答区"
 
 
+# --------------------------------------------------------------------------
+# Agent 执行轨迹（界面）
+# --------------------------------------------------------------------------
+
+
+def _agent_reply_with_tools(calls: list[dict], answer: str = "好了") -> httpx.Response:
+    import json
+
+    return httpx.Response(
+        200,
+        json={
+            "model": "stub-model",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": call["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": call["name"],
+                                    "arguments": json.dumps(call["args"], ensure_ascii=False),
+                                },
+                            }
+                            for call in calls
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
+            "usage": {"total_tokens": 10},
+        },
+    )
+
+
+def _run_agent_analysis(enable_ai, handler) -> AppTest:
+    enable_ai(handler)
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.toggle[0].set_value(True).run()
+    at.text_area[0].set_value("预算 3000 买笔记本，主要编程，看重性能").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+    return at
+
+
+def test_trace_shows_real_tool_calls(enable_ai):
+    """轨迹展示**真实发生过的调用**：工具名、参数、结果摘要。"""
+    state = {"n": 0}
+
+    def handler(request):
+        if _is_parse_request(request):
+            return _ai_reply(_parse_payload())
+        if _is_agent_request(request):
+            state["n"] += 1
+            if state["n"] == 1:
+                return _agent_reply_with_tools(
+                    [{"id": "c1", "name": "search_products",
+                      "args": {"category": "laptop", "budget_max": 3000}}]
+                )
+            return _agent_reply("综合筛选结果给出建议。")
+        return _ai_reply("{}")
+
+    at = _run_agent_analysis(enable_ai, handler)
+    body = _all_text(at)
+
+    assert "AI 执行过程" in body
+    assert "search_products" in body
+    assert "参数：" in body, "要展示模型给的参数，否则看不出它调了什么"
+    assert "结果：" in body
+
+
+def test_rejected_call_is_marked_in_the_trace(enable_ai):
+    """被参数校验拒绝的调用也要展示，并标成醒目状态。
+
+    那不是失败展示——是**校验在起作用的证据**。
+    """
+    state = {"n": 0}
+
+    def handler(request):
+        if _is_parse_request(request):
+            return _ai_reply(_parse_payload())
+        if _is_agent_request(request):
+            state["n"] += 1
+            if state["n"] == 1:
+                # 编造一个不存在的品类
+                return _agent_reply_with_tools(
+                    [{"id": "c1", "name": "search_products", "args": {"category": "平板"}}]
+                )
+            return _agent_reply("换个说法再试。")
+        return _ai_reply("{}")
+
+    at = _run_agent_analysis(enable_ai, handler)
+    body = _all_text(at)
+
+    assert "参数被拒" in body
+    assert "平板" in body, "要能看到模型给错了什么"
+
+
+def test_trace_is_empty_note_when_no_tools_used(enable_ai):
+    """没调工具时说明「本次未使用工具」，不展示伪造的流程。"""
+
+    def handler(request):
+        if _is_parse_request(request):
+            return _ai_reply(_parse_payload())
+        if _is_agent_request(request):
+            return _agent_reply("直接回答。")
+        return _ai_reply("{}")
+
+    at = _run_agent_analysis(enable_ai, handler)
+    body = _all_text(at)
+
+    assert "未使用工具" in body
+    # 「第 N 轮」是轨迹步骤独有的标记——评分说明里也会出现「参数：」，
+    # 拿它做断言会误判。
+    assert "第 1 轮" not in body, "没调工具却渲染出了轨迹步骤"
+
+
+def test_agent_failure_degrades_with_full_results(enable_ai):
+    """编排失败时降级：给出提示，且**筛选、评分、排序结果一个不少**。"""
+    state = {"n": 0}
+
+    def handler(request):
+        if _is_parse_request(request):
+            return _ai_reply(_parse_payload())
+        if _is_agent_request(request):
+            state["n"] += 1
+            return httpx.Response(500, json={"error": "boom"})
+        return _ai_reply("{}")
+
+    at = _run_agent_analysis(enable_ai, handler)
+    body = _all_text(at)
+
+    assert "为你推荐" in body, "降级后推荐结果不能少"
+    assert "系统匹配评分" in body, "评分还在"
+    assert "AI 执行过程" not in body
+
+
+def test_local_mode_does_not_show_any_ai_section():
+    """不配密钥时整条 AI 路径都不出现——这是断网也能演示的保障。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("预算 3000 买笔记本，主要编程").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "为你推荐" in body
+    assert "AI 执行过程" not in body
+    assert "AI 的分析结论" not in body
+
+
 def test_demo_data_disclaimer_is_visible_on_home():
     at = _run()
     body = _all_text(at)
@@ -1069,11 +1223,27 @@ def _parse_payload(**overrides) -> str:
 
 
 def _is_parse_request(request) -> bool:
-    """靠系统提示里的关键词区分「解析」和「解读」两类请求。"""
+    """靠系统提示里的关键词区分请求类型。
+
+    三类请求的系统提示各不相同：需求解析用「解析器」，Agent 编排用
+    「可以调用工具」，其余是单轮解读/作答。
+    """
     import json
 
     body = json.loads(request.content)
     return "解析器" in body["messages"][0]["content"]
+
+
+def _is_agent_request(request) -> bool:
+    """Agent 编排请求——它带着 `tools` 声明。"""
+    import json
+
+    return "tools" in json.loads(request.content)
+
+
+def _agent_reply(content: str) -> httpx.Response:
+    """Agent 的最终作答（不请求工具）。"""
+    return _ai_reply(content)
 
 
 def test_ai_toggle_is_hidden_when_not_configured():
@@ -1168,27 +1338,14 @@ def test_ai_timeout_degrades_gracefully(enable_ai):
     assert _state(at, state.KEY_RESULT) is not None
 
 
-def test_ai_explanation_is_shown_and_marked(enable_ai, catalog):
-    """解读要标出来源，且不能混进「系统匹配评分」里冒充规则结果。"""
-    import json
-
-    every_id = [p.id for p in catalog.by_category("laptop")]
-
+def test_ai_agent_answer_and_trace_are_shown(enable_ai):
+    """AI 路径展示「分析结论」与「执行过程」，且都标明来自 AI。"""
     def handler(request):
         if _is_parse_request(request):
             return _ai_reply(_parse_payload())
-        return _ai_reply(
-            json.dumps(
-                {
-                    "overview": "这几件都在你的预算内。",
-                    "per_product": [
-                        {"product_id": pid, "why": "处理器档位较高，适合编程"}
-                        for pid in every_id
-                    ],
-                },
-                ensure_ascii=False,
-            )
-        )
+        if _is_agent_request(request):
+            return _agent_reply("综合工具返回的数据，这几款适合编程。")
+        return _ai_reply("{}")
 
     enable_ai(handler)
 
@@ -1200,9 +1357,23 @@ def test_ai_explanation_is_shown_and_marked(enable_ai, catalog):
     _assert_clean(at)
 
     body = _all_text(at)
-    assert "AI 解读" in body
+    assert "AI 的分析结论" in body
     assert "适合编程" in body
-    assert "AI 总述" in body
+    assert "AI 执行过程" in body
+    assert "未使用工具" in body, "模型没调工具时要如实说明，不能伪造流程"
+
+
+def test_ai_agent_not_used_when_switch_is_off():
+    """没打开 AI 开关时不出现执行过程——那条路径根本没跑编排。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    at.text_area[0].set_value("预算 3000 买笔记本，主要编程").run()
+    _button(at, "开始分析").click().run()
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "AI 执行过程" not in body
+    assert "AI 的分析结论" not in body
 
 
 def test_explanation_failure_keeps_the_recommendations(enable_ai):

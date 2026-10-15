@@ -16,7 +16,7 @@
 | 1 | 结构化商品数据库 | 阶段 0（已随 MVP 交付） | ✅ |
 | 2 | AI 需求理解与推荐 | 阶段 0（已随 MVP 交付） | ✅ |
 | 3 | RAG 商品知识库 | 阶段 2 `add-knowledge-base` | 📋 提案已备好 |
-| 4 | Agent 多步骤工具调用 | 阶段 3 `add-agent-orchestration` | ❌ 待起草 |
+| 4 | Agent 多步骤工具调用 | 阶段 3 `add-agent-orchestration` | ✅ 已交付 |
 | 5 | 可解释推荐与效果评测 | 阶段 1 `harden-ai-enhancement` + 阶段 4 `add-evaluation-suite` | 🚧 可解释✅ / 评测❌ |
 
 > 说明：第 5 项拆成了两个阶段——「可信度机制」靠阶段 1 的抗幻觉加固，
@@ -63,7 +63,7 @@
 
 ---
 
-## 阶段 3：Agent 工具调用 `add-agent-orchestration` ❌（待起草）
+## 阶段 3：Agent 工具调用 `add-agent-orchestration` ✅（已交付并归档）
 
 | 项 | 内容 |
 |---|---|
