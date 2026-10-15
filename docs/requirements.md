@@ -139,8 +139,8 @@
 
 ## 6. 功能需求
 
-六个功能模块。详细规格见 [`openspec/specs/`](../openspec/specs/)（8 份能力规格，
-40 条需求，107 条可测试场景）。
+六个功能模块。详细规格见 [`openspec/specs/`](../openspec/specs/)（11 份能力规格，
+59 条需求，186 条可测试场景）。
 
 ### FR-1 商品中心 🚧
 
@@ -339,4 +339,4 @@
 | [demo_script.md](demo_script.md) | 演示脚本 |
 | [data-disclaimer.md](data-disclaimer.md) | 数据说明与使用限制 |
 | [spec-coverage.md](spec-coverage.md) | 规格覆盖追溯表 |
-| [`openspec/specs/`](../openspec/specs/) | 8 份能力规格（正式规格源） |
+| [`openspec/specs/`](../openspec/specs/) | 11 份能力规格（正式规格源） |
