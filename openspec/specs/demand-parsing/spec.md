@@ -14,8 +14,8 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 
 #### Scenario: 部分信息缺失时保留空值
 
-- **WHEN** 用户输入「想买个耳机」且未提及预算与用途
-- **THEN** 解析结果中商品类别为耳机、总预算为空、使用场景为空，系统不得为缺失字段填入任何默认数值
+- **WHEN** 用户输入「想买个手机」且未提及预算与用途
+- **THEN** 解析结果中商品类别为手机、总预算为空、使用场景为空，系统不得为缺失字段填入任何默认数值
 
 #### Scenario: 未配置大模型时也能完成解析
 
@@ -47,7 +47,7 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 
 #### Scenario: 仅结构化输入也可运行
 
-- **WHEN** 用户不填写自然语言输入，仅通过控件选择类别为耳机、预算为 500
+- **WHEN** 用户不填写自然语言输入，仅通过控件选择类别为手机、预算为 2000
 - **THEN** 系统构造出仅含类别与预算的需求对象并正常进入筛选流程
 
 ### Requirement: 非法需求输入的处理
@@ -86,7 +86,7 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 
 #### Scenario: 小额预算被识别
 
-- **WHEN** 用户说「50 元以内的耳机」
+- **WHEN** 用户说「50 元以内的手机」
 - **THEN** 系统识别出预算为 50
 
 #### Scenario: 一位数金额同样识别
@@ -112,17 +112,17 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 
 #### Scenario: 省位写法判为未识别
 
-- **WHEN** 用户说「预算两千五的耳机」
+- **WHEN** 用户说「预算两千五的手机」
 - **THEN** 系统判定为未识别到预算并追问，SHALL NOT 得到 2005 或其他数值
 
 #### Scenario: 有零标记的写法正常解析
 
-- **WHEN** 用户说「预算两千零五的耳机」
+- **WHEN** 用户说「预算两千零五的手机」
 - **THEN** 系统识别出预算为 2005
 
 #### Scenario: 规范写法正常解析
 
-- **WHEN** 用户说「预算两千五百的耳机」
+- **WHEN** 用户说「预算两千五百的手机」
 - **THEN** 系统识别出预算为 2500
 
 #### Scenario: 十后面的数字不算歧义

@@ -24,7 +24,7 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 
 ### Requirement: 报告导出
 
-系统 SHALL 支持将报告导出为 Markdown 或 CSV 文件供用户保存。导出内容 SHALL 与界面上展示的报告一致，SHALL NOT 在导出时丢失演示数据来源标注。
+系统 SHALL 支持将报告导出为 Markdown 或 CSV 文件供用户保存。导出内容 SHALL 与界面上展示的报告一致，SHALL NOT 在导出时丢失数据来源标注与核验状态。
 
 #### Scenario: 导出 Markdown
 
