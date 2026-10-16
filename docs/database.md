@@ -42,9 +42,9 @@
 
 | # | 表 | 职责 | 状态 |
 |---|---|---|---|
-| 1 | `products` | 商品主表：ID、名称、品牌、品类、型号、描述、图片、状态 | 🚧 JSON 文件承载 |
+| 1 | `products` | 商品主表：ID、名称、品牌、品类、型号、描述、图片、来源、核验状态 | ✅ SQLite 商品库 |
 | 2 | `product_prices` | 价格记录：商品 ID、价格、币种、来源、采集时间、有效状态 | 📋 |
-| 3 | `product_attributes` | 参数表：商品 ID、参数名、值、单位、来源、核验状态 | 🚧 JSON 内嵌 `specs` |
+| 3 | `product_attributes` | 参数表：商品 ID、参数名、值、单位、来源、核验状态 | ✅ SQLite 内嵌 `specs`（JSON 列） |
 | 4 | `data_sources` | 来源表：名称、URL、许可说明、获取时间、数据质量 | 📋 |
 | 5 | `knowledge_documents` | 知识文档：ID、关联商品、类型、来源、版本、索引状态 | 📋 |
 | 6 | `recommendation_sessions` | 推荐会话：需求、条件、候选、结果摘要、模型版本 | ✅ SQLite |
@@ -76,13 +76,14 @@ CREATE TABLE IF NOT EXISTS products (
     name         TEXT NOT NULL DEFAULT '',
     brand        TEXT NOT NULL DEFAULT '',
     category     TEXT NOT NULL DEFAULT '',
-    model        TEXT,                                -- 可空：服装家具没有型号概念
+    model        TEXT,                                -- 可空：字段可选，当前 20 条均已填
     specs        TEXT NOT NULL DEFAULT '{}',          -- JSON 列，按品类异构
     use_cases    TEXT NOT NULL DEFAULT '[]',
     pros         TEXT NOT NULL DEFAULT '[]',
     cons         TEXT NOT NULL DEFAULT '[]',
     data_source  TEXT NOT NULL DEFAULT '',
-    source_url   TEXT,                                -- 可空：自造数据没有真实来源
+    source_url   TEXT,                                -- 可空：取不到来源时留空
+    image_url    TEXT,                                -- 可空：外链图片，挂了由界面回落类别图标
     data_status  TEXT NOT NULL DEFAULT 'unverified',  -- verified / unverified
     updated_at   TEXT NOT NULL DEFAULT ''
 );
@@ -125,6 +126,16 @@ CREATE TABLE IF NOT EXISTS dataset_meta (      -- 数据集级说明：免责声
 ### 3.2 历史库（`storage/zhigou.db`）
 
 ```sql
+-- 账号。字段刻意只有这些：用户名、角色、状态、凭据、创建时间。
+-- 没有邮箱/手机号/姓名——本应用不需要它们，收了也只是白拿用户信息。
+CREATE TABLE IF NOT EXISTS users (
+    username      TEXT PRIMARY KEY,
+    role          TEXT    NOT NULL DEFAULT 'user',   -- admin / user
+    is_active     INTEGER NOT NULL DEFAULT 1,
+    password_hash TEXT    NOT NULL DEFAULT '',       -- pbkdf2 自描述串
+    created_at    TEXT    NOT NULL DEFAULT ''
+);
+
 -- 对应目标表 recommendation_sessions
 CREATE TABLE IF NOT EXISTS analysis_history (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,25 +145,75 @@ CREATE TABLE IF NOT EXISTS analysis_history (
     top_score      REAL,
     result_count   INTEGER NOT NULL DEFAULT 0,
     report_json    TEXT    NOT NULL,   -- 报告整段 JSON 快照
-    signature      TEXT                -- 条件指纹，跨会话去重
+    signature      TEXT,               -- 条件指纹，**按用户**去重
+    user_id        TEXT                -- 归属账号；遗留记录为空
 );
 
 CREATE INDEX IF NOT EXISTS idx_history_created_at
     ON analysis_history (created_at DESC);
 
--- 同一组条件只存一条。
--- 部分索引让「老记录」（签名为 NULL）与「没算出签名的报告」互不冲突，
--- 升级老库时不会因为历史重复数据而失败。
-CREATE UNIQUE INDEX IF NOT EXISTS idx_history_signature
-    ON analysis_history (signature)
-    WHERE signature IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_history_user
+    ON analysis_history (user_id, created_at DESC);
 
--- 收藏（目标态 7 表中未列出，属于额外功能）
+-- 同一组条件**在同一用户下**只存一条。
+-- 部分索引让「老记录」（签名为 NULL、或归属为 NULL）与「没算出签名的报告」
+-- 互不冲突，升级老库时不会因为历史重复数据而失败。
+CREATE UNIQUE INDEX IF NOT EXISTS idx_history_signature
+    ON analysis_history (user_id, signature)
+    WHERE signature IS NOT NULL AND user_id IS NOT NULL;
+
+-- 收藏：主键带上用户。旧形态是 product_id 单列主键，
+-- 那意味着**全站只能有一个人收藏某件商品**。
 CREATE TABLE IF NOT EXISTS favorites (
-    product_id TEXT PRIMARY KEY,
-    added_at   TEXT NOT NULL
+    user_id    TEXT,                   -- 可空仅对遗留收藏有意义
+    product_id TEXT NOT NULL,
+    added_at   TEXT NOT NULL,
+    PRIMARY KEY (user_id, product_id)
+);
+
+-- 偏好按用户存（原先是全局的 storage/settings.json）
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id    TEXT PRIMARY KEY,
+    prefs_json TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL DEFAULT ''
+);
+
+-- 单用户时期那份 settings.json 的归宿：新用户的初始偏好模板
+CREATE TABLE IF NOT EXISTS preference_template (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    prefs_json TEXT NOT NULL DEFAULT '{}'
 );
 ```
+
+### 3.2.1 三处必须知道的改动理由
+
+| 改动 | 不改会怎样 |
+|---|---|
+| 签名唯一索引加上 `user_id` | 旧索引是全局 `(signature)` 唯一。李四提交与张三完全相同的条件时，`save_analysis` 的去重查询会命中张三那条，把**张三的记录 ID 返回给李四**——不报错、不崩溃，只是把别人的报告当成自己的给出去 |
+| `favorites` 主键改成 `(user_id, product_id)` | 旧主键下，第二个人点收藏是**覆盖**第一个人那条，两个人共用一条记录 |
+| 偏好从全局文件搬进按用户的表 | 一份全局偏好意味着李四的分析会被张三的设置影响——这不是「功能缺失」，是**一个人的设置作用在另一个人身上** |
+
+### 3.2.2 从单用户库升级（迁移）
+
+`_migrate()` 是幂等的，每次建表都会跑一遍。顺序与要点：
+
+1. **迁移前先备份** `zhigou.db` → `zhigou.db.bak-<日期>`（只在真的需要迁移时）
+2. `users` 建表；`analysis_history` 补 `signature` 与 `user_id` 两列（可空）
+3. `favorites` 重建：建新表 → 搬数据 → 删旧 → 改名（SQLite 改不了主键）
+4. 删掉全局的旧签名索引，按 `(user_id, signature)` 重建
+5. 单用户时期的 `settings.json`：内容写进 `preference_template`，文件改名 `.bak`
+
+**遗留数据一律标为无归属，只对管理员可见。** 系统不把它们划给任何账号——
+那份数据是谁产生的我们并不知道，编一个归属不如如实留空。
+
+> ⚠️ **整段迁移必须在一个显式事务里。** Python 的 `sqlite3` 只在 DML
+> （INSERT/UPDATE/DELETE）前隐式开事务，`ALTER TABLE` / `CREATE INDEX`
+> 各自自动提交——不写 `BEGIN` 的话，中途失败时表已经被改掉了，
+> 而 `rollback()` 无事可回滚。这个坑由「迁移中途失败」那条用例逮住过。
+>
+> ⚠️ **索引不能建在补列之前。** 建表脚本先于 `_migrate` 执行，而
+> `CREATE TABLE IF NOT EXISTS` 对老表是空操作——紧跟其后的
+> `CREATE INDEX ... (user_id, ...)` 会以 `no such column: user_id` 直接失败。
 
 ### 3.3 字段说明
 
@@ -165,7 +226,52 @@ CREATE TABLE IF NOT EXISTS favorites (
 | `top_score` | REAL | 首推商品的匹配评分 |
 | `result_count` | INTEGER | 结果数量 |
 | `report_json` | TEXT | **完整 `DecisionReport` 的 JSON 快照** |
-| `signature` | TEXT | 需求条件指纹，用于跨会话去重 |
+| `signature` | TEXT | 需求条件指纹，**按用户**去重 |
+| `user_id` | TEXT | 归属账号。单用户时期的遗留记录为空，只对管理员可见 |
+
+`users` 表的字段：
+
+| 字段 | 说明 |
+|---|---|
+| `username` | 主键，登录名 |
+| `role` | `admin`（管理员）/ `user`（普通用户） |
+| `is_active` | 停用的账号不能登录，其历史数据仍在 |
+| `password_hash` | `pbkdf2_sha256$<迭代>$<盐>$<哈希>`，**绝不是明文** |
+| `created_at` | 创建时间 |
+
+### 3.3.1 商品库新增的两张元数据表
+
+```sql
+-- 分类元数据。**只放既有分类的覆盖项**，全集永远是 config.CATEGORY_LABELS。
+CREATE TABLE IF NOT EXISTS category_meta (
+    category_key  TEXT PRIMARY KEY,
+    display_label TEXT,                       -- 空则用配置里的默认名
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    is_active     INTEGER NOT NULL DEFAULT 1,
+    updated_by    TEXT,
+    updated_at    TEXT
+);
+
+-- 品牌字典。键是**商品里的写法**，与商品表对得上。
+CREATE TABLE IF NOT EXISTS brand_meta (
+    brand_name   TEXT PRIMARY KEY,
+    display_name TEXT,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    entered_by   TEXT,
+    entered_at   TEXT
+);
+```
+
+**为什么分类元数据是「叠加层」而不是「分类表」**：新增一个分类要同时配评分
+权重、参数档位与知识指南——那是改代码与语料的工作量，不是一次点击。
+做成可增删的表，只会让系统进入「配置不完整」的状态：推荐缺权重、
+问答缺资料，而且不报错，只是结果悄悄变差。
+
+`products` 表同时新增了 `is_active`（上下架）与 `entered_by` / `entered_at`
+（界面录入者与时间，命令行为空）。**停用分类或品牌、下架商品都只是读取时
+过滤，不改写任何商品行**——否则恢复时无法区分「管理员当初手工下架的」与
+「因分类停用而被下架的」。
 
 ### 3.4 为什么报告存 JSON 快照
 
@@ -246,11 +352,10 @@ CREATE TABLE product_attributes (
 ```
 
 > **为什么用 EAV（实体-属性-值）而不是宽表**：不同品类的参数完全不同——
-> 笔记本有 `cpu_tier`，手机有 `chip_tier`/`camera_tier`，服饰有
-> `comfort_tier`/`breathability_tier`。宽表会变成几十列且大部分为空。
+> 笔记本有 `cpu_tier`，手机有 `chip_tier`/`camera_tier`。宽表会变成几十列且大部分为空。
 >
 > 当前实现用 JSON 内嵌 `specs` 达到同样效果，代价是无法用 SQL 直接
-> 按参数筛选。演示规模下这个代价可接受。
+> 按参数筛选。当前规模下这个代价可接受。
 
 ### 4.4 `data_sources` 数据来源表
 
@@ -266,8 +371,9 @@ CREATE TABLE data_sources (
 ```
 
 > ⚠️ **这张表是「创新点二」的前置条件。**
-> 当前 112 条商品的 `data_source` 是同一串免责说明，
-> 没有独立的来源表，也没有逐条 URL 与许可说明。
+> 当前 20 条商品的 `data_source` 统一为「公开资料整理 · 参数经简化，价格非实时」，
+> 且 20 条全部带 `source_url`，
+> 但**没有独立的来源表**，也没有逐条许可说明——离「逐条可追溯」仍差一张表。
 
 ### 4.5 `knowledge_documents` 知识文档表
 
@@ -348,10 +454,10 @@ CREATE TABLE recommendation_feedback (
 
 ```json
 {
-  "dataset_name": "智购参谋演示数据集",
-  "disclaimer": "本数据集全部为演示数据……",
-  "updated_at": "2026-10-01",
-  "spec_tier_note": "specs 中的档位字段……为本项目为规则评分设定的分类档位",
+  "dataset_name": "智购参谋电子产品数据集",
+  "disclaimer": "本数据集覆盖笔记本电脑、手机两类电子产品。品牌与型号真实存在，参考价与参数依据公开资料整理而成：价格是整理时的参考价、不是实时价格，会随促销波动；参数经过简化。适用场景与优缺点由本项目依据参数整理。全部记录标注为未核验。",
+  "updated_at": "2026-10-15",
+  "spec_tier_note": "specs 中的档位字段（cpu_tier / chip_tier / camera_tier）为本项目为规则评分设定的分类档位（1 最低，5 最高），不是厂商跑分或专业评测结果。",
   "products": [ /* 见 6.2 */ ]
 }
 ```
@@ -361,25 +467,29 @@ CREATE TABLE recommendation_feedback (
 ```json
 {
   "id": "LP001",
-  "name": "轻羽 AirBook 14",
+  "name": "红米 REDMI Book 14 2025",
   "category": "laptop",
-  "price": 3299,
-  "brand": "轻羽",
+  "model": "REDMI Book 14 2025",
+  "brand": "红米",
+  "price": 3519,
   "specs": {
-    "cpu": "R5-7530U",
-    "cpu_tier": 3,
+    "cpu": "酷睿5 220H",
+    "cpu_tier": 4,
     "ram_gb": 16,
-    "storage_gb": 512,
+    "storage_gb": 1024,
     "screen_size": 14,
-    "weight_kg": 1.28,
+    "weight_kg": 1.36,
     "battery_h": 10,
     "has_dedicated_gpu": false
   },
-  "use_cases": ["编程", "办公", "学习", "通勤"],
-  "pros": ["1.28kg 通勤背包不累", "…"],
-  "cons": ["无独显，大型 3D 游戏性能不足", "…"],
-  "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-  "updated_at": "2026-10-01"
+  "use_cases": ["办公", "学习", "编程", "影音"],
+  "pros": ["1.36kg、15.9mm 金属机身，便携性好", "16GB+1TB 大存储，并预留第二个 M.2 硬盘位", "…"],
+  "cons": ["仅 Intel 核芯显卡，无独立显卡", "56Wh 电池，配高刷屏实际续航打折", "…"],
+  "data_source": "公开资料整理 · 参数经简化，价格非实时",
+  "source_url": "https://nb.zol.com.cn/1014/10149291_param.html",
+  "image_url": "https://2c.zol-img.com.cn/product/276/900/ceKkwW8okziDE.png",
+  "data_status": "unverified",
+  "updated_at": "2026-10-15"
 }
 ```
 
@@ -389,13 +499,16 @@ CREATE TABLE recommendation_feedback (
 |---|---|---|
 | `id` | ✅ | 唯一标识，用于去重与关联 |
 | `name` | ✅ | 商品名称 |
-| `category` | ✅ | 必须在 `CATEGORY_LABELS` 中登记 |
+| `category` | ✅ | 必须在 `CATEGORY_LABELS` 中登记（当前仅 laptop / phone） |
 | `price` | ✅ | 数值，用于预算筛选 |
 | `brand` | ✅ | 品牌筛选 |
 | `specs` | ✅ | 键按品类异构，档位字段取值 1–5 |
 | `use_cases` | ✅ | 字符串数组 |
 | `pros` / `cons` | ✅ | 字符串数组 |
 | `data_source` | ✅ | 数据来源说明，**界面与导出报告都会展示** |
+| `source_url` | — | 可空：当前 20 条均有链接；取不到来源时留空 |
+| `image_url` | — | 可空：外链图片，缺失或加载失败时界面回落类别图标 |
+| `data_status` | ✅ | 核验状态，当前一律 `unverified` |
 | `updated_at` | ✅ | 数据更新时间，**界面与导出报告都会展示** |
 
 > **缺失字段的商品不会导致整批加载失败**：加载层逐条容错，
@@ -403,10 +516,9 @@ CREATE TABLE recommendation_feedback (
 
 ### 6.4 档位字段说明
 
-`specs` 中的 `cpu_tier` / `chip_tier` / `camera_tier` / `audio_tier` /
-`noise_level` / `energy_grade` / `durability_tier` / `comfort_tier` /
-`breathability_tier` / `cushion_tier` 是**本项目为规则评分设定的分类档位**
-（1 最低，5 最高），**不是厂商跑分或专业评测结果**。
+`specs` 中的 `cpu_tier` / `chip_tier` / `camera_tier`
+是**本项目为规则评分设定的分类档位**（1 最低，5 最高），
+**不是厂商跑分或专业评测结果**。品类收缩到电子产品后，规格表里只剩这四个档位键。
 
 ---
 
@@ -466,8 +578,9 @@ CSV / Excel 原始商品表
 | 5 | 逐条补 `source_url` 与 `data_status` | **高（需要真实数据来源）** |
 | 6 | 建 `knowledge_documents` 表并生成知识文档 | 高（依赖 RAG 开发） |
 
-> **步骤 5 是真正的瓶颈**：没有真实数据来源，`data_sources` 表只能
-> 存「本项目自行构造」这一条记录。补齐它是「创新点二」的前提。
+> **步骤 5 已过半**：商品记录现在逐条带 `source_url`（20/20）与 `data_status`
+> （一律 `unverified`），但 `data_sources` 表仍只有一条整批共用的说明。
+> 把来源拆成独立表并补齐许可说明，才是「创新点二」的前提。
 
 ---
 

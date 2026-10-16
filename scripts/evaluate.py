@@ -213,6 +213,25 @@ def _run_compare_case(case: dict, catalog) -> Outcome:
     return Outcome(case["id"], case["category"], passed, checks=checks)
 
 
+def _run_unsupported_case(case: dict) -> Outcome:
+    """表外品类：应当明确回「暂不支持」，而不是当成没提类别乱推一气。
+
+    这是品类收缩后新增的一类场景。判两件事：识别得出来，且提示语里
+    **列出了真正支持的类别**——只说「不支持」而不说有什么，用户还是不知道该问什么。
+    """
+    want = case["expected"]["unsupported_category"]
+    got = demand_parser.detect_unsupported_category(case["input"])
+    checks = [(f"识别为「{want}」", got == want, f"实际 {got or '（没识别出来）'}")]
+
+    if got:
+        message = demand_parser.unsupported_category_message(got)
+        supported = all(label in message for label in config.CATEGORY_LABELS.values())
+        checks.append(("提示里列出了支持的类别", supported, message[:80]))
+
+    passed = all(ok for _n, ok, _d in checks)
+    return Outcome(case["id"], case["category"], passed, checks=checks)
+
+
 def _run_consistency_case(case: dict, catalog) -> Outcome:
     """幻觉场景 5：构造一条内部矛盾的记录，确认会被标出来。"""
     from src.consistency import check_product
@@ -499,6 +518,8 @@ def main() -> int:
             category = case["category"]
             if category in runners:
                 outcome = runners[category](case)
+            elif category == "不支持的类别":
+                outcome = _run_unsupported_case(case)
             elif category == "幻觉场景4_知识库无资料":
                 outcome = _run_knowledge_case(case, index)
             elif category == "幻觉场景5_资料自相矛盾":

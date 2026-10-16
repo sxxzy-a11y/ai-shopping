@@ -6,11 +6,17 @@
 （这些规格已归档合并进 `openspec/specs/`，成为后续改动的依据。
 **注意两份的数字不同**：归档快照是 39 条需求 / 99 条场景；
 此后每个变更归档都会往规格里加内容，当前 `openspec/specs/` 已有
-**11 份能力规格、59 条需求 / 186 条场景**。
+**12 份能力规格、76 条需求 / 282 条场景**。
 
 **本表核对的是归档快照的 99 条**，后续变更新增的需求与场景**尚未纳入这张追溯表**。
 它不是失效了，而是只覆盖到 MVP 那一次迭代——新变更的追溯在各变更自己的
-`specs/` 与 `tasks.md` 里。）
+`specs/` 与 `tasks.md` 里。
+
+（商品数据集换成真实电子产品后，本表里由该变更改名的测试函数已就地换成现行名：
+键盘品类移除使 `test_keyboard_scores_exclude_portability_with_reason` 变成
+`test_headphone_scores_exclude_portability_with_reason`；「演示数据标识」相关的两条
+换成 `test_data_boundary_notice_is_visible_on_home` 与 `test_markdown_keeps_the_data_disclaimer`。
+场景名与统计仍以归档快照为准。）
 
 **这份表是人工核对的，不是脚本生成的。** 我第一版写了个脚本拿中文 Scenario 名
 去搜英文测试函数名，结果把几乎全部标成「缺口」——那是假报告，已经废弃。
@@ -34,7 +40,7 @@
 | 数据集满足规模要求 | ✅ `test_dataset_has_at_least_20_products` |
 | 商品之间具有可区分差异 | ✅ `test_products_have_unique_ids_and_vary_within_category` |
 | 商品卡片显示演示数据标识 | ✅ `test_product_card_carries_the_demo_data_source` |
-| 报告与导出结果保留标注 | ✅ `test_markdown_keeps_the_demo_data_disclaimer`、`test_csv_keeps_the_data_source` |
+| 报告与导出结果保留标注 | ✅ `test_markdown_keeps_the_data_disclaimer`、`test_csv_keeps_the_data_source` |
 | 数据文件不存在 | ✅ `test_missing_file_raises_domain_error`、`test_missing_product_file_shows_a_hint_and_keeps_the_app_alive` |
 | 数据文件内容非法 | ✅ `test_invalid_json_raises_domain_error`、`test_corrupt_product_file_shows_a_hint` |
 | 数据文件为空列表 | ✅ `test_empty_product_list_raises_empty_catalog`、`test_empty_product_catalog_shows_a_hint` |
@@ -64,7 +70,7 @@
 | 评分包含各维度得分 | ✅ `test_score_total_is_weighted_average_of_dimensions` |
 | 评分命名不暗示市场口碑 | ✅ `test_score_is_never_presented_as_market_reputation` |
 | 缺参数商品仍能得到评分 | ✅ `test_missing_specs_exclude_dimensions_instead_of_defaulting` |
-| 类别权重差异生效 | ✅ `test_categories_use_different_dimensions`、`test_laptop_scores_include_portability`、`test_keyboard_scores_exclude_portability_with_reason` |
+| 类别权重差异生效 | ✅ `test_categories_use_different_dimensions`、`test_laptop_scores_include_portability`、`test_headphone_scores_exclude_portability_with_reason` |
 | 权重集中可查 | ✅ `test_weight_table_sums_to_one`（权重集中在 `config.SCORING_WEIGHTS` 单一位置，该测试守住其合法性） |
 | 高分商品排在低价商品之前 | ✅ `test_higher_need_match_outranks_cheaper_weak_item` |
 | 排序结果随需求变化 | ✅ `test_changing_core_needs_changes_the_order` |
@@ -142,7 +148,7 @@
 |---|---|
 | 五个页面均可打开 | ✅ `test_every_page_renders_without_exception` |
 | 首页提供入口与说明 | ✅ `test_app_uses_the_expected_page_layout`、`test_quick_start_prefills_the_analysis_page` |
-| 项目说明页披露数据限制 | ✅ `test_demo_data_disclaimer_is_visible_on_home` + 页面内容审查 |
+| 项目说明页披露数据限制 | ✅ `test_data_boundary_notice_is_visible_on_home` + 页面内容审查 |
 | 结构化控件可用 | ✅ `test_ai_parse_is_used_when_enabled`（用到结构化控件路径） |
 | 非法输入就地提示 | ✅ `test_invalid_budget_shows_a_chinese_error` |
 | 商品卡片信息完整 | ✅ `test_product_card_carries_the_demo_data_source` |

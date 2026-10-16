@@ -56,8 +56,8 @@ python scripts/fetch_products.py --source csv --input data/platform_export.csv
 
 「参数」列支持三种写法：
 
-- JSON 对象：`{"容量": 318, "能效等级": "一级"}`
-- 文本：`容量: 318; 能效等级: 一级`
+- JSON 对象：`{"内存": 16, "屏幕尺寸": 14}`
+- 文本：`内存: 16; 屏幕尺寸: 14`
 - 留空
 
 ---
@@ -96,9 +96,10 @@ python scripts/fetch_products.py --source api --mode replace
 平台的类目名映射到内部类别键，配置在 `src/ingest.py` 的
 `DEFAULT_CATEGORY_MAP`。匹配顺序：精确 → 包含 → 内部类别中文名包含。
 
+**商品库当前只覆盖两个电子产品类**：笔记本电脑（`laptop`）、手机（`phone`）。
 平台类目对不上时有两种处理：
 
-- 映射到已有的 10 个品类之一（推荐，评分维度现成）
+- 映射到已有的两类之一（推荐，评分维度现成）
 - 新增一个品类：在 `src/config.py` 登记 `CATEGORY_LABELS` 与
   `SCORING_WEIGHTS`，再指明它的参数范围（`src/scoring.py` 的
   `_SPEC_RANGES` / `_PERFORMANCE_SPECS`）。比较表会自动带上该类别的参数
@@ -109,10 +110,10 @@ python scripts/fetch_products.py --source api --mode replace
 
 1. **未登记的键原样保留**——比较表能显示，只是没有中文标签。
    宁可先少映射，也不要乱映射
-2. **档位要折算**。项目内部用 1–5 档（5 最高），而平台给的是
-   「一级能效」「三星」这类原始表述：
-   - `parse_energy_grade("一级")` → `5`（一级能效最好，映射到 5）
+2. **档位要折算**。项目内部用 1–5 档（5 最高），而平台给的往往是
+   「8/10 分」「一级」这类原始表述：
    - `to_tier(8, scale_max=10)` → `4`（满分 10 分制折算到 1–5）
+   - `parse_energy_grade("一级")` → `5`（「一级/二级」这类分等级表述同样换算到 1–5）
    - 新品类要补同类折算函数，并加到 `TIER_KEYS`
 
 ### 4.3 价格
@@ -151,18 +152,20 @@ python scripts/fetch_products.py --source api --mode replace
 
 ---
 
-## 7. 切换为真实数据后必须同步的事
+## 7. 从整理数据再切到平台实时数据时，必须同步的事
 
-1. **真实性标注**：`data_source` 由脚本统一盖章为「来自XX平台 · 抓取于
-   某日」。**不允许**再出现「演示数据」字样，也不允许把平台营销文案
-   当作用户评价
-2. **更新测试断言**：`tests/test_data_loader.py` 与
-   `tests/test_acceptance.py` 中有「数据集必须标注演示数据」的断言，
-   切换到真实数据后需要同步修改
-3. **核对评分口径**：真实参数的量纲可能与演示数据不同，
-   `src/scoring.py` 的 `_SPEC_RANGES` 需要按真实量纲校准
-4. **免责声明**：`docs/data-disclaimer.md` 与界面文案中关于「演示数据」
-   的表述需要按实际情况改写
+当前数据集是「真实品牌 + 依公开资料整理的参数与参考价」。若要进一步换成
+**平台实时数据**，以下四件事要一并处理：
+
+1. **真实性标注**：`data_source` 由脚本统一盖章为「来自XX平台 · 抓取于某日」。
+   **不允许**把平台营销文案当作用户评价，也不允许把未核验的数据说成已核验
+2. **更新测试断言**：`tests/test_data_loader.py` 与 `tests/test_acceptance.py`
+   现在守的是「每条商品有来源说明、且标注未核验」（`data_status` 字段），
+   切到实时数据后需要同步修改——例如把核验状态改成 `verified` 的条件
+3. **核对评分口径**：平台参数的量纲可能与当前整理数据不同，
+   `src/scoring.py` 的 `_SPEC_RANGES` 需要按实际量纲校准
+4. **免责声明**：`docs/data-disclaimer.md` 与界面文案中关于
+   「公开资料整理 · 价格非实时」的表述，需要按实际情况改写
 
 ---
 

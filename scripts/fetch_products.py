@@ -197,20 +197,32 @@ class ApiSource(ProductSource):
 
 
 def write_csv_template(path: Path) -> None:
-    """生成 CSV 列名模板，按平台导出结构改名即可。"""
+    """生成 CSV 列名模板，按平台导出结构改名即可。
+
+    「来源链接」与「图片」两列不要省略：它们是溯源信息，缺了不会报错，
+    只会让导入进来的商品**悄悄丢掉来源**——这种缺失最难在事后发现。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    headers = ["商品ID", "标题", "商品类目", "价格", "品牌", "参数", "适用场景", "优点", "缺点"]
+    headers = [
+        "商品ID", "标题", "商品类目", "价格", "品牌", "型号",
+        "参数", "适用场景", "优点", "缺点", "来源链接", "图片",
+    ]
     rows = [
         [
             "EX0001",
-            "示例 商品名称",
-            "家用电器",
-            "2999",
+            "示例 笔记本电脑 14 2026",
+            "笔记本电脑",
+            "4999",
             "示例品牌",
-            '{"容量": 318, "能效等级": "一级", "耐用档位": 5}',
-            "家庭、厨房",
-            "一级能效，长期省电",
-            "体积偏大",
+            "示例型号 14 2026",
+            '{"cpu": "i5-13500H", "cpu_tier": 3, "ram_gb": 16, '
+            '"storage_gb": 512, "screen_size": 14, "weight_kg": 1.35, '
+            '"battery_h": 9, "has_dedicated_gpu": false}',
+            "办公、学习",
+            "16GB 内存日常够用，重量 1.35kg 便于携带",
+            "低压处理器，重度渲染吃力",
+            "https://example.com/product/EX0001",
+            "https://example.com/img/EX0001.jpg",
         ]
     ]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
@@ -219,6 +231,7 @@ def write_csv_template(path: Path) -> None:
         writer.writerows(rows)
     print(f"已写入模板：{path}")
     print("说明：「参数」列支持 JSON 对象或「键:值;键:值」文本。")
+    print("说明：「图片」列要填**图片直链**（浏览器打开即是一张图），不是商品页地址。")
 
 
 def _print_report(
