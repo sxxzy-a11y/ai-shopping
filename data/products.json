@@ -1,3630 +1,800 @@
 {
-  "dataset_name": "智购参谋演示商品数据集",
-  "disclaimer": "本数据集全部为演示数据，由本项目自行构造，不是真实在售商品，价格不是实时价格，参数不是厂商实测值，优缺点不是真实用户评价。仅用于验证筛选、评分与比较逻辑，不得作为真实购买决策依据。",
-  "updated_at": "2026-10-01",
-  "spec_tier_note": "specs 中的档位字段（cpu_tier / chip_tier / camera_tier / audio_tier / noise_level / energy_grade / durability_tier / comfort_tier / breathability_tier / cushion_tier）为本项目为规则评分设定的分类档位（1 最低，5 最高），不是厂商跑分或专业评测结果。",
+  "dataset_name": "智购参谋电子产品数据集",
+  "disclaimer": "本数据集覆盖笔记本电脑、手机两类电子产品。**品牌与型号真实存在**，参考价与参数依据公开资料整理而成：价格是整理时的参考价、**不是实时价格**，会随促销波动；参数经过简化（例如把多个配置合并成一项）。适用场景与优缺点由本项目依据参数整理，不是厂商宣传，也不是真实用户评价。全部记录标注为**未核验**——没有人逐条对照过来源。不得作为真实购买决策依据。",
+  "updated_at": "2026-10-16",
+  "spec_tier_note": "specs 中的档位字段（cpu_tier / chip_tier / camera_tier）为本项目为规则评分设定的分类档位（1 最低，5 最高），不是厂商跑分或专业评测结果。",
   "products": [
     {
       "id": "LP001",
-      "name": "轻羽 AirBook 14",
+      "name": "红米 REDMI Book 14 2025",
+      "brand": "红米",
       "category": "laptop",
-      "price": 3299,
-      "brand": "轻羽",
+      "model": "REDMI Book 14 2025",
+      "price": 3519,
       "specs": {
-        "cpu": "R5-7530U",
-        "cpu_tier": 3,
+        "cpu": "酷睿5 220H",
+        "cpu_tier": 4,
         "ram_gb": 16,
-        "storage_gb": 512,
+        "storage_gb": 1024,
         "screen_size": 14,
-        "weight_kg": 1.28,
+        "weight_kg": 1.36,
         "battery_h": 10,
         "has_dedicated_gpu": false
       },
       "use_cases": [
-        "编程",
         "办公",
         "学习",
-        "通勤"
+        "编程",
+        "影音"
       ],
       "pros": [
-        "1.28kg 便于每天背着走",
-        "标称续航 10 小时，一天课基本不用带充电器",
-        "16G 内存足够开编辑器加浏览器多标签",
-        "同配置里价格偏低"
+        "2880x1800 120Hz、400nit、100% sRGB高分高刷屏",
+        "1.36kg、15.9mm金属机身，便携性好",
+        "酷睿5 220H为12核16线程、45W，性能释放较强",
+        "16GB+1TB大存储，并预留第二个M.2硬盘位"
       ],
       "cons": [
-        "无独立显卡，大型 3D 游戏基本跑不动",
-        "屏幕色域一般，不适合修图"
+        "仅Intel核芯显卡，无独立显卡",
+        "56Wh电池，配高刷屏实际续航打折",
+        "品牌售后网点少于联想、惠普等一线厂商",
+        "实际到手价随促销波动较大"
       ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://nb.zol.com.cn/1014/10149291_param.html",
+      "image_url": "https://2c.zol-img.com.cn/product/276/900/ceKkwW8okziDE.png",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
     },
     {
       "id": "LP002",
-      "name": "锋刃 X15 游戏本",
+      "name": "荣耀 MagicBook X14 Pro 锐龙版 2023",
+      "brand": "荣耀",
       "category": "laptop",
-      "price": 5999,
-      "brand": "锋刃",
+      "model": "MagicBook X14 Pro 2023",
+      "price": 3949,
       "specs": {
-        "cpu": "i7-13620H",
-        "cpu_tier": 4,
-        "ram_gb": 16,
-        "storage_gb": 1024,
-        "screen_size": 15.6,
-        "weight_kg": 2.3,
-        "battery_h": 4,
-        "has_dedicated_gpu": true
-      },
-      "use_cases": [
-        "游戏",
-        "编程",
-        "视频剪辑",
-        "三维渲染"
-      ],
-      "pros": [
-        "带独立显卡，3D 游戏与渲染有实际加成",
-        "散热规格足，长时间高负载不易降频",
-        "1T 固态不用额外加盘"
-      ],
-      "cons": [
-        "2.3kg 加电源适配器，通勤负担明显",
-        "续航约 4 小时，脱离插座基本撑不过半天课",
-        "价格接近 6000，对学生预算压力大"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP003",
-      "name": "墨砚 Pro 14",
-      "category": "laptop",
-      "price": 4599,
-      "brand": "墨砚",
-      "specs": {
-        "cpu": "Ultra5-125H",
+        "cpu": "R7-7840HS",
         "cpu_tier": 4,
         "ram_gb": 16,
         "storage_gb": 512,
         "screen_size": 14,
-        "weight_kg": 1.35,
-        "battery_h": 12,
+        "weight_kg": 1.4,
+        "battery_h": 10,
         "has_dedicated_gpu": false
       },
       "use_cases": [
         "办公",
+        "学习",
         "编程",
-        "影音",
-        "通勤"
-      ],
-      "pros": [
-        "屏幕素质好，长时间看代码眼睛负担小",
-        "标称续航 12 小时，是这批里最长的",
-        "机身做工扎实，键盘手感好"
-      ],
-      "cons": [
-        "比同类核显本贵约 1000 元",
-        "无独立显卡，游戏能力弱"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP004",
-      "name": "启程 15 学生本",
-      "category": "laptop",
-      "price": 2499,
-      "brand": "启程",
-      "specs": {
-        "cpu": "N100",
-        "cpu_tier": 1,
-        "ram_gb": 8,
-        "storage_gb": 256,
-        "screen_size": 15.6,
-        "weight_kg": 1.8,
-        "battery_h": 7,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "上网",
-        "文档",
-        "网课"
-      ],
-      "pros": [
-        "价格是同批最低的一档",
-        "屏幕大，看文档和网课舒服"
-      ],
-      "cons": [
-        "处理器性能弱，同时开多个 IDE 会卡",
-        "8G 内存偏小，浏览器多开就吃紧",
-        "256G 固态装完系统所剩不多",
-        "屏幕分辨率与色彩都较基础"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP005",
-      "name": "星轨 16 全能本",
-      "category": "laptop",
-      "price": 5299,
-      "brand": "星轨",
-      "specs": {
-        "cpu": "R7-8845H",
-        "cpu_tier": 4,
-        "ram_gb": 32,
-        "storage_gb": 1024,
-        "screen_size": 16,
-        "weight_kg": 1.9,
-        "battery_h": 9,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "编程",
-        "视频剪辑",
-        "办公",
         "影音"
       ],
       "pros": [
-        "32G 内存，开虚拟机、容器、多容器编排都够用",
-        "核显性能强，轻度剪辑可以胜任",
-        "预留内存与硬盘扩展位，后续能自己升级"
+        "R7-7840HS标压8核16线程，最高睿频5.1GHz，CPU性能强",
+        "60Wh电池，官方日常办公续航13.5小时",
+        "1.4kg金属机身，带USB4接口",
+        "指纹电源键二合一，支持多屏协同"
       ],
       "cons": [
-        "1.9kg 算不上轻便",
-        "16 寸机身，普通课桌放开后空间紧张"
+        "1920x1200、60Hz、300nit屏幕，素质一般",
+        "Radeon 780M核显，无独立显卡",
+        "512GB存储容量偏小",
+        "2023年上市，平台相对较老"
       ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://nb.zol.com.cn/854/8546477_all.html",
+      "image_url": "https://www-file.honor.com/content/dam/honor/cn/product/laptops/honor-magicbook-x-14-pro-2023-amd/imgs/sec-change/sec-laptop-pc1.png",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "LP003",
+      "name": "华为 MateBook D 14 2024",
+      "brand": "华为",
+      "category": "laptop",
+      "model": "MateBook D 14 2024",
+      "price": 4199,
+      "specs": {
+        "cpu": "i5-13420H",
+        "cpu_tier": 3,
+        "ram_gb": 16,
+        "storage_gb": 512,
+        "screen_size": 14,
+        "weight_kg": 1.39,
+        "battery_h": 6,
+        "has_dedicated_gpu": false
+      },
+      "use_cases": [
+        "办公",
+        "学习",
+        "上网",
+        "商旅"
+      ],
+      "pros": [
+        "1.39kg轻薄机身，通勤与商旅携带方便",
+        "预装Windows 11家庭版并附赠Office家庭和学生版",
+        "100% sRGB屏，莱茵低蓝光认证",
+        "电源键指纹二合一，支持多屏协同、WiFi6"
+      ],
+      "cons": [
+        "56Wh电池且官方未标续航，重度办公约6小时",
+        "1920x1200、60Hz、300nit屏幕，参数较平庸",
+        "i5-13420H为8核12线程，多核性能一般",
+        "Intel Iris Xe核显，不适合游戏与渲染"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://nb.zol.com.cn/959/9597450_param.html",
+      "image_url": "https://img14.360buyimg.com/n1/jfs/t1/290964/8/12960/43204/684a56daF6ec1d032/c4f7a6a4050a0696.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "LP004",
+      "name": "联想 小新Pro14 2024 锐龙版",
+      "brand": "联想",
+      "category": "laptop",
+      "model": "小新Pro 14 2024 AHP9",
+      "price": 5199,
+      "specs": {
+        "cpu": "R7 8745H",
+        "cpu_tier": 4,
+        "ram_gb": 24,
+        "storage_gb": 1024,
+        "screen_size": 14,
+        "weight_kg": 1.46,
+        "battery_h": 10,
+        "has_dedicated_gpu": false
+      },
+      "use_cases": [
+        "办公",
+        "学习",
+        "编程",
+        "影音"
+      ],
+      "pros": [
+        "24GB LPDDR5X大内存，多开程序、开虚拟机更从容",
+        "2880x1800 120Hz高分高刷屏，600nit、100% DCI-P3色域",
+        "84Wh大电池配100W氮化镓充电器，续航余量足",
+        "1.46kg、金属机身，性能与便携兼顾"
+      ],
+      "cons": [
+        "仅Radeon 780M核显，大型3D游戏与三维渲染吃力",
+        "1.46kg在14英寸轻薄本中偏重",
+        "2.8K 120Hz高刷屏实际续航约10小时，低于部分竞品",
+        "R7 8745H取消NPU，不支持Ryzen AI加速"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://nb.zol.com.cn/944/9444915_param.html",
+      "image_url": "https://2f.zol-img.com.cn/product/259_600x450/819/cepOkdxGN68aU.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "LP005",
+      "name": "惠普 星Book 14 2026 酷睿版",
+      "brand": "惠普",
+      "category": "laptop",
+      "model": "星Book 14 2026 (14-hu0052TU)",
+      "price": 5199,
+      "specs": {
+        "cpu": "酷睿5 210H",
+        "cpu_tier": 3,
+        "ram_gb": 16,
+        "storage_gb": 512,
+        "screen_size": 14,
+        "weight_kg": 1.4,
+        "battery_h": 10,
+        "has_dedicated_gpu": false
+      },
+      "use_cases": [
+        "办公",
+        "学习",
+        "上网",
+        "商旅"
+      ],
+      "pros": [
+        "2026年新品，酷睿5 210H 8核12线程、45W",
+        "14.85mm、1.4kg轻薄机身，银色金属质感",
+        "500万像素摄像头+IR人脸识别+物理防窥拨片",
+        "60Wh电池官方续航10小时15分，配100W GaN充电器"
+      ],
+      "cons": [
+        "16GB LPDDR5板载内存不可自行扩展",
+        "Intel核显，游戏与三维渲染能力弱",
+        "512GB存储容量一般",
+        "1920x1200、60Hz屏幕，非高分高刷"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "http://m.suning.com/itemcanshu/0000000000/000000012451481350.html",
+      "image_url": "https://media.hpstore.cn/catalog/product/cache/b3b166914d87ce343d4dc5ec5117b502/h/p/hp-omnibook-3-14-inch-laptop-next-gen-ai-pc-abei-glacier_silver-front.png",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
     },
     {
       "id": "LP006",
-      "name": "疾风 Blade 14 轻薄性能本",
+      "name": "戴尔 游匣 G15 5530",
+      "brand": "戴尔",
       "category": "laptop",
-      "price": 6899,
-      "brand": "疾风",
+      "model": "游匣 G15 5530",
+      "price": 7799,
       "specs": {
-        "cpu": "i7-13700H",
+        "cpu": "i7-13650HX",
+        "cpu_tier": 4,
+        "ram_gb": 16,
+        "storage_gb": 1024,
+        "screen_size": 15.6,
+        "weight_kg": 2.65,
+        "battery_h": 5,
+        "has_dedicated_gpu": true
+      },
+      "use_cases": [
+        "游戏",
+        "视频剪辑",
+        "办公"
+      ],
+      "pros": [
+        "i7-13650HX + RTX4060 满血独显直连，1080p 高刷游戏流畅",
+        "86Wh 大电池，在同级游戏本中续航偏长",
+        "外星人散热技术（VC 均热板 + 液金），双 M.2 可扩展"
+      ],
+      "cons": [
+        "2.65kg 机身较重，配 330W 适配器不便携",
+        "标配屏仅 1920×1080 165Hz，未上 2.5K",
+        "DDR5-4800 频率偏低，内存上限 32GB"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://g.pconline.com.cn/product/notebook/dell/1850927_price.html",
+      "image_url": "https://2e.zol-img.com.cn/product/239_600x450/590/ceVLvGKku1RwI.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "LP007",
+      "name": "联想 拯救者 Y7000P 2024",
+      "brand": "联想",
+      "category": "laptop",
+      "model": "拯救者 Y7000P 2024",
+      "price": 8299,
+      "specs": {
+        "cpu": "i7-14700HX",
         "cpu_tier": 5,
         "ram_gb": 16,
         "storage_gb": 1024,
-        "screen_size": 14,
-        "weight_kg": 1.5,
+        "screen_size": 16,
+        "weight_kg": 2.4,
+        "battery_h": 5,
+        "has_dedicated_gpu": true
+      },
+      "use_cases": [
+        "游戏",
+        "三维渲染",
+        "编程"
+      ],
+      "pros": [
+        "i7-14700HX（20核28线程）配 140W 满血 RTX4060，整机性能释放约 190W，游戏与渲染性能强",
+        "16 英寸 2560×1600 165Hz、100% sRGB、16:10 屏，兼顾电竞与创作",
+        "双 DDR5 插槽 + 双 M.2，16GB/1TB 可自行扩展"
+      ],
+      "cons": [
+        "2.4kg 机身加 230W 适配器，便携性差",
+        "游戏本续航短，80Wh 电池实际高负载下仅数小时",
+        "高负载时风扇噪音与表面温度偏高"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://m.zol.com/shop_59227/40195651.html",
+      "image_url": "https://2d.zol-img.com.cn/product/258_600x450/293/cewbnFaowj936.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "LP008",
+      "name": "华硕 ROG 魔霸新锐 2024",
+      "brand": "华硕",
+      "category": "laptop",
+      "model": "ROG 魔霸新锐 2024",
+      "price": 8443,
+      "specs": {
+        "cpu": "i9-13980HX",
+        "cpu_tier": 5,
+        "ram_gb": 16,
+        "storage_gb": 1024,
+        "screen_size": 16,
+        "weight_kg": 2.36,
         "battery_h": 6,
         "has_dedicated_gpu": true
       },
       "use_cases": [
         "游戏",
-        "编程",
+        "三维渲染",
         "视频剪辑"
       ],
       "pros": [
-        "1.5kg 机身里塞了独立显卡，兼顾便携与性能",
-        "处理器档位最高，编译与渲染都快"
+        "i9-13980HX（24核32线程）+ 140W RTX4060，整机功耗约 195W，性能释放猛",
+        "16 英寸 2.5K 240Hz 500 尼特 100% DCI-P3 星云屏，规格高",
+        "90Wh 电池 + 雷电4，含 RJ45 网口、HDMI2.1，接口齐全"
       ],
       "cons": [
-        "价格 6899，是这批里最贵的",
-        "高负载时风扇噪音明显",
-        "续航约 6 小时，不算突出"
+        "2.36kg 机身，便携性一般",
+        "高负载功耗与发热大，续航短",
+        "13 代 HX 平台非最新代，内存频率一般"
       ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://nb.zol.com.cn/985/9853147.html",
+      "image_url": "https://doc-fd.zol-img.com.cn/t_s2000x2000/g7/M00/0B/0E/ChMkK2grPSWIe-2NAAKNTfKVgPwAAskPQGetDgAAo1l885.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
     },
     {
-      "id": "LP007",
-      "name": "简一 13 超便携",
+      "id": "LP009",
+      "name": "苹果 MacBook Air M3 13英寸（2024）",
+      "brand": "苹果",
       "category": "laptop",
-      "price": 3899,
-      "brand": "简一",
+      "model": "MacBook Air M3 13.6",
+      "price": 10499,
       "specs": {
-        "cpu": "R5-7530U",
+        "cpu": "M3",
         "cpu_tier": 3,
         "ram_gb": 16,
         "storage_gb": 512,
-        "screen_size": 13.3,
-        "weight_kg": 1.05,
+        "screen_size": 13.6,
+        "weight_kg": 1.24,
+        "battery_h": 15,
+        "has_dedicated_gpu": false
+      },
+      "use_cases": [
+        "办公",
+        "学习",
+        "通勤",
+        "影音"
+      ],
+      "pros": [
+        "1.24kg、厚约 1.1cm，通勤携带轻松",
+        "M3 芯片无风扇静音，能效高、续航长",
+        "13.6 英寸 Liquid 视网膜屏 500 尼特 P3 色域，显示素质好"
+      ],
+      "cons": [
+        "16GB 内存板载不可扩展，512GB 版本售价偏高",
+        "无独立显卡，且仅 2 个雷雳/USB4 口，重度渲染与游戏受限",
+        "无风扇设计高负载时会降频"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://digi.ithome.com/archiver/806/988.htm",
+      "image_url": "https://doc-fd.zol-img.com.cn/t_s2000x2000/g7/M00/01/07/ChMkK2g2ZTyISsKdAAC2ZGH3Z68AAs6YwOnC-kAALZ8296.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "LP010",
+      "name": "华为 MateBook X Pro 2024 微绒典藏版",
+      "brand": "华为",
+      "category": "laptop",
+      "model": "MateBook X Pro 2024",
+      "price": 11199,
+      "specs": {
+        "cpu": "Ultra 7 155H",
+        "cpu_tier": 4,
+        "ram_gb": 16,
+        "storage_gb": 1024,
+        "screen_size": 14.2,
+        "weight_kg": 0.98,
         "battery_h": 11,
         "has_dedicated_gpu": false
       },
       "use_cases": [
-        "通勤",
+        "商旅",
         "办公",
-        "学习",
-        "写作"
-      ],
-      "pros": [
-        "1.05kg，是这批里最轻的",
-        "续航 11 小时，全天在外不用找插座",
-        "13.3 寸机身，小桌板也能展开"
-      ],
-      "cons": [
-        "屏幕小，长期多窗口编程略显局促",
-        "接口少，外接设备需要转接坞",
-        "无独立显卡"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH001",
-      "name": "磐石 A5",
-      "category": "phone",
-      "price": 1799,
-      "brand": "磐石",
-      "specs": {
-        "chip": "天玑 7050",
-        "chip_tier": 3,
-        "ram_gb": 8,
-        "storage_gb": 256,
-        "screen_size": 6.6,
-        "weight_g": 195,
-        "battery_mah": 5000,
-        "camera_tier": 2
-      },
-      "use_cases": [
-        "日常",
-        "上网",
+        "通勤",
         "影音"
       ],
       "pros": [
-        "价格不到 1800",
-        "5000mAh 电池，中度使用能撑两天",
-        "256G 存储够日常照片与应用"
+        "仅 0.98kg、厚 13.5mm，1kg 内的旗舰 Ultra 平台轻薄本，商旅便携突出",
+        "14.2 英寸 3120×2080 120Hz OLED 触控屏，3:2 比例利于办公",
+        "70Wh 电池 + 90W 快充，官方本地视频续航约 11 小时"
       ],
       "cons": [
-        "芯片档位中端，大型游戏需要降画质",
-        "拍照档位偏低，夜景表现一般"
+        "无独立显卡，图形与游戏性能有限",
+        "仅雷电4 与 USB-C 接口，外接需转接",
+        "实际办公/网页负载续航约 5.5–6.5 小时，与标称有差距"
       ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://www.expreview.com/93225.html",
+      "image_url": "https://2d.zol-img.com.cn/product/262_600x450/937/ce1aQshZjKM.png",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "PH001",
+      "name": "红米 Turbo 4",
+      "brand": "红米",
+      "category": "phone",
+      "model": "Turbo 4",
+      "price": 1499,
+      "specs": {
+        "chip": "天玑 8400-Ultra",
+        "chip_tier": 4,
+        "ram_gb": 12,
+        "storage_gb": 256,
+        "screen_size": 6.67,
+        "weight_g": 204,
+        "battery_mah": 6550,
+        "camera_tier": 3
+      },
+      "use_cases": [
+        "游戏",
+        "日常",
+        "通勤",
+        "影音"
+      ],
+      "pros": [
+        "天玑8400-Ultra 为 8 颗 A725 全大核架构，安兔兔约 186 万分，性能接近旗舰",
+        "6550mAh 金沙江电池配 90W 快充，重度使用续航充裕",
+        "支持 IP66/IP68/IP69 防水，同价位罕见",
+        "1.5K 120Hz 直屏，3200nit 峰值亮度，户外可视性好"
+      ],
+      "cons": [
+        "机身约 203.5g，长时间单手握持偏重",
+        "副摄仅 800 万像素超广角，无长焦镜头",
+        "中框为塑料材质，整机质感一般"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://detail.zol.com.cn/cell_phone/index2117749.shtml",
+      "image_url": "https://2f.zol-img.com.cn/product/270/959/ce4qa41s3jNXQ.png",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
     },
     {
       "id": "PH002",
-      "name": "曜影 X7",
+      "name": "荣耀 X70",
+      "brand": "荣耀",
       "category": "phone",
-      "price": 4299,
-      "brand": "曜影",
+      "model": "X70",
+      "price": 1599,
       "specs": {
-        "chip": "骁龙 8 Gen3",
+        "chip": "骁龙 6 Gen 4",
+        "chip_tier": 2,
+        "ram_gb": 8,
+        "storage_gb": 256,
+        "screen_size": 6.79,
+        "weight_g": 193,
+        "battery_mah": 8300,
+        "camera_tier": 2
+      },
+      "use_cases": [
+        "通勤",
+        "长途",
+        "户外",
+        "日常"
+      ],
+      "pros": [
+        "8300mAh 青海湖电池，是同期同价位电池容量最大的机型",
+        "6.79 英寸 1.5K 直屏，3840Hz 超高频 PWM 调光，护眼",
+        "IP69K 满级防水加金标三防抗摔认证，耐用性突出",
+        "193g 重量对 8300mAh 大电池机型控制较好"
+      ],
+      "cons": [
+        "骁龙6 Gen 4 性能入门，运行大型 3D 游戏吃力",
+        "后置仅单颗 5000 万像素主摄，缺少超广角与长焦",
+        "80W 有线充电充满 8300mAh 耗时较长"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://detail.zol.com.cn/cell_phone/index2132773.shtml",
+      "image_url": "https://2e.zol-img.com.cn/product/272/2/ceDhJ6Sjoi8ik.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "PH003",
+      "name": "iQOO Z9 Turbo",
+      "brand": "iQOO",
+      "category": "phone",
+      "model": "Z9 Turbo",
+      "price": 1799,
+      "specs": {
+        "chip": "骁龙 8s Gen 3",
+        "chip_tier": 4,
+        "ram_gb": 12,
+        "storage_gb": 256,
+        "screen_size": 6.78,
+        "weight_g": 195,
+        "battery_mah": 6000,
+        "camera_tier": 3
+      },
+      "use_cases": [
+        "游戏",
+        "影音",
+        "上网",
+        "日常"
+      ],
+      "pros": [
+        "骁龙8s Gen 3 加独显芯片 Turbo，游戏帧率稳定、跑分高",
+        "6.78 英寸 1.5K 144Hz 直屏，支持 3840Hz 高频调光",
+        "6000mAh 蓝海电池配 80W 快充，兼顾性能与续航",
+        "拥有 KPL 比赛用机认证，触控采样最高 2000Hz"
+      ],
+      "cons": [
+        "无长焦镜头，副摄 800 万像素超广角规格一般",
+        "防水等级仅 IP64，低于同价位部分机型",
+        "中框为塑料材质，机身质感普通"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://detail.zol.com.cn/cell_phone/index2002740.shtml",
+      "image_url": "https://2d.zol-img.com.cn/product/262/365/cexRX99uoxNU.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "PH004",
+      "name": "真我 GT Neo6 SE",
+      "brand": "真我",
+      "category": "phone",
+      "model": "GT Neo6 SE",
+      "price": 1899,
+      "specs": {
+        "chip": "骁龙 7+ Gen 3",
+        "chip_tier": 4,
+        "ram_gb": 12,
+        "storage_gb": 256,
+        "screen_size": 6.78,
+        "weight_g": 191,
+        "battery_mah": 5500,
+        "camera_tier": 3
+      },
+      "use_cases": [
+        "游戏",
+        "拍照",
+        "影音",
+        "日常"
+      ],
+      "pros": [
+        "骁龙7+ Gen 3 与骁龙8 Gen3 同款超大核架构，性能接近 8s Gen 3",
+        "6.78 英寸 1.5K 无双屏，局部峰值 6000nit，户外强光下清晰",
+        "支持 100W 光速秒充，官方称约 29 分钟充满",
+        "机身约 191g、8.65mm，较为轻薄"
+      ],
+      "cons": [
+        "5500mAh 电池容量在 2000 元档偏小",
+        "防水等级仅 IP65，防护能力一般",
+        "副摄 800 万像素超广角规格普通"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://detail.zol.com.cn/cell_phone/index1994923.shtml",
+      "image_url": "https://2f.zol-img.com.cn/product/262/441/cePV9UNCv3D8M.png",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "PH005",
+      "name": "OPPO K12 Plus",
+      "brand": "OPPO",
+      "category": "phone",
+      "model": "K12 Plus",
+      "price": 1999,
+      "specs": {
+        "chip": "骁龙 7 Gen 3",
+        "chip_tier": 3,
+        "ram_gb": 12,
+        "storage_gb": 256,
+        "screen_size": 6.7,
+        "weight_g": 192,
+        "battery_mah": 6400,
+        "camera_tier": 3
+      },
+      "use_cases": [
+        "游戏",
+        "通勤",
+        "影音",
+        "日常"
+      ],
+      "pros": [
+        "6400mAh 大电池配 80W 超级闪充，官方宣称 DOU 续航约 2.2 天",
+        "192g 重量在同电池容量机型中相对轻盈",
+        "通过 SGS 五星整机抗跌耐摔认证，机身耐用",
+        "保留 3.5mm 耳机孔并支持最高 1TB 存储卡扩展"
+      ],
+      "cons": [
+        "骁龙7 Gen 3 属中端芯片，不适合长时间高负载游戏",
+        "内存为 LPDDR4X 规格，落后于同价位 LPDDR5 机型",
+        "副摄 800 万像素超广角成像素质一般"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://detail.zol.com.cn/cell_phone/index2109643.shtml",
+      "image_url": "https://2b.zol-img.com.cn/product/269/819/ceyyh3LKewh7k.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "PH006",
+      "name": "OPPO Find X8",
+      "brand": "OPPO",
+      "category": "phone",
+      "model": "Find X8",
+      "price": 3199,
+      "specs": {
+        "chip": "天玑9400",
         "chip_tier": 5,
         "ram_gb": 12,
-        "storage_gb": 512,
-        "screen_size": 6.7,
-        "weight_g": 205,
+        "storage_gb": 256,
+        "screen_size": 6.59,
+        "weight_g": 193,
+        "battery_mah": 5630,
+        "camera_tier": 4
+      },
+      "use_cases": [
+        "拍照",
+        "日常",
+        "通勤",
+        "商旅"
+      ],
+      "pros": [
+        "7.85mm 厚、193g，直屏轻薄，手感与通勤便携好",
+        "三颗 5000万像素含 3 倍潜望长焦，影像焦段完整",
+        "5630mAh + 80W 有线 / 50W 无线充电，配置均衡"
+      ],
+      "cons": [
+        "天玑9400 虽强，但同价位多为骁龙 8 至尊版机型",
+        "超广角采用三星 JN5 小底，画质弱于主摄",
+        "无卫星通信功能，户外极端场景不如华为"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://www.oppo.com/cn/smartphones/series-find-x/find-x8/specs/",
+      "image_url": "https://2b.zol-img.com.cn/product/270_600x450/465/ceIF2PsnMyYGc.png",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "PH007",
+      "name": "小米 15",
+      "brand": "小米",
+      "category": "phone",
+      "model": "15",
+      "price": 3299,
+      "specs": {
+        "chip": "骁龙8至尊版",
+        "chip_tier": 5,
+        "ram_gb": 12,
+        "storage_gb": 256,
+        "screen_size": 6.36,
+        "weight_g": 191,
         "battery_mah": 5400,
         "camera_tier": 4
       },
       "use_cases": [
-        "游戏",
         "拍照",
-        "日常"
-      ],
-      "pros": [
-        "芯片档位最高，跑大型游戏没有压力",
-        "拍照档位高，白天与夜景都拿得出手",
-        "12G 内存，后台保活能力强"
-      ],
-      "cons": [
-        "4299 的价格对学生来说偏高",
-        "205g 机身偏重",
-        "高负载游戏后机身发热明显"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH003",
-      "name": "清水 Note 12",
-      "category": "phone",
-      "price": 2499,
-      "brand": "清水",
-      "specs": {
-        "chip": "骁龙 7s",
-        "chip_tier": 3,
-        "ram_gb": 12,
-        "storage_gb": 256,
-        "screen_size": 6.8,
-        "weight_g": 210,
-        "battery_mah": 6000,
-        "camera_tier": 3
-      },
-      "use_cases": [
         "日常",
-        "影音",
-        "续航"
-      ],
-      "pros": [
-        "6000mAh 是这批里最大的，重度使用也能撑一整天",
-        "大屏看视频舒服",
-        "12G 内存价格控制得不错"
-      ],
-      "cons": [
-        "210g 是这批里最重的之一",
-        "拍照档位中等",
-        "机身大，单手操作困难"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH004",
-      "name": "极简 Phone 9",
-      "category": "phone",
-      "price": 3499,
-      "brand": "极简",
-      "specs": {
-        "chip": "骁龙 8s",
-        "chip_tier": 4,
-        "ram_gb": 12,
-        "storage_gb": 256,
-        "screen_size": 6.1,
-        "weight_g": 168,
-        "battery_mah": 4500,
-        "camera_tier": 3
-      },
-      "use_cases": [
-        "日常",
-        "通勤",
-        "摄影"
-      ],
-      "pros": [
-        "168g 很轻，单手操作与长时间握持都舒服",
-        "系统预装应用少，没有广告推送",
-        "芯片档位较高，日常与中度游戏都流畅"
-      ],
-      "cons": [
-        "4500mAh 电池偏小，重度使用一天要充两次",
-        "价格 3499，比同档位国产机型贵",
-        "小屏看视频体验一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH005",
-      "name": "浪潮 Neo 5",
-      "category": "phone",
-      "price": 1299,
-      "brand": "浪潮",
-      "specs": {
-        "chip": "天玑 6100+",
-        "chip_tier": 2,
-        "ram_gb": 6,
-        "storage_gb": 128,
-        "screen_size": 6.5,
-        "weight_g": 200,
-        "battery_mah": 5000,
-        "camera_tier": 2
-      },
-      "use_cases": [
-        "日常",
-        "上网",
-        "通话"
-      ],
-      "pros": [
-        "1299 的价格是这批里最低的",
-        "5000mAh 电池，基础使用够用"
-      ],
-      "cons": [
-        "6G 内存偏小，应用多开容易重新加载",
-        "128G 存储安装常用应用后余量紧张",
-        "芯片与拍照档位都偏低",
-        "不建议用它做重度使用"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH006",
-      "name": "星辉 Pro Max",
-      "category": "phone",
-      "price": 5999,
-      "brand": "星辉",
-      "specs": {
-        "chip": "骁龙 8 Gen3",
-        "chip_tier": 5,
-        "ram_gb": 16,
-        "storage_gb": 1024,
-        "screen_size": 6.8,
-        "weight_g": 220,
-        "battery_mah": 5000,
-        "camera_tier": 5
-      },
-      "use_cases": [
-        "拍照",
         "游戏",
-        "生产力",
-        "影音"
-      ],
-      "pros": [
-        "芯片与拍照都是最高档位",
-        "16G + 1T，几乎不用担心存储和后台",
-        "大屏适合看文档与剪短视频"
-      ],
-      "cons": [
-        "5999 的价格远超一般学生预算",
-        "220g 是这批最重的",
-        "体积大，裤兜放不下"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP001",
-      "name": "静谷 ANC Lite",
-      "category": "headphone",
-      "price": 399,
-      "brand": "静谷",
-      "specs": {
-        "driver_mm": 40,
-        "connection": "蓝牙 5.3",
-        "battery_h": 40,
-        "weight_g": 260,
-        "noise_cancelling": true,
-        "audio_tier": 3
-      },
-      "use_cases": [
-        "通勤",
-        "学习",
-        "自习"
-      ],
-      "pros": [
-        "主动降噪在这个价位少见",
-        "标称续航 40 小时，一两周充一次",
-        "头梁压力小，戴一下午不夹头"
-      ],
-      "cons": [
-        "音质档位中等，听细节多的曲目会糊",
-        "外壳塑料感明显",
-        "不支持有线模式"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP002",
-      "name": "声纪 Air 3",
-      "category": "headphone",
-      "price": 899,
-      "brand": "声纪",
-      "specs": {
-        "driver_mm": 13,
-        "connection": "蓝牙 5.4",
-        "battery_h": 8,
-        "weight_g": 5,
-        "noise_cancelling": false,
-        "audio_tier": 3
-      },
-      "use_cases": [
-        "通勤",
-        "运动",
-        "通话"
-      ],
-      "pros": [
-        "单耳 5g，久戴无压迫感",
-        "半入耳设计，不闷耳道",
-        "连接稳定，延迟低"
-      ],
-      "cons": [
-        "无降噪，地铁上环境噪音挡不住",
-        "单次续航 8 小时，需要配合充电盒",
-        "899 在真无线里偏贵"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP003",
-      "name": "乐章 Studio",
-      "category": "headphone",
-      "price": 1999,
-      "brand": "乐章",
-      "specs": {
-        "driver_mm": 45,
-        "connection": "有线 + 蓝牙",
-        "battery_h": 30,
-        "weight_g": 290,
-        "noise_cancelling": true,
-        "audio_tier": 5
-      },
-      "use_cases": [
-        "听歌",
-        "编曲",
-        "录音",
-        "影音"
-      ],
-      "pros": [
-        "音质是这批里最高档位，乐器分离度好",
-        "有线和无线两种模式都支持",
-        "耳罩用料扎实，长期佩戴不闷汗"
-      ],
-      "cons": [
-        "1999 的价格是耳机里最贵的",
-        "290g 偏重，通勤戴久了脖子累",
-        "机身大，不便携"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP004",
-      "name": "静谷 ANC Pro",
-      "category": "headphone",
-      "price": 899,
-      "brand": "静谷",
-      "specs": {
-        "driver_mm": 42,
-        "connection": "蓝牙 5.3",
-        "battery_h": 50,
-        "weight_g": 250,
-        "noise_cancelling": true,
-        "audio_tier": 4
-      },
-      "use_cases": [
-        "通勤",
-        "学习",
-        "长途",
-        "自习"
-      ],
-      "pros": [
-        "降噪深度明显强于同价位",
-        "50 小时续航，出差一周不用带充电线",
-        "899 的价格把降噪和续航都给了"
-      ],
-      "cons": [
-        "音质档位中上但不出彩",
-        "降噪开启时有轻微耳压感",
-        "外观设计偏保守"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP005",
-      "name": "声纪 Buds 青春版",
-      "category": "headphone",
-      "price": 149,
-      "brand": "声纪",
-      "specs": {
-        "driver_mm": 10,
-        "connection": "蓝牙 5.0",
-        "battery_h": 5,
-        "weight_g": 4,
-        "noise_cancelling": false,
-        "audio_tier": 1
-      },
-      "use_cases": [
-        "通勤",
-        "日常"
-      ],
-      "pros": [
-        "149 的价格几乎没有门槛",
-        "单耳 4g，戴着几乎无感"
-      ],
-      "cons": [
-        "蓝牙 5.0，人多的地方容易断连",
-        "音质档位最低，低音基本没有",
-        "单次续航 5 小时，充电盒补偿也有限",
-        "无降噪"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP006",
-      "name": "律动 Sport",
-      "category": "headphone",
-      "price": 499,
-      "brand": "律动",
-      "specs": {
-        "driver_mm": 12,
-        "connection": "蓝牙 5.2",
-        "battery_h": 10,
-        "weight_g": 6,
-        "noise_cancelling": false,
-        "audio_tier": 3
-      },
-      "use_cases": [
-        "运动",
-        "跑步",
         "通勤"
       ],
       "pros": [
-        "带防水防汗等级，跑步出汗不怕",
-        "耳挂式设计，剧烈运动不掉",
-        "单次续航 10 小时"
+        "6.36 英寸小直屏仅 191g，单手握持与通勤携带友好",
+        "5400mAh 电池塞进小尺寸机身，续航优于多数小屏机",
+        "徕卡三摄均 5000万，主摄 1/1.3 英寸大底，暗光成片好"
       ],
       "cons": [
-        "低频偏弱，听摇滚不过瘾",
-        "无降噪",
-        "耳挂结构戴眼镜时有点别扭"
+        "12+256GB 版本存储偏小，且不支持存储卡扩展",
+        "机身小、散热受限，长时间高负载游戏易降频",
+        "长焦为 2.6 倍浮动镜头、传感器较小，远摄规格一般"
       ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB001",
-      "name": "键语 K87 机械键盘",
-      "category": "keyboard",
-      "price": 299,
-      "brand": "键语",
-      "specs": {
-        "layout": "87 键",
-        "switch_type": "青轴",
-        "connection": "有线",
-        "weight_g": 800,
-        "wireless": false,
-        "hot_swappable": false,
-        "noise_level": 5
-      },
-      "use_cases": [
-        "编程",
-        "游戏",
-        "打字"
-      ],
-      "pros": [
-        "青轴段落感明确，打字确认感强",
-        "299 的价格对手感来说是低门槛",
-        "全键无冲，游戏连招不丢键"
-      ],
-      "cons": [
-        "青轴声音很响，宿舍或图书馆用会被投诉",
-        "有线，桌面走线麻烦",
-        "800g，不便携"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB002",
-      "name": "键语 K68 无线双模",
-      "category": "keyboard",
-      "price": 399,
-      "brand": "键语",
-      "specs": {
-        "layout": "68 键",
-        "switch_type": "红轴",
-        "connection": "无线 + 有线",
-        "weight_g": 620,
-        "wireless": true,
-        "hot_swappable": false,
-        "noise_level": 2
-      },
-      "use_cases": [
-        "编程",
-        "办公",
-        "便携",
-        "图书馆"
-      ],
-      "pros": [
-        "红轴直上直下，声音轻，图书馆可用",
-        "620g 加无线，塞进包里带走方便",
-        "无线有线双模，没电也能插线用"
-      ],
-      "cons": [
-        "68 键没有独立小键盘与 F 区，需要适应",
-        "无线模式偶尔有轻微延迟"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB003",
-      "name": "静默 M75 静音键盘",
-      "category": "keyboard",
-      "price": 199,
-      "brand": "静默",
-      "specs": {
-        "layout": "75 键",
-        "switch_type": "静音红轴",
-        "connection": "有线",
-        "weight_g": 700,
-        "wireless": false,
-        "hot_swappable": false,
-        "noise_level": 1
-      },
-      "use_cases": [
-        "办公",
-        "图书馆",
-        "自习"
-      ],
-      "pros": [
-        "静音轴，是这批里最安静的一把",
-        "199 的价格很便宜",
-        "75 键保留了方向键，比 68 键好上手"
-      ],
-      "cons": [
-        "静音轴手感偏软，触底反馈不清晰",
-        "有线",
-        "键帽用料一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB004",
-      "name": "极客 Pro 98 客制化",
-      "category": "keyboard",
-      "price": 899,
-      "brand": "极客",
-      "specs": {
-        "layout": "98 键",
-        "switch_type": "热插拔（默认茶轴）",
-        "connection": "无线三模",
-        "weight_g": 900,
-        "wireless": true,
-        "hot_swappable": true,
-        "noise_level": 2
-      },
-      "use_cases": [
-        "编程",
-        "客制化",
-        "办公"
-      ],
-      "pros": [
-        "热插拔，可以自己换轴体，手感能慢慢调",
-        "98 键保留小键盘又比全尺寸短",
-        "无线三模，多设备切换方便"
-      ],
-      "cons": [
-        "899 是这批里最贵的",
-        "900g 很重，基本不能带着走",
-        "入门客制化还要额外买轴体和键帽，预算会被拉高"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB005",
-      "name": "清风 87 薄膜键盘",
-      "category": "keyboard",
-      "price": 89,
-      "brand": "清风",
-      "specs": {
-        "layout": "87 键",
-        "switch_type": "薄膜",
-        "connection": "有线",
-        "weight_g": 500,
-        "wireless": false,
-        "hot_swappable": false,
-        "noise_level": 1
-      },
-      "use_cases": [
-        "办公",
-        "日常",
-        "图书馆"
-      ],
-      "pros": [
-        "89 的价格是最低的",
-        "薄膜结构安静，不打扰室友",
-        "500g，相对轻便"
-      ],
-      "cons": [
-        "手感偏平，长时间打字容易累",
-        "薄膜结构寿命明显短于机械轴",
-        "无背光，晚上关灯看不清键位"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP008",
-      "name": "华构 Creator 16",
-      "category": "laptop",
-      "price": 8299,
-      "brand": "华构",
-      "specs": {
-        "cpu": "Ultra9-185H",
-        "cpu_tier": 5,
-        "ram_gb": 32,
-        "storage_gb": 1024,
-        "screen_size": 16,
-        "weight_kg": 1.95,
-        "battery_h": 8,
-        "has_dedicated_gpu": true
-      },
-      "use_cases": [
-        "视频剪辑",
-        "三维渲染",
-        "编程",
-        "影音"
-      ],
-      "pros": [
-        "32G 内存加独立显卡，剪 4K 时间线不用代理",
-        "屏幕出厂逐台校色，调色时不用再买校色仪",
-        "双风扇加均热板，长时间渲染不掉频"
-      ],
-      "cons": [
-        "8299 是这批里最贵的",
-        "1.95kg 加电源适配器接近 2.7kg，基本固定在工位用",
-        "续航约 8 小时，高负载下掉得更快"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP009",
-      "name": "萤石 Book 15",
-      "category": "laptop",
-      "price": 3099,
-      "brand": "萤石",
-      "specs": {
-        "cpu": "R5-7530U",
-        "cpu_tier": 3,
-        "ram_gb": 16,
-        "storage_gb": 1024,
-        "screen_size": 15.6,
-        "weight_kg": 1.72,
-        "battery_h": 8,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "学习",
-        "办公",
-        "网课",
-        "影音"
-      ],
-      "pros": [
-        "3000 出头给到 1T 固态，不用另外加硬盘",
-        "15.6 寸大屏，同时开两个窗口看文档和代码不挤"
-      ],
-      "cons": [
-        "1.72kg 在这个价位算重的，每天通勤背着累",
-        "屏幕色域一般，修图会偏色",
-        "核显，3D 游戏基本跑不动"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP010",
-      "name": "折光 Flip 14 二合一",
-      "category": "laptop",
-      "price": 4799,
-      "brand": "折光",
-      "specs": {
-        "cpu": "Ultra5-125H",
-        "cpu_tier": 4,
-        "ram_gb": 16,
-        "storage_gb": 512,
-        "screen_size": 14,
-        "weight_kg": 1.55,
-        "battery_h": 9,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "办公",
-        "学习",
-        "影音",
-        "手写笔记"
-      ],
-      "pros": [
-        "360 度翻转加触控笔，上课可以直接在 PDF 上做批注",
-        "平板模式下看文献、画流程图方便",
-        "处理器档位较高，日常多开不卡"
-      ],
-      "cons": [
-        "翻转转轴占了内部空间，1.55kg 比同尺寸普通本重",
-        "转轴长期开合有松动风险，比普通本多一个故障点",
-        "同配置的非触控机型便宜约 700 元"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH007",
-      "name": "长缨 Max 5",
-      "category": "phone",
-      "price": 2299,
-      "brand": "长缨",
-      "specs": {
-        "chip": "骁龙 7+ Gen2",
-        "chip_tier": 4,
-        "ram_gb": 12,
-        "storage_gb": 256,
-        "screen_size": 6.7,
-        "weight_g": 205,
-        "battery_mah": 6200,
-        "camera_tier": 3
-      },
-      "use_cases": [
-        "日常",
-        "续航",
-        "影音",
-        "游戏"
-      ],
-      "pros": [
-        "6200mAh 是这批里最大的，重度使用能撑一天半",
-        "芯片档位偏高，中大型游戏开中画质能稳",
-        "12G 内存，应用多开不容易被后台清掉"
-      ],
-      "cons": [
-        "205g 偏重，长时间单手拿会累",
-        "机身偏厚，握持手感一般",
-        "拍照档位中等，夜景成片率低"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://g.pconline.com.cn/product/mobile/miui/2336139_detail.html",
+      "image_url": "https://img4.pconline.com.cn/pconline/images/product/20241029/23223059.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
     },
     {
       "id": "PH008",
-      "name": "云影 Compact",
+      "name": "vivo X200",
+      "brand": "vivo",
       "category": "phone",
-      "price": 4699,
-      "brand": "云影",
+      "model": "X200",
+      "price": 3599,
       "specs": {
-        "chip": "骁龙 8 Gen3",
+        "chip": "天玑9400",
         "chip_tier": 5,
         "ram_gb": 12,
-        "storage_gb": 512,
-        "screen_size": 6.1,
-        "weight_g": 172,
-        "battery_mah": 4700,
+        "storage_gb": 256,
+        "screen_size": 6.67,
+        "weight_g": 202,
+        "battery_mah": 5800,
+        "camera_tier": 4
+      },
+      "use_cases": [
+        "拍照",
+        "日常",
+        "影音",
+        "旅行"
+      ],
+      "pros": [
+        "5800mAh 大电池 + 90W 快充，续航与回血都强",
+        "蔡司 5000万三摄含 3 倍潜望长焦，100 倍变焦可用",
+        "天玑9400 性能释放强，游戏帧率稳"
+      ],
+      "cons": [
+        "202g 重、7.99mm 厚，机身偏沉",
+        "屏幕为微四曲，非纯直屏，贴膜与边缘触控体验打折",
+        "不支持无线充电，缺少高端机常见配置"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://m.vivo.com.cn/vivo/param/x200",
+      "image_url": "https://2a.zol-img.com.cn/product/270_600x450/332/ce4iT8nTIYJ96.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
+    },
+    {
+      "id": "PH009",
+      "name": "华为 Mate 70",
+      "brand": "华为",
+      "category": "phone",
+      "model": "Mate 70",
+      "price": 4299,
+      "specs": {
+        "chip": "麒麟9010",
+        "chip_tier": 4,
+        "ram_gb": 12,
+        "storage_gb": 256,
+        "screen_size": 6.7,
+        "weight_g": 203,
+        "battery_mah": 5300,
         "camera_tier": 5
       },
       "use_cases": [
         "拍照",
-        "通勤",
-        "日常",
-        "摄影"
+        "商旅",
+        "送礼",
+        "日常"
       ],
       "pros": [
-        "172g 的小屏旗舰，单手操作和放裤兜都舒服",
-        "芯片与拍照都是最高档位，小机身没缩水",
-        "6.1 寸屏加窄边框，实际显示面积不小"
+        "5000万可变光圈主摄 + 5.5 倍潜望长焦，红枫原色影像色彩还原准",
+        "5300mAh 电池、IP68/IP69 防护，耐用与商务属性强",
+        "支持双向北斗卫星消息，无地面网络也能通信"
       ],
       "cons": [
-        "4700mAh 续航一般，重度使用一天两充",
-        "4699 的价格对学生来说偏高",
-        "小屏看视频和玩游戏的体验不如大屏"
+        "麒麟 9010 性能落后同价位骁龙/天玑旗舰，重载游戏吃力",
+        "203g 机身偏重，长时间单手使用较累",
+        "屏幕用侧边指纹，解锁方案不如同价位超声波屏下指纹先进"
       ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP007",
-      "name": "云听 H1",
-      "category": "headphone",
-      "price": 699,
-      "brand": "云听",
-      "specs": {
-        "driver_mm": 40,
-        "connection": "蓝牙 5.4",
-        "battery_h": 60,
-        "weight_g": 240,
-        "noise_cancelling": true,
-        "audio_tier": 3
-      },
-      "use_cases": [
-        "通勤",
-        "学习",
-        "长途",
-        "办公"
-      ],
-      "pros": [
-        "60 小时续航，是同价位里最长的，出差一周不用带线",
-        "240g 佩戴轻，戴一下午耳朵不夹",
-        "蓝牙 5.4，连接比 5.2 的机型更稳、延迟更低"
-      ],
-      "cons": [
-        "音质档位中等，听编曲复杂的曲子会觉得平",
-        "降噪深度一般，地铁上仍有残余低频噪音",
-        "外壳塑料感明显，戴出门颜值一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP008",
-      "name": "声阔 Plus",
-      "category": "headphone",
-      "price": 1299,
-      "brand": "声阔",
-      "specs": {
-        "driver_mm": 12,
-        "connection": "蓝牙 5.4",
-        "battery_h": 9,
-        "weight_g": 5,
-        "noise_cancelling": true,
-        "audio_tier": 5
-      },
-      "use_cases": [
-        "通勤",
-        "运动",
-        "通话",
-        "听歌"
-      ],
-      "pros": [
-        "真无线里音质最高档位，而且带主动降噪",
-        "单耳 5g，戴久了几乎没有异物感",
-        "双设备同时连接，电脑和手机切换不用重新配对"
-      ],
-      "cons": [
-        "单次续航 9 小时，长途要带充电盒",
-        "1299 在真无线里偏贵",
-        "开降噪后音质会略打折扣"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB006",
-      "name": "薄刃 K68 矮轴",
-      "category": "keyboard",
-      "price": 249,
-      "brand": "薄刃",
-      "specs": {
-        "layout": "68 键",
-        "switch_type": "矮红轴",
-        "connection": "有线",
-        "weight_g": 480,
-        "wireless": false,
-        "hot_swappable": false,
-        "noise_level": 2
-      },
-      "use_cases": [
-        "办公",
-        "编程",
-        "便携",
-        "图书馆"
-      ],
-      "pros": [
-        "480g 是这批机械键盘里最轻的，塞包里带走没负担",
-        "矮轴行程短，长时间打字手腕不累",
-        "声音轻，图书馆和宿舍都能用"
-      ],
-      "cons": [
-        "矮轴手感偏平，喜欢段落感的人会不适应",
-        "键帽是非标尺寸，想换键帽基本买不到",
-        "有线，桌面走线麻烦"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB007",
-      "name": "承光 K108 全尺寸",
-      "category": "keyboard",
-      "price": 599,
-      "brand": "承光",
-      "specs": {
-        "layout": "108 键",
-        "switch_type": "茶轴",
-        "connection": "无线三模",
-        "weight_g": 980,
-        "wireless": true,
-        "hot_swappable": false,
-        "noise_level": 3
-      },
-      "use_cases": [
-        "办公",
-        "编程",
-        "打字",
-        "会计"
-      ],
-      "pros": [
-        "带独立数字键区，做表格和记账快很多",
-        "无线三模，可以同时连台式机、笔记本和平板",
-        "茶轴段落感适中，长时间敲字不累也不吵"
-      ],
-      "cons": [
-        "980g 很重，只能固定放在桌面上",
-        "108 键占地大，小桌面放不下",
-        "键位距离比 87 键宽，从笔记本换过来要适应几天"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB008",
-      "name": "拾光 65 入门客制化",
-      "category": "keyboard",
-      "price": 649,
-      "brand": "拾光",
-      "specs": {
-        "layout": "65 键",
-        "switch_type": "热插拔（默认红轴）",
-        "connection": "无线三模",
-        "weight_g": 690,
-        "wireless": true,
-        "hot_swappable": true,
-        "noise_level": 2
-      },
-      "use_cases": [
-        "编程",
-        "客制化",
-        "便携",
-        "办公"
-      ],
-      "pros": [
-        "649 就能买到热插拔加三模，是入门客制化的低门槛",
-        "65 键保留方向键又够短，装进双肩包不占地方",
-        "Gasket 结构，手感比同价位硬壳键盘软弹"
-      ],
-      "cons": [
-        "65 键没有独立 F 区，调音量和亮度要按组合键",
-        "原厂配的是 ABS 键帽，用久了会打油发亮",
-        "轴体默认红轴，想换手感还要另外买轴"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP011",
-      "name": "云梯 S14 入门学习本",
-      "category": "laptop",
-      "price": 2799,
-      "brand": "云梯",
-      "specs": {
-        "cpu": "i3-N305",
-        "cpu_tier": 2,
-        "ram_gb": 8,
-        "storage_gb": 512,
-        "screen_size": 14,
-        "weight_kg": 1.5,
-        "battery_h": 8,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "上网",
-        "文档",
-        "网课",
-        "学习"
-      ],
-      "pros": [
-        "2799 这个价位给到了 512G 固态，不是 256G",
-        "1.5kg 在入门本里算轻的",
-        "屏幕是 1080P 雾面，反光比镜面屏小"
-      ],
-      "cons": [
-        "8G 内存偏小，开多个浏览器标签会吃紧",
-        "处理器只有 8 核小核，视频转码这类任务很慢",
-        "没有独立显卡"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP012",
-      "name": "磐石 军工本 T14",
-      "category": "laptop",
-      "price": 3499,
-      "brand": "磐石",
-      "specs": {
-        "cpu": "R7-7730U",
-        "cpu_tier": 4,
-        "ram_gb": 16,
-        "storage_gb": 512,
-        "screen_size": 14,
-        "weight_kg": 1.9,
-        "battery_h": 12,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "办公",
-        "编程",
-        "户外",
-        "长途"
-      ],
-      "pros": [
-        "机身做了加固和防泼溅，工地、实验室这类环境更抗造",
-        "12 小时续航，全天在外不用找插座",
-        "处理器档位不低，同价位里性能靠前"
-      ],
-      "cons": [
-        "1.9kg 是 14 寸里偏重的，加固机身换来的",
-        "机身厚，装不进一些薄款内胆包",
-        "屏幕亮度一般，户外强光下偏暗"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP013",
-      "name": "星尘 Slim 15",
-      "category": "laptop",
-      "price": 4199,
-      "brand": "星尘",
-      "specs": {
-        "cpu": "Ultra5-125H",
-        "cpu_tier": 4,
-        "ram_gb": 16,
-        "storage_gb": 1024,
-        "screen_size": 15.6,
-        "weight_kg": 1.6,
-        "battery_h": 10,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "办公",
-        "编程",
-        "影音",
-        "学习"
-      ],
-      "pros": [
-        "15.6 寸大屏机身只有 1.6kg，比同尺寸的轻 0.2kg 左右",
-        "1T 固态，装完系统和常用软件还剩一大半",
-        "接口齐全，HDMI 和读卡器都在，不用带转接坞"
-      ],
-      "cons": [
-        "大屏机身刚性一般，单手拿一侧会有点形变",
-        "核显，只能应付轻量游戏",
-        "键盘没有独立数字区，做表格慢"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP014",
-      "name": "砺锋 T14 商务本",
-      "category": "laptop",
-      "price": 4999,
-      "brand": "砺锋",
-      "specs": {
-        "cpu": "Ultra7-165U",
-        "cpu_tier": 4,
-        "ram_gb": 32,
-        "storage_gb": 1024,
-        "screen_size": 14,
-        "weight_kg": 1.35,
-        "battery_h": 14,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "办公",
-        "编程",
-        "长途",
-        "会议"
-      ],
-      "pros": [
-        "14 小时续航是这批里最长的，跨天出差不用带充电器",
-        "32G 内存，同时开几十个网页和多个 IDE 也不卡",
-        "1.35kg 加长续航，商务出行的组合最舒服"
-      ],
-      "cons": [
-        "低功耗处理器，长时间编译比标压机型慢",
-        "没有独立显卡",
-        "价格 4999，比同尺寸的消费本贵约 900 元"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP015",
-      "name": "织风 13 触控轻薄",
-      "category": "laptop",
-      "price": 5599,
-      "brand": "织风",
-      "specs": {
-        "cpu": "Ultra7-155H",
-        "cpu_tier": 5,
-        "ram_gb": 16,
-        "storage_gb": 512,
-        "screen_size": 13.5,
-        "weight_kg": 1.2,
-        "battery_h": 11,
-        "has_dedicated_gpu": false
-      },
-      "use_cases": [
-        "办公",
-        "通勤",
-        "学习",
-        "写作"
-      ],
-      "pros": [
-        "1.2kg 加触控屏，飞机小桌板上也能翻开用",
-        "屏幕支持手写笔，改文档和做批注顺手",
-        "处理器档位最高的一档，13 寸机身里性能很足"
-      ],
-      "cons": [
-        "13.5 寸屏长期多窗口编程会局促",
-        "只有两个 Type-C 口，外接显示器就要占掉一个",
-        "5599 的价格在 13 寸里偏高"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP016",
-      "name": "拓界 17 大屏创作本",
-      "category": "laptop",
-      "price": 6399,
-      "brand": "拓界",
-      "specs": {
-        "cpu": "R9-8945HS",
-        "cpu_tier": 5,
-        "ram_gb": 32,
-        "storage_gb": 1024,
-        "screen_size": 17,
-        "weight_kg": 2.2,
-        "battery_h": 8,
-        "has_dedicated_gpu": true
-      },
-      "use_cases": [
-        "视频剪辑",
-        "三维渲染",
-        "编程",
-        "影音"
-      ],
-      "pros": [
-        "17 寸大屏，时间线不用横向拖来拖去",
-        "32G 内存加独立显卡，渲染和导出都快",
-        "散热空间大，满载时风扇噪音比 14 寸游戏本低"
-      ],
-      "cons": [
-        "2.2kg 基本搬不动，适合当固定工作站",
-        "17 寸机身普通的双肩包放不下，要买 17 寸专用包",
-        "续航约 8 小时，但高负载下掉得快"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "LP017",
-      "name": "幻境 G16 电竞本",
-      "category": "laptop",
-      "price": 7499,
-      "brand": "幻境",
-      "specs": {
-        "cpu": "i9-14900HX",
-        "cpu_tier": 5,
-        "ram_gb": 32,
-        "storage_gb": 1024,
-        "screen_size": 16,
-        "weight_kg": 2.45,
-        "battery_h": 5,
-        "has_dedicated_gpu": true
-      },
-      "use_cases": [
-        "游戏",
-        "三维渲染",
-        "视频剪辑"
-      ],
-      "pros": [
-        "处理器和显卡都是这批里的顶配，3A 大作开高画质能稳",
-        "高刷新率电竞屏，射击游戏拖影明显更少",
-        "32G 内存，边游戏边录屏也不会掉帧"
-      ],
-      "cons": [
-        "2.45kg 加适配器超过 3.2kg，基本固定在桌上",
-        "续航只有约 5 小时，拔电玩游戏撑不过两小时",
-        "7499 是这批里第二贵的"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH009",
-      "name": "清风 大屏长辈机",
-      "category": "phone",
-      "price": 1499,
-      "brand": "清风",
-      "specs": {
-        "chip": "天玑 700",
-        "chip_tier": 2,
-        "ram_gb": 8,
-        "storage_gb": 256,
-        "screen_size": 6.8,
-        "weight_g": 215,
-        "battery_mah": 6000,
-        "camera_tier": 2
-      },
-      "use_cases": [
-        "日常",
-        "通话",
-        "影音",
-        "续航"
-      ],
-      "pros": [
-        "系统内置大字体和大音量模式，长辈上手不需要教",
-        "6000mAh 电池，两三天充一次",
-        "6.8 寸大屏，看视频和视频通话都清楚"
-      ],
-      "cons": [
-        "芯片档位低，玩游戏会卡",
-        "215g 偏重，长辈拿久了也累",
-        "拍照档位最低，只够记录用"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "http://m.zol.com/shop_176702/41896485.html",
+      "image_url": "https://2d.zol-img.com.cn/product/270_600x450/465/ceYF1AUiH9ays.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
     },
     {
       "id": "PH010",
-      "name": "长缨 Neo 游戏版",
+      "name": "苹果 iPhone 16",
+      "brand": "苹果",
       "category": "phone",
-      "price": 1999,
-      "brand": "长缨",
+      "model": "iPhone 16",
+      "price": 5399,
       "specs": {
-        "chip": "骁龙 7s Gen2",
-        "chip_tier": 3,
-        "ram_gb": 12,
-        "storage_gb": 256,
-        "screen_size": 6.7,
-        "weight_g": 210,
-        "battery_mah": 5500,
-        "camera_tier": 3
-      },
-      "use_cases": [
-        "游戏",
-        "日常",
-        "影音"
-      ],
-      "pros": [
-        "同价位里 12G 内存给得足，游戏后台不易被清",
-        "5500mAh 加散热铜管，连续玩两小时不明显降频",
-        "1999 就能有 120Hz 屏幕"
-      ],
-      "cons": [
-        "芯片档位中端，高画质原神要降设置",
-        "210g 偏重",
-        "塑料中框，质感一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH011",
-      "name": "曜影 直屏电竞版",
-      "category": "phone",
-      "price": 2799,
-      "brand": "曜影",
-      "specs": {
-        "chip": "骁龙 8s Gen3",
-        "chip_tier": 4,
-        "ram_gb": 12,
-        "storage_gb": 256,
-        "screen_size": 6.7,
-        "weight_g": 198,
-        "battery_mah": 5000,
-        "camera_tier": 3
-      },
-      "use_cases": [
-        "游戏",
-        "日常",
-        "影音"
-      ],
-      "pros": [
-        "直屏加高触控采样率，玩射击游戏不容易误触",
-        "芯片档位较高，主流手游都能开高帧",
-        "198g 比同性能的机型轻一些"
-      ],
-      "cons": [
-        "直屏在曲面屏为主的价位里显得保守，观感一般",
-        "拍照档位中等",
-        "充电功率一般，充满要一小时出头"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH012",
-      "name": "云影 Air 5 轻薄自拍",
-      "category": "phone",
-      "price": 2999,
-      "brand": "云影",
-      "specs": {
-        "chip": "骁龙 7 Gen3",
-        "chip_tier": 3,
-        "ram_gb": 12,
-        "storage_gb": 256,
-        "screen_size": 6.4,
-        "weight_g": 168,
-        "battery_mah": 4800,
-        "camera_tier": 4
-      },
-      "use_cases": [
-        "通勤",
-        "拍照",
-        "日常",
-        "摄影"
-      ],
-      "pros": [
-        "168g 很轻，长时间单手刷手机不累",
-        "前置摄像头档位高，自拍和视频通话画质好",
-        "6.4 寸单手能握住，放裤兜不硌"
-      ],
-      "cons": [
-        "4800mAh 续航一般，重度用一天要充两次",
-        "芯片档位中端，大型游戏要降画质",
-        "小屏看剧体验不如 6.7 寸以上的机型"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH013",
-      "name": "磐石 三防户外机",
-      "category": "phone",
-      "price": 3199,
-      "brand": "磐石",
-      "specs": {
-        "chip": "天玑 7300",
-        "chip_tier": 3,
-        "ram_gb": 12,
-        "storage_gb": 256,
-        "screen_size": 6.6,
-        "weight_g": 232,
-        "battery_mah": 6500,
-        "camera_tier": 3
-      },
-      "use_cases": [
-        "户外",
-        "运动",
-        "续航",
-        "长途"
-      ],
-      "pros": [
-        "防水防尘加防摔认证，下雨天和户外直接用不担心",
-        "6500mAh 电池，野外两天没问题",
-        "支持手套触控和湿手操作，冬天户外实用"
-      ],
-      "cons": [
-        "232g 是这批里最重的，日常带着沉",
-        "机身厚，无线充电基本没法用",
-        "拍照档位中等，硬件规格为耐用性做了让步"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH014",
-      "name": "清水 Note 13 均衡版",
-      "category": "phone",
-      "price": 3799,
-      "brand": "清水",
-      "specs": {
-        "chip": "骁龙 8s Gen3",
-        "chip_tier": 4,
-        "ram_gb": 12,
-        "storage_gb": 512,
-        "screen_size": 6.7,
-        "weight_g": 195,
-        "battery_mah": 5500,
-        "camera_tier": 4
-      },
-      "use_cases": [
-        "日常",
-        "游戏",
-        "拍照",
-        "影音"
-      ],
-      "pros": [
-        "芯片、拍照、续航都在中上档，没有明显短板",
-        "512G 存储，不用为了容量多花钱",
-        "195g 加 5500mAh，重量和续航平衡得好"
-      ],
-      "cons": [
-        "没有单项做到最高档，追求极致的人会觉得平庸",
-        "外观设计比较保守",
-        "3799 比同芯片的竞品略贵"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH015",
-      "name": "折光 Flip 小折叠",
-      "category": "phone",
-      "price": 4999,
-      "brand": "折光",
-      "specs": {
-        "chip": "骁龙 8s Gen3",
-        "chip_tier": 4,
-        "ram_gb": 12,
-        "storage_gb": 256,
-        "screen_size": 6.7,
-        "weight_g": 190,
-        "battery_mah": 4400,
-        "camera_tier": 4
-      },
-      "use_cases": [
-        "通勤",
-        "拍照",
-        "日常",
-        "便携"
-      ],
-      "pros": [
-        "折叠后只有掌心大小，放小包和口袋都方便",
-        "外屏能直接回消息和拍照，不用每次展开",
-        "展开后是大屏，看文档和视频都舒服"
-      ],
-      "cons": [
-        "4400mAh 续航偏短，重度使用一天两充",
-        "折痕在强光下能看出来",
-        "4999 买到的芯片档位不如同价位的直板机"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PH016",
-      "name": "砺锋 商务安全机",
-      "category": "phone",
-      "price": 5599,
-      "brand": "砺锋",
-      "specs": {
-        "chip": "骁龙 8 Gen3",
+        "chip": "A18",
         "chip_tier": 5,
-        "ram_gb": 16,
-        "storage_gb": 512,
-        "screen_size": 6.8,
-        "weight_g": 205,
-        "battery_mah": 5600,
+        "ram_gb": 8,
+        "storage_gb": 128,
+        "screen_size": 6.1,
+        "weight_g": 170,
+        "battery_mah": 3561,
         "camera_tier": 4
       },
       "use_cases": [
-        "办公",
-        "生产力",
-        "影音",
-        "长途"
-      ],
-      "pros": [
-        "内置独立安全芯片，商务资料加密更放心",
-        "5600mAh 加系统级省电，重度办公能用一天半",
-        "16G 内存，同时开会议、文档和浏览器不卡"
-      ],
-      "cons": [
-        "5599 的价格对普通用户偏高",
-        "205g 偏重",
-        "影像不是它的强项，拍照档位只是中上"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP009",
-      "name": "声纪 有线入耳 W1",
-      "category": "headphone",
-      "price": 199,
-      "brand": "声纪",
-      "specs": {
-        "driver_mm": 10,
-        "connection": "3.5mm 有线",
-        "battery_h": 0,
-        "weight_g": 12,
-        "noise_cancelling": false,
-        "audio_tier": 3
-      },
-      "use_cases": [
+        "日常",
+        "拍照",
         "通勤",
-        "游戏",
-        "听歌",
-        "办公"
-      ],
-      "pros": [
-        "有线连接没有延迟，打游戏听脚步声准",
-        "不用充电，插上就能用，也没有电池衰减问题",
-        "199 的价格几乎无门槛"
-      ],
-      "cons": [
-        "线材容易缠绕，收纳麻烦",
-        "没有麦克风降噪，嘈杂环境下通话对方听不清",
-        "接口是 3.5mm，新手机需要转接头"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP010",
-      "name": "律动 骨传导 S2",
-      "category": "headphone",
-      "price": 299,
-      "brand": "律动",
-      "specs": {
-        "driver_mm": 16,
-        "connection": "蓝牙 5.3",
-        "battery_h": 8,
-        "weight_g": 28,
-        "noise_cancelling": false,
-        "audio_tier": 3
-      },
-      "use_cases": [
-        "运动",
-        "跑步",
-        "骑行",
-        "户外"
-      ],
-      "pros": [
-        "不入耳设计，跑步时还能听到周围车辆，安全性高",
-        "耳挂式佩戴，剧烈运动也不会掉",
-        "IP67 防水，出汗和下雨都不怕"
-      ],
-      "cons": [
-        "开放式结构没有隔音，嘈杂环境要开大音量",
-        "低频几乎没有，听流行乐会觉得单薄",
-        "续航 8 小时，长距离骑行要中途充"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP011",
-      "name": "云听 Air Lite",
-      "category": "headphone",
-      "price": 349,
-      "brand": "云听",
-      "specs": {
-        "driver_mm": 14,
-        "connection": "蓝牙 5.3",
-        "battery_h": 7,
-        "weight_g": 4,
-        "noise_cancelling": false,
-        "audio_tier": 3
-      },
-      "use_cases": [
-        "通勤",
-        "通话",
-        "日常"
-      ],
-      "pros": [
-        "半入耳加充电盒共 30 小时，一周充一次",
-        "单耳 4g，戴着几乎没有感觉",
-        "349 的价格在真无线里很低"
-      ],
-      "cons": [
-        "没有降噪，地铁上环境音盖得住音乐",
-        "半入耳隔音天生弱，音量要开更大",
-        "音质档位中等，解析力一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP012",
-      "name": "锐鸣 游戏耳机 G7",
-      "category": "headphone",
-      "price": 549,
-      "brand": "锐鸣",
-      "specs": {
-        "driver_mm": 50,
-        "connection": "2.4G + 蓝牙",
-        "battery_h": 40,
-        "weight_g": 320,
-        "noise_cancelling": false,
-        "audio_tier": 3
-      },
-      "use_cases": [
-        "游戏",
-        "影音",
-        "通话"
-      ],
-      "pros": [
-        "2.4G 接收器延迟低，打竞技游戏音画能对上",
-        "可拆卸麦克风带降噪，开黑时队友听得清",
-        "50mm 大单元，游戏音效定位准"
-      ],
-      "cons": [
-        "320g 偏重，戴两小时头顶有压迫感",
-        "外观带灯效，不适合带去办公室或教室",
-        "音质偏重低频，听古典和女声一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP013",
-      "name": "云听 Open 开放式",
-      "category": "headphone",
-      "price": 799,
-      "brand": "云听",
-      "specs": {
-        "driver_mm": 16,
-        "connection": "蓝牙 5.4",
-        "battery_h": 12,
-        "weight_g": 9,
-        "noise_cancelling": false,
-        "audio_tier": 4
-      },
-      "use_cases": [
-        "办公",
-        "学习",
-        "通勤",
-        "运动"
-      ],
-      "pros": [
-        "开放式不堵耳道，戴一整天也不闷不胀",
-        "办公室用能同时听清同事说话，不用摘下来",
-        "单耳 9g，比头戴式轻得多"
-      ],
-      "cons": [
-        "几乎没有隔音，地铁和飞机上不合适",
-        "低频量感少，重低音曲目听着不够劲",
-        "799 的价格在开放式里偏高"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP014",
-      "name": "乐章 Monitor 监听版",
-      "category": "headphone",
-      "price": 999,
-      "brand": "乐章",
-      "specs": {
-        "driver_mm": 45,
-        "connection": "有线 + 蓝牙",
-        "battery_h": 35,
-        "weight_g": 285,
-        "noise_cancelling": false,
-        "audio_tier": 5
-      },
-      "use_cases": [
-        "听歌",
-        "编曲",
-        "录音",
         "影音"
       ],
       "pros": [
-        "调音平直不加染色，做混音时听到的是真实声音",
-        "有线和蓝牙双模，剪片子和移动监听都能用",
-        "音质档位最高，乐器分离度好"
+        "170g 重、6.1 英寸小屏，单手操控与便携性突出",
+        "A18 芯片单核性能强，iOS 系统长期流畅、更新支持久",
+        "IP68 防水，新增相机控制键操作顺手"
       ],
       "cons": [
-        "平直调音不适合纯娱乐，听流行会觉得不够刺激",
-        "285g 偏重，久戴脖子累",
-        "没有主动降噪"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP015",
-      "name": "静眠 SleepBuds 助眠版",
-      "category": "headphone",
-      "price": 1599,
-      "brand": "静眠",
-      "specs": {
-        "driver_mm": 6,
-        "connection": "蓝牙 5.4",
-        "battery_h": 10,
-        "weight_g": 2.6,
-        "noise_cancelling": true,
-        "audio_tier": 3
-      },
-      "use_cases": [
-        "睡眠",
-        "自习",
-        "长途",
-        "办公"
-      ],
-      "pros": [
-        "单耳 2.6g 是这批里最轻的，侧睡压不着耳朵",
-        "超薄机身贴合耳廓，翻身也不掉",
-        "内置白噪音，宿舍和飞机上能盖住环境音"
-      ],
-      "cons": [
-        "为睡眠设计，音质档位不高，听音乐一般",
-        "续航 10 小时，白天当日常耳机用要频繁充电",
-        "1599 只为助眠场景，性价比因人而异"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "HP016",
-      "name": "乐章 Studio Max",
-      "category": "headphone",
-      "price": 2499,
-      "brand": "乐章",
-      "specs": {
-        "driver_mm": 50,
-        "connection": "蓝牙 5.4",
-        "battery_h": 45,
-        "weight_g": 300,
-        "noise_cancelling": true,
-        "audio_tier": 5
-      },
-      "use_cases": [
-        "听歌",
-        "编曲",
-        "影音",
-        "长途"
-      ],
-      "pros": [
-        "音质与降噪都是最高档位，两样都不用妥协",
-        "45 小时续航，长途飞行一趟来回不用充电",
-        "支持无损传输协议，接播放器听细节更完整"
-      ],
-      "cons": [
-        "2499 是这批耳机里最贵的",
-        "300g 很重，长时间佩戴脖子有负担",
-        "收纳盒体积大，随身带占地方"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB009",
-      "name": "清风 无线办公 K104",
-      "category": "keyboard",
-      "price": 129,
-      "brand": "清风",
-      "specs": {
-        "layout": "104 键",
-        "switch_type": "薄膜",
-        "connection": "无线 2.4G",
-        "weight_g": 560,
-        "wireless": true,
-        "hot_swappable": false,
-        "noise_level": 1
-      },
-      "use_cases": [
-        "办公",
-        "文档",
-        "会计",
-        "日常"
-      ],
-      "pros": [
-        "无线加 104 键全尺寸，做表格不用凑合",
-        "薄膜结构安静，合租和开放办公室都合适",
-        "129 的价格最低，还带独立数字区"
-      ],
-      "cons": [
-        "薄膜手感平，长时间打字容易累",
-        "2.4G 单模，不能同时连多台设备",
-        "电池供电，需要定期换电池"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB010",
-      "name": "薄刃 M75 剪刀脚",
-      "category": "keyboard",
-      "price": 169,
-      "brand": "薄刃",
-      "specs": {
-        "layout": "75 键",
-        "switch_type": "剪刀脚",
-        "connection": "蓝牙 + 有线",
-        "weight_g": 420,
-        "wireless": true,
-        "hot_swappable": false,
-        "noise_level": 1
-      },
-      "use_cases": [
-        "办公",
-        "便携",
-        "图书馆",
-        "出差"
-      ],
-      "pros": [
-        "420g 是这批里最轻的，出差随手塞进包里",
-        "剪刀脚结构键程短，打字省力且几乎无声",
-        "蓝牙加有线双模，没电插线也能继续用"
-      ],
-      "cons": [
-        "键程短，喜欢机械手感的人不习惯",
-        "75 键布局紧凑，方向键和 Delete 要适应几天",
-        "键帽薄，长期使用有磨损"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB011",
-      "name": "拾光 61 迷你客制化",
-      "category": "keyboard",
-      "price": 229,
-      "brand": "拾光",
-      "specs": {
-        "layout": "61 键",
-        "switch_type": "热插拔（默认青轴）",
-        "connection": "有线",
-        "weight_g": 520,
-        "wireless": false,
-        "hot_swappable": true,
-        "noise_level": 4
-      },
-      "use_cases": [
-        "客制化",
-        "便携",
-        "打字"
-      ],
-      "pros": [
-        "61 键只有 A4 一半宽，桌面小或要带走都合适",
-        "热插拔，229 就能自己换轴玩",
-        "有线连接无延迟"
-      ],
-      "cons": [
-        "没有独立方向键和 F 区，全靠组合键，学习成本高",
-        "默认青轴很吵，不适合宿舍和办公室",
-        "键位太密，手指粗的人容易误触"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB012",
-      "name": "静默 M87 静音机械",
-      "category": "keyboard",
-      "price": 349,
-      "brand": "静默",
-      "specs": {
-        "layout": "87 键",
-        "switch_type": "静音茶轴",
-        "connection": "有线",
-        "weight_g": 760,
-        "wireless": false,
-        "hot_swappable": false,
-        "noise_level": 1
-      },
-      "use_cases": [
-        "办公",
-        "图书馆",
-        "自习",
-        "编程"
-      ],
-      "pros": [
-        "静音茶轴有段落反馈但声音很轻，是机械键盘里最安静的一档",
-        "87 键保留完整 F 区和方向键，不用适应",
-        "带 PBT 键帽，比 ABS 耐磨不打油"
-      ],
-      "cons": [
-        "静音轴手感偏软，触底反馈不如普通轴干脆",
-        "有线，桌面走线麻烦",
-        "没有背光，关灯后看不清键位"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB013",
-      "name": "承光 K96 紧凑全功能",
-      "category": "keyboard",
-      "price": 449,
-      "brand": "承光",
-      "specs": {
-        "layout": "96 键",
-        "switch_type": "红轴",
-        "connection": "无线三模",
-        "weight_g": 720,
-        "wireless": true,
-        "hot_swappable": false,
-        "noise_level": 2
-      },
-      "use_cases": [
-        "办公",
-        "编程",
-        "会计",
-        "日常"
-      ],
-      "pros": [
-        "96 键保留了数字区，但比 104 键短 8 公分，桌面能省出一块地方",
-        "无线三模，台式机和平板之间切换方便",
-        "红轴直上直下，声音比茶轴小"
-      ],
-      "cons": [
-        "键位压缩后方向键和数字区挨得近，容易误触",
-        "720g 不算轻，带出门略沉",
-        "非热插拔"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB014",
-      "name": "锐鸣 光轴电竞 K87",
-      "category": "keyboard",
-      "price": 549,
-      "brand": "锐鸣",
-      "specs": {
-        "layout": "87 键",
-        "switch_type": "光轴",
-        "connection": "有线",
-        "weight_g": 850,
-        "wireless": false,
-        "hot_swappable": false,
-        "noise_level": 4
-      },
-      "use_cases": [
-        "游戏",
-        "电竞",
-        "打字"
-      ],
-      "pros": [
-        "光轴触发快，连点和急停比机械轴更跟手",
-        "全键无冲，格斗游戏和音游不会丢键",
-        "支持板载宏，换机器不用重设"
-      ],
-      "cons": [
-        "光轴声音清脆但很响，宿舍用会被投诉",
-        "只能有线，桌面走线乱",
-        "为游戏优化，打字手感不如传统机械轴"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "KB015",
-      "name": "极客 Pro 铝坨坨 68",
-      "category": "keyboard",
-      "price": 799,
-      "brand": "极客",
-      "specs": {
-        "layout": "68 键",
-        "switch_type": "热插拔（默认银轴）",
-        "connection": "无线三模",
-        "weight_g": 1150,
-        "wireless": true,
-        "hot_swappable": true,
-        "noise_level": 2
-      },
-      "use_cases": [
-        "客制化",
-        "编程",
-        "办公"
-      ],
-      "pros": [
-        "全铝机身，敲起来有分量、不位移，手感是这批里最扎实的",
-        "Gasket 结构加多层填充，声音干净没有空腔音",
-        "热插拔加三模，可玩性和便利性都拉满"
-      ],
-      "cons": [
-        "1150g 是这批里最重的，完全没有便携性",
-        "799 的价格接近入门客制化的上限",
-        "铝合金冬天上手偏凉，且边角磕碰会留痕"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "AP001",
-      "name": "清澜 冰箱 BCD-318",
-      "category": "appliance",
-      "price": 2999,
-      "brand": "清澜",
-      "specs": {
-        "capacity_l": 318,
-        "energy_grade": 5,
-        "power_w": 150,
-        "noise_db": 38,
-        "warranty_years": 5,
-        "durability_tier": 5
-      },
-      "use_cases": [
-        "家庭",
-        "厨房"
-      ],
-      "pros": [
-        "一级能效，长期电费更省",
-        "318L 容量，三口之家够用",
-        "运行 38 分贝，很安静"
-      ],
-      "cons": [
-        "机身占地较宽，需留散热空间",
-        "容量偏大，小家庭略显浪费"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "AP002",
-      "name": "恒暖 洗衣机 XQG-10",
-      "category": "appliance",
-      "price": 2199,
-      "brand": "恒暖",
-      "specs": {
-        "capacity_l": 65,
-        "energy_grade": 4,
-        "power_w": 500,
-        "noise_db": 52,
-        "warranty_years": 3,
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "家庭",
-        "清洁",
-        "收纳"
-      ],
-      "pros": [
-        "四级能效，日常用水较省",
-        "65L 内筒，一次洗净全家",
-        "整机保修 3 年，有保障"
-      ],
-      "cons": [
-        "噪音 52 分贝，夜间略吵",
-        "能效非最高档，电费一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "AP003",
-      "name": "净界 空调 KFR-35",
-      "category": "appliance",
-      "price": 3899,
-      "brand": "净界",
-      "specs": {
-        "capacity_l": 12,
-        "energy_grade": 5,
-        "power_w": 1100,
-        "noise_db": 33,
-        "warranty_years": 6,
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "卧室",
-        "客厅",
-        "夏季"
-      ],
-      "pros": [
-        "一级能效，夏季省电明显",
-        "噪音 33 分贝，睡眠不打扰",
-        "保修 6 年，耐用等级高"
-      ],
-      "cons": [
-        "制冷功率大，峰值耗电高",
-        "需专业安装，墙面占位较大"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "AP004",
-      "name": "沐光 微波炉 MZ-20",
-      "category": "appliance",
-      "price": 599,
-      "brand": "沐光",
-      "specs": {
-        "capacity_l": 20,
-        "energy_grade": 3,
-        "power_w": 700,
-        "noise_db": 55,
-        "warranty_years": 2,
-        "durability_tier": 3
-      },
-      "use_cases": [
-        "厨房",
-        "家庭"
-      ],
-      "pros": [
-        "功率 700W，加热速度快",
-        "机身小巧，厨房好摆放",
-        "599 元入门，价格友好"
-      ],
-      "cons": [
-        "三级能效，用电略偏高",
-        "容量 20L，大盘子放不下"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "AP005",
-      "name": "简一 电饭煲 CF-4",
-      "category": "appliance",
-      "price": 399,
-      "brand": "简一",
-      "specs": {
-        "capacity_l": 4,
-        "energy_grade": 4,
-        "power_w": 500,
-        "noise_db": 40,
-        "warranty_years": 2,
-        "durability_tier": 3
-      },
-      "use_cases": [
-        "厨房",
-        "家庭",
-        "育儿"
-      ],
-      "pros": [
-        "四级能效，煮饭较省电",
-        "容量 4L，三四口人正好",
-        "噪音低，夜间预约不扰"
-      ],
-      "cons": [
-        "保修仅 2 年，年限偏短",
-        "耐用等级中等，长期较一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "AP006",
-      "name": "磐石 吸尘器 XC-15",
-      "category": "appliance",
-      "price": 1299,
-      "brand": "磐石",
-      "specs": {
-        "capacity_l": 3,
-        "energy_grade": 4,
-        "power_w": 450,
-        "noise_db": 68,
-        "warranty_years": 3,
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "清洁",
-        "家庭"
-      ],
-      "pros": [
-        "吸力较强，清洁效率高",
-        "耐用等级高，机身结实",
-        "集尘 3L，不用频繁倒"
-      ],
-      "cons": [
-        "噪音 68 分贝，运行偏吵",
-        "功率较高，续航受影响"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "AP007",
-      "name": "净界 空气净化器 KJ-400",
-      "category": "appliance",
-      "price": 1899,
-      "brand": "净界",
-      "specs": {
-        "capacity_l": 9,
-        "energy_grade": 5,
-        "power_w": 45,
-        "noise_db": 32,
-        "warranty_years": 3,
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "卧室",
-        "客厅",
-        "家庭"
-      ],
-      "pros": [
-        "一级能效，全天开启省电",
-        "噪音 32 分贝，睡眠很安静",
-        "风量足，客厅也够用"
-      ],
-      "cons": [
-        "净化容量有限，大户型吃力",
-        "保修 3 年，滤网需另换"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "AP008",
-      "name": "恒暖 洗碗机 WQP-13",
-      "category": "appliance",
-      "price": 6999,
-      "brand": "恒暖",
-      "specs": {
-        "capacity_l": 13,
-        "energy_grade": 5,
-        "power_w": 1800,
-        "noise_db": 44,
-        "warranty_years": 8,
-        "durability_tier": 5
-      },
-      "use_cases": [
-        "厨房",
-        "家庭",
-        "收纳"
-      ],
-      "pros": [
-        "一级能效，长期省水省电",
-        "耐用等级最高，用料扎实",
-        "保修 8 年，售后更放心",
-        "噪音 44 分贝，运行很安静"
-      ],
-      "cons": [
-        "功率 1800W，加热耗电",
-        "6999 元高价，预算要求高"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "CL001",
-      "name": "织风 纯棉 T恤",
-      "category": "apparel",
-      "price": 79,
-      "brand": "织风",
-      "specs": {
-        "material": "纯棉",
-        "comfort_tier": 5,
-        "breathability_tier": 5,
-        "durability_tier": 3,
-        "weight_g": 180
-      },
-      "use_cases": [
-        "日常",
-        "通勤"
-      ],
-      "pros": [
-        "纯棉亲肤，透气不闷汗",
-        "版型宽松，日常好搭配"
-      ],
-      "cons": [
-        "浅色款较易显脏",
-        "面料偏薄不耐磨"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "CL002",
-      "name": "轻羽 免烫衬衫",
-      "category": "apparel",
-      "price": 159,
-      "brand": "轻羽",
-      "specs": {
-        "material": "涤纶",
-        "comfort_tier": 4,
-        "breathability_tier": 4,
-        "durability_tier": 4,
-        "weight_g": 220
-      },
-      "use_cases": [
-        "办公",
-        "通勤",
-        "商旅"
-      ],
-      "pros": [
-        "涤纶免烫，久穿少褶皱",
-        "垂顺挺括，适合正式场合"
-      ],
-      "cons": [
-        "透气一般，夏天略闷",
-        "贴身感稍硬"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "CL003",
-      "name": "墨砚 直筒牛仔裤",
-      "category": "apparel",
-      "price": 259,
-      "brand": "墨砚",
-      "specs": {
-        "material": "纯棉牛仔",
-        "comfort_tier": 3,
-        "breathability_tier": 3,
-        "durability_tier": 5,
-        "weight_g": 620
-      },
-      "use_cases": [
-        "日常",
-        "通勤",
-        "户外"
-      ],
-      "pros": [
-        "厚实耐磨，久穿不易破",
-        "直筒版型，修饰腿型"
-      ],
-      "cons": [
-        "面料偏硬，初期略磨腿",
-        "较重，清洗后不易干"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "CL004",
-      "name": "轻羽 加厚羽绒服",
-      "category": "apparel",
-      "price": 899,
-      "brand": "轻羽",
-      "specs": {
-        "material": "羽绒",
-        "comfort_tier": 5,
-        "breathability_tier": 2,
-        "durability_tier": 4,
-        "weight_g": 850
-      },
-      "use_cases": [
-        "冬季",
-        "户外",
-        "旅行"
-      ],
-      "pros": [
-        "含绒量高，保暖包裹好",
-        "防钻绒面料，耐穿抗寒"
-      ],
-      "cons": [
-        "透气性差，室内易闷",
-        "体积大，收纳占空间"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "CL005",
-      "name": "拾光 抓绒卫衣",
-      "category": "apparel",
-      "price": 219,
-      "brand": "拾光",
-      "specs": {
-        "material": "棉混纺",
-        "comfort_tier": 5,
-        "breathability_tier": 3,
-        "durability_tier": 3,
-        "weight_g": 450
-      },
-      "use_cases": [
-        "日常",
-        "学习",
-        "通勤"
-      ],
-      "pros": [
-        "内里抓绒，亲肤又保暖",
-        "宽松版型，活动无束缚"
-      ],
-      "cons": [
-        "易起球，久穿显旧",
-        "厚度中等，深冬偏薄"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "CL006",
-      "name": "墨砚 羊毛大衣",
-      "category": "apparel",
-      "price": 1299,
-      "brand": "墨砚",
-      "specs": {
-        "material": "羊毛",
-        "comfort_tier": 4,
-        "breathability_tier": 3,
-        "durability_tier": 4,
-        "weight_g": 1200
-      },
-      "use_cases": [
-        "通勤",
-        "办公",
-        "送礼"
-      ],
-      "pros": [
-        "羊毛挺括，保暖又体面",
-        "版型利落，通勤显气质"
-      ],
-      "cons": [
-        "重量偏大，久穿易累",
-        "需干洗，打理较麻烦"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "CL007",
-      "name": "星尘 缓震运动鞋",
-      "category": "apparel",
-      "price": 399,
-      "brand": "星尘",
-      "specs": {
-        "material": "飞织网布",
-        "comfort_tier": 5,
-        "breathability_tier": 5,
-        "durability_tier": 4,
-        "weight_g": 280
-      },
-      "use_cases": [
-        "运动",
-        "日常",
-        "旅行"
-      ],
-      "pros": [
-        "网布透气，久走不闷脚",
-        "缓震回弹，减震护脚"
-      ],
-      "cons": [
-        "浅色鞋面易沾灰",
-        "耐磨尚可，长跑需换"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "CL008",
-      "name": "长缨 通勤双肩包",
-      "category": "apparel",
-      "price": 289,
-      "brand": "长缨",
-      "specs": {
-        "material": "帆布",
-        "comfort_tier": 4,
-        "breathability_tier": 2,
-        "durability_tier": 5,
-        "weight_g": 750
-      },
-      "use_cases": [
-        "通勤",
-        "旅行",
-        "商旅"
-      ],
-      "pros": [
-        "帆布加厚，耐磨耐用",
-        "分区合理，装得多"
-      ],
-      "cons": [
-        "自重偏大，空包也不轻",
-        "透气一般，久背闷背"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "FN001",
-      "name": "木言 人体工学椅 网布款",
-      "category": "furniture",
-      "price": 899,
-      "brand": "木言",
-      "specs": {
-        "material": "网布",
-        "weight_kg": 18.5,
-        "width_cm": 68,
-        "load_kg": 150,
-        "durability_tier": 4,
-        "warranty_years": 5,
-        "assembly_required": true
-      },
-      "use_cases": [
-        "办公",
-        "学习",
-        "卧室"
-      ],
-      "pros": [
-        "腰托可调，久坐更省力",
-        "承重150kg，坐着稳当",
-        "网布透气，夏季不闷"
-      ],
-      "cons": [
-        "需自行组装，约30分钟",
-        "扶手高度固定不可调"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "FN002",
-      "name": "承光 实木书桌 1.2m",
-      "category": "furniture",
-      "price": 1299,
-      "brand": "承光",
-      "specs": {
-        "material": "实木",
-        "weight_kg": 32.0,
-        "width_cm": 120,
-        "load_kg": 80,
-        "durability_tier": 5,
-        "warranty_years": 5,
-        "assembly_required": true
-      },
-      "use_cases": [
-        "办公",
-        "学习",
-        "家庭"
-      ],
-      "pros": [
-        "实木桌面，承重80kg",
-        "宽120cm，双屏够用",
-        "耐用等级5，质保5年"
-      ],
-      "cons": [
-        "需自行组装，约40分钟",
-        "桌板偏重，建议两人搬抬"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "FN003",
-      "name": "简一 记忆棉床垫 1.5m",
-      "category": "furniture",
-      "price": 2199,
-      "brand": "简一",
-      "specs": {
-        "material": "记忆棉",
-        "weight_kg": 28.5,
-        "width_cm": 150,
-        "load_kg": 300,
-        "durability_tier": 4,
-        "warranty_years": 8,
-        "assembly_required": false
-      },
-      "use_cases": [
-        "卧室",
-        "家庭"
-      ],
-      "pros": [
-        "记忆棉贴合，翻身省力",
-        "宽150cm，双人宽敞",
-        "免组装，开箱即可用"
-      ],
-      "cons": [
-        "整重28.5kg，搬运费力",
-        "初期略有气味，需先通风"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "FN004",
-      "name": "磐石 三人布艺沙发 2.0m",
-      "category": "furniture",
-      "price": 3599,
-      "brand": "磐石",
-      "specs": {
-        "material": "布艺",
-        "weight_kg": 85.0,
-        "width_cm": 200,
-        "load_kg": 300,
-        "durability_tier": 4,
-        "warranty_years": 5,
-        "assembly_required": true
-      },
-      "use_cases": [
-        "客厅",
-        "家庭"
-      ],
-      "pros": [
-        "宽200cm，三人同坐宽敞",
-        "承重300kg，坐感扎实",
-        "布套可拆洗，日常好清洁"
-      ],
-      "cons": [
-        "整重85kg，需自行组装",
-        "摆放需预留较大空间"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "FN005",
-      "name": "清谷 四门衣柜 1.8m",
-      "category": "furniture",
-      "price": 2699,
-      "brand": "清谷",
-      "specs": {
-        "material": "板材",
-        "weight_kg": 110.0,
-        "width_cm": 180,
-        "load_kg": 120,
-        "durability_tier": 4,
-        "warranty_years": 5,
-        "assembly_required": true
-      },
-      "use_cases": [
-        "卧室",
-        "收纳"
-      ],
-      "pros": [
-        "宽180cm，四门大容量",
-        "承重120kg，搁板很稳",
-        "质保5年，耐用等级4"
-      ],
-      "cons": [
-        "整重110kg，组装较费力",
-        "需自行组装，建议两人配合"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "FN006",
-      "name": "折光 金属置物架 五层",
-      "category": "furniture",
-      "price": 299,
-      "brand": "折光",
-      "specs": {
-        "material": "金属",
-        "weight_kg": 12.0,
-        "width_cm": 90,
-        "load_kg": 100,
-        "durability_tier": 3,
-        "warranty_years": 3,
-        "assembly_required": true
-      },
-      "use_cases": [
-        "收纳",
-        "家庭",
-        "厨房"
-      ],
-      "pros": [
-        "金属材质，承重100kg",
-        "五层设计，收纳更省地",
-        "价格299元，入门划算"
-      ],
-      "cons": [
-        "质保3年，耐用等级3",
-        "需自行组装，层板偏薄"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "FN007",
-      "name": "承光 实木餐桌 1.4m",
-      "category": "furniture",
-      "price": 4999,
-      "brand": "承光",
-      "specs": {
-        "material": "实木",
-        "weight_kg": 48.0,
-        "width_cm": 140,
-        "load_kg": 120,
-        "durability_tier": 5,
-        "warranty_years": 5,
-        "assembly_required": true
-      },
-      "use_cases": [
-        "家庭",
-        "厨房",
-        "客厅"
-      ],
-      "pros": [
-        "实木1.4m，四人用餐宽敞",
-        "承重120kg，桌面稳固",
-        "耐用等级5，质保5年"
-      ],
-      "cons": [
-        "整重48kg，需两人组装",
-        "实木需防潮防晒，勤打理"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "FN008",
-      "name": "折光 超薄鞋柜 0.8m",
-      "category": "furniture",
-      "price": 399,
-      "brand": "折光",
-      "specs": {
-        "material": "板材",
-        "weight_kg": 15.0,
-        "width_cm": 80,
-        "load_kg": 60,
-        "durability_tier": 3,
-        "warranty_years": 3,
-        "assembly_required": true
-      },
-      "use_cases": [
-        "收纳",
-        "家庭"
-      ],
-      "pros": [
-        "超薄宽80cm，贴墙省空间",
-        "翻斗设计，取鞋更顺手",
-        "承重60kg，台面可放物"
-      ],
-      "cons": [
-        "耐用等级3，轻拿轻放为宜",
-        "需自行组装，约20分钟"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "SP001",
-      "name": "疾风 折叠智能跑步机",
-      "category": "sports",
-      "price": 3999,
-      "brand": "疾风",
-      "specs": {
-        "weight_g": 45000,
-        "material": "铝合金",
-        "cushion_tier": 5,
-        "durability_tier": 4,
-        "waterproof": false
-      },
-      "use_cases": [
-        "运动",
-        "家庭",
-        "收纳"
-      ],
-      "pros": [
-        "可折叠收纳，占地更小",
-        "减震跑板，护膝更舒适",
-        "铝合金机身，结实稳固"
-      ],
-      "cons": [
-        "高速运转时噪音偏大",
-        "整机偏重，搬运吃力"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "SP002",
-      "name": "星轨 加厚防滑瑜伽垫",
-      "category": "sports",
-      "price": 129,
-      "brand": "星轨",
-      "specs": {
-        "weight_g": 1200,
-        "material": "TPE",
-        "cushion_tier": 4,
-        "durability_tier": 3,
-        "waterproof": true
-      },
-      "use_cases": [
-        "运动",
-        "家庭",
-        "收纳"
-      ],
-      "pros": [
-        "TPE材质，轻便易卷",
-        "加厚缓冲，护膝护腕",
-        "表面防滑，出汗也稳"
-      ],
-      "cons": [
-        "长期重压易留折痕",
-        "收卷后回弹略慢"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "SP003",
-      "name": "磐石 可调重量哑铃",
-      "category": "sports",
-      "price": 259,
-      "brand": "磐石",
-      "specs": {
-        "weight_g": 20000,
-        "material": "铸铁",
-        "cushion_tier": 1,
-        "durability_tier": 5,
-        "waterproof": false
-      },
-      "use_cases": [
-        "运动",
-        "家庭",
-        "送礼"
-      ],
-      "pros": [
-        "铸铁材质，经久耐用",
-        "重量可调，适配多阶段",
-        "包胶外层，减少磕碰伤"
-      ],
-      "cons": [
-        "整体偏重，不便携带",
-        "调节结构需定期紧固"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "SP004",
-      "name": "长缨 双人自动帐篷",
-      "category": "sports",
-      "price": 1299,
-      "brand": "长缨",
-      "specs": {
-        "weight_g": 4200,
-        "material": "尼龙",
-        "cushion_tier": 2,
-        "durability_tier": 4,
-        "waterproof": true
-      },
-      "use_cases": [
-        "户外",
-        "旅行",
-        "夏季"
-      ],
-      "pros": [
-        "防水尼龙，雨天可用",
-        "自动开合，搭建省时",
-        "轻量设计，背负轻松"
-      ],
-      "cons": [
-        "内里空间偏紧凑",
-        "强风下需额外加固"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "SP005",
-      "name": "星辉 轻量登山背包",
-      "category": "sports",
-      "price": 499,
-      "brand": "星辉",
-      "specs": {
-        "weight_g": 1100,
-        "material": "聚酯纤维",
-        "cushion_tier": 4,
-        "durability_tier": 4,
-        "waterproof": true
-      },
-      "use_cases": [
-        "户外",
-        "旅行",
-        "运动"
-      ],
-      "pros": [
-        "聚酯纤维，耐磨防水",
-        "背负缓冲，久背省力",
-        "轻量包体，减轻负荷"
-      ],
-      "cons": [
-        "容量有限，长线不够装",
-        "侧面网袋偏浅"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "SP006",
-      "name": "锐鸣 竞速轴承跳绳",
-      "category": "sports",
-      "price": 39,
-      "brand": "锐鸣",
-      "specs": {
-        "weight_g": 180,
-        "material": "钢丝",
-        "cushion_tier": 1,
-        "durability_tier": 3,
-        "waterproof": false
-      },
-      "use_cases": [
-        "运动",
-        "通勤",
-        "收纳"
-      ],
-      "pros": [
-        "轴承顺滑，转速更快",
-        "钢丝绳体，轻巧便携",
-        "长度可调，身高适配"
-      ],
-      "cons": [
-        "绳体较细，易磨地板",
-        "手柄防滑手感一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "SP007",
-      "name": "星轨 高清防雾泳镜",
-      "category": "sports",
-      "price": 79,
-      "brand": "星轨",
-      "specs": {
-        "weight_g": 80,
-        "material": "硅胶",
-        "cushion_tier": 4,
-        "durability_tier": 3,
-        "waterproof": true
-      },
-      "use_cases": [
-        "运动",
-        "夏季",
-        "旅行"
-      ],
-      "pros": [
-        "硅胶密封，防水贴合",
-        "防雾镜片，视野清晰",
-        "鼻扣可调，佩戴舒适"
-      ],
-      "cons": [
-        "镜带偏紧，久戴有压痕",
-        "暂不提供近视度数"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "SP008",
-      "name": "磐石 加厚保暖睡袋",
-      "category": "sports",
-      "price": 699,
-      "brand": "磐石",
-      "specs": {
-        "weight_g": 1600,
-        "material": "聚酯纤维",
-        "cushion_tier": 3,
-        "durability_tier": 4,
-        "waterproof": true
-      },
-      "use_cases": [
-        "户外",
-        "冬季",
-        "旅行"
-      ],
-      "pros": [
-        "加厚填充，保暖性好",
-        "防水外层，隔潮防湿",
-        "拉链拼接，可依偎同眠"
-      ],
-      "cons": [
-        "收纳后体积仍偏大",
-        "整体透气性一般"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PC001",
-      "name": "沐光 负离子吹风机",
-      "category": "personal_care",
-      "price": 299,
-      "brand": "沐光",
-      "specs": {
-        "power_w": 1800,
-        "battery_h": 0,
-        "noise_db": 68,
-        "suit_for": "所有发质",
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "日常",
-        "家庭",
-        "旅行"
-      ],
-      "pros": [
-        "1800W大功率，干发更快",
-        "负离子抚平毛躁",
-        "4级耐用，机身结实"
-      ],
-      "cons": [
-        "机身偏重，久举略累",
-        "需插电，无内置电池",
-        "68分贝运行，噪音偏大"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PC002",
-      "name": "云听 声波电动牙刷",
-      "category": "personal_care",
-      "price": 129,
-      "brand": "云听",
-      "specs": {
-        "power_w": 5,
-        "battery_h": 30,
-        "noise_db": 42,
-        "suit_for": "成人通用",
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "日常",
-        "商旅",
-        "旅行"
-      ],
-      "pros": [
-        "30小时续航，出差省心",
-        "42分贝轻音，早晚不吵",
-        "4级耐用，机身扎实"
-      ],
-      "cons": [
-        "5W小功率，靠声波清洁",
-        "刷头需另购，长期花费"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PC003",
-      "name": "薄刃 三刀头电动剃须刀",
-      "category": "personal_care",
-      "price": 459,
-      "brand": "薄刃",
-      "specs": {
-        "power_w": 8,
-        "battery_h": 45,
-        "noise_db": 55,
-        "suit_for": "所有肤质",
-        "durability_tier": 5
-      },
-      "use_cases": [
-        "日常",
-        "通勤",
-        "商旅"
-      ],
-      "pros": [
-        "45小时续航，充电省心",
-        "三刀头贴合，剃得干净",
-        "5级耐用，机身结实"
-      ],
-      "cons": [
-        "55分贝有噪，清晨略吵",
-        "8W功率，硬胡须略费力"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PC004",
-      "name": "拾光 硅胶洁面仪",
-      "category": "personal_care",
-      "price": 89,
-      "brand": "拾光",
-      "specs": {
-        "power_w": 3,
-        "battery_h": 20,
-        "noise_db": 35,
-        "suit_for": "油性皮肤",
-        "durability_tier": 3
-      },
-      "use_cases": [
-        "日常",
-        "清洁",
-        "旅行"
-      ],
-      "pros": [
-        "35分贝静音，清洁不吵",
-        "20小时续航，一周一充",
-        "硅胶刷头，油皮友好"
-      ],
-      "cons": [
-        "3W低功率，力度偏柔",
-        "3级耐用，硅胶易老化"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PC005",
-      "name": "沐光 陶瓷卷发棒",
-      "category": "personal_care",
-      "price": 199,
-      "brand": "沐光",
-      "specs": {
-        "power_w": 65,
-        "battery_h": 0,
-        "noise_db": 30,
-        "suit_for": "长发",
-        "durability_tier": 3
-      },
-      "use_cases": [
-        "日常",
-        "家庭",
-        "送礼"
-      ],
-      "pros": [
-        "65W速热，造型省时",
-        "30分贝安静，长发顺滑",
-        "3级耐用，涂层耐磨"
-      ],
-      "cons": [
-        "需插电，无内置电池",
-        "涂层用久，易有磨损"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PC006",
-      "name": "静眠 超声波加湿器",
-      "category": "personal_care",
-      "price": 549,
-      "brand": "静眠",
-      "specs": {
-        "power_w": 25,
-        "battery_h": 0,
-        "noise_db": 25,
-        "suit_for": "干性皮肤",
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "卧室",
-        "冬季",
-        "家庭"
-      ],
-      "pros": [
-        "25分贝静音，睡眠不扰",
-        "干皮补水，晨起不紧绷",
-        "4级耐用，水箱结实"
-      ],
-      "cons": [
-        "25W功率，加湿量中等",
-        "需插电，无内置电池"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PC007",
-      "name": "清风 肩颈电动按摩仪",
-      "category": "personal_care",
-      "price": 1299,
-      "brand": "清风",
-      "specs": {
-        "power_w": 12,
-        "battery_h": 60,
-        "noise_db": 40,
-        "suit_for": "所有肤质",
-        "durability_tier": 5
-      },
-      "use_cases": [
-        "办公",
-        "家庭",
-        "送礼"
-      ],
-      "pros": [
-        "60小时超长续航",
-        "40分贝轻音，办公可用",
-        "5级耐用，机身结实"
-      ],
-      "cons": [
-        "12W功率，力度偏轻",
-        "初次佩戴，需适应贴合",
-        "价格偏高，预算需考虑"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "PC008",
-      "name": "拾光 免洗护发精油",
-      "category": "personal_care",
-      "price": 49,
-      "brand": "拾光",
-      "specs": {
-        "power_w": 3,
-        "battery_h": 0,
-        "noise_db": 25,
-        "suit_for": "干性发质",
-        "durability_tier": 3
-      },
-      "use_cases": [
-        "日常",
-        "送礼",
-        "旅行"
-      ],
-      "pros": [
-        "免洗配方，干发即顺滑",
-        "3级耐用，一瓶用数月",
-        "小巧便携，适合旅行"
-      ],
-      "cons": [
-        "用量难控，涂多易油腻",
-        "瓶口易漏，需直立收纳"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "BB001",
-      "name": "云梯 可折叠婴儿车",
-      "category": "baby",
-      "price": 1299,
-      "brand": "云梯",
-      "specs": {
-        "material": "铝合金",
-        "age_min_months": 0,
-        "weight_kg": 6.8,
-        "safety_cert": true,
-        "foldable": true,
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "育儿",
-        "旅行",
-        "收纳"
-      ],
-      "pros": [
-        "一键折叠，单手收车",
-        "铝合金车架，轻便好推",
-        "通过安全认证，用料结实"
-      ],
-      "cons": [
-        "折叠后体积仍偏大",
-        "遮阳篷偏小"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "BB002",
-      "name": "承光 儿童安全座椅",
-      "category": "baby",
-      "price": 1999,
-      "brand": "承光",
-      "specs": {
-        "material": "钢骨架 + PP",
-        "age_min_months": 0,
-        "weight_kg": 8.5,
-        "safety_cert": true,
-        "foldable": false,
-        "durability_tier": 5
-      },
-      "use_cases": [
-        "育儿",
-        "旅行",
-        "家庭"
-      ],
-      "pros": [
-        "钢骨架，抗冲击强",
-        "通过安全认证",
-        "五点式安全带固定"
-      ],
-      "cons": [
-        "整件偏重，搬运费力",
-        "不可折叠，占地较大"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "BB003",
-      "name": "织风 透气婴儿背带",
-      "category": "baby",
-      "price": 269,
-      "brand": "织风",
-      "specs": {
-        "material": "棉布",
-        "age_min_months": 3,
-        "weight_kg": 0.6,
-        "safety_cert": true,
-        "foldable": true,
-        "durability_tier": 3
-      },
-      "use_cases": [
-        "育儿",
-        "户外",
-        "旅行"
-      ],
-      "pros": [
-        "纯棉透气，久背不闷",
-        "轻仅 0.6 千克",
-        "可折叠，便于收纳"
-      ],
-      "cons": [
-        "承重上限偏低",
-        "肩带调节略繁琐"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "BB004",
-      "name": "静谷 实木婴儿床",
-      "category": "baby",
-      "price": 2999,
-      "brand": "静谷",
-      "specs": {
-        "material": "实木",
-        "age_min_months": 0,
-        "weight_kg": 20,
-        "safety_cert": true,
-        "foldable": false,
-        "durability_tier": 5
-      },
-      "use_cases": [
-        "育儿",
-        "卧室",
-        "家庭"
-      ],
-      "pros": [
-        "实木用料，结实耐用",
-        "通过安全认证",
-        "床板高度可调"
-      ],
-      "cons": [
-        "整件重达 20 千克",
-        "不可折叠，搬运困难"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "BB005",
-      "name": "清水 宽口玻璃奶瓶",
-      "category": "baby",
-      "price": 89,
-      "brand": "清水",
-      "specs": {
-        "material": "高硼硅玻璃",
-        "age_min_months": 0,
-        "weight_kg": 0.3,
-        "safety_cert": true,
-        "foldable": false,
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "育儿",
-        "厨房",
-        "日常"
-      ],
-      "pros": [
-        "高硼硅玻璃，耐高温",
-        "通过安全认证",
-        "宽口设计，易清洗"
-      ],
-      "cons": [
-        "玻璃易碎，需轻拿放",
-        "不可折叠，外出不便"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "BB006",
-      "name": "长缨 可折叠儿童餐椅",
-      "category": "baby",
-      "price": 499,
-      "brand": "长缨",
-      "specs": {
-        "material": "食品级 PP",
-        "age_min_months": 6,
-        "weight_kg": 3.2,
-        "safety_cert": true,
-        "foldable": true,
-        "durability_tier": 4
-      },
-      "use_cases": [
-        "育儿",
-        "家庭",
-        "厨房"
-      ],
-      "pros": [
-        "一键折叠，节省空间",
-        "食品级 PP，易擦洗",
-        "通过安全认证"
-      ],
-      "cons": [
-        "靠背角度不可调",
-        "餐盘拆装略费劲"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "BB007",
-      "name": "织风 EVA 爬行垫",
-      "category": "baby",
-      "price": 129,
-      "brand": "织风",
-      "specs": {
-        "material": "EVA",
-        "age_min_months": 3,
-        "weight_kg": 1.2,
-        "safety_cert": true,
-        "foldable": true,
-        "durability_tier": 3
-      },
-      "use_cases": [
-        "育儿",
-        "客厅",
-        "收纳"
-      ],
-      "pros": [
-        "EVA 材质，回弹好",
-        "可折叠，收纳方便",
-        "轻仅 1.2 千克"
-      ],
-      "cons": [
-        "厚度偏薄",
-        "边角容易翘起"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
-    },
-    {
-      "id": "BB008",
-      "name": "清水 智能温奶器",
-      "category": "baby",
-      "price": 159,
-      "brand": "清水",
-      "specs": {
-        "material": "食品级 PP",
-        "age_min_months": 0,
-        "weight_kg": 0.9,
-        "safety_cert": true,
-        "foldable": false,
-        "durability_tier": 3
-      },
-      "use_cases": [
-        "育儿",
-        "厨房",
-        "日常"
-      ],
-      "pros": [
-        "恒温加热，奶温均匀",
-        "食品级 PP，接触安心",
-        "一键启动，操作简单"
-      ],
-      "cons": [
-        "不可折叠，占地略大",
-        "仅适配标准奶瓶"
-      ],
-      "data_source": "演示数据 · 本项目自行构造，非真实在售商品、非实时价格",
-      "updated_at": "2026-10-01"
+        "128GB 起步容量偏小，且苹果机身存储不可扩展",
+        "屏幕仅 60Hz 刷新率，同价位明显落后",
+        "3561mAh 电池偏小、20W 有线充电较慢"
+      ],
+      "data_source": "公开资料整理 · 参数经简化，价格非实时",
+      "source_url": "https://g.pconline.com.cn/product/mobile/apple/1936067_detail.html",
+      "image_url": "https://img4.pconline.com.cn/pconline/images/product/20240910/22354997.jpg",
+      "data_status": "unverified",
+      "updated_at": "2026-10-15"
     }
   ]
 }

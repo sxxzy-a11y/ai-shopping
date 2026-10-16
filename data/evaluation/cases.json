@@ -1,8 +1,8 @@
 {
   "name": "智购参谋效果评测集",
-  "version": "1.0",
+  "version": "2.0",
   "updated_at": "2026-10-15",
-  "note": "本评测集由本项目自行构造并标注，用于评价本项目自身。这是**自评**，不是第三方基准。每条用例的 origin 字段说明了它的构造依据。",
+  "note": "本评测集由本项目自行构造并标注，用于评价本项目自身。这是**自评**，不是第三方基准。每条用例的 origin 字段说明了它的构造依据。2.1 版随品类聚焦（只保留笔记本电脑与手机）重新标注：耳机相关用例改写为 laptop/phone 场景或「暂不支持」场景，知识检索用例同步更新语料。",
   "cases": [
     {
       "id": "demand_001",
@@ -10,7 +10,10 @@
       "origin": "按系统支持的类别与用途词表构造",
       "input": "预算 3000 元，主要用来编程，想买一台笔记本电脑",
       "expected": {
-        "demand": {"category": "laptop", "budget": 3000},
+        "demand": {
+          "category": "laptop",
+          "budget": 3000
+        },
         "must_all_satisfy_budget": true
       }
     },
@@ -18,11 +21,20 @@
       "id": "demand_002",
       "category": "需求理解",
       "origin": "按系统支持的类别与用途词表构造",
-      "input": "想买一款 500 元以内的耳机，主要用来通勤，降噪要好，戴着要舒服",
+      "input": "想买一款 2000 元以内的手机，主要用来打游戏，性能要好",
       "expected": {
-        "demand": {"category": "headphone", "budget": 500},
+        "demand": {
+          "category": "phone",
+          "budget": 2000
+        },
         "must_all_satisfy_budget": true,
-        "must_exclude": ["HP012", "HP007", "HP013", "HP002", "HP004", "HP014", "HP008", "HP015", "HP003", "HP016"]
+        "must_exclude": [
+          "PH006",
+          "PH007",
+          "PH008",
+          "PH009",
+          "PH010"
+        ]
       }
     },
     {
@@ -31,7 +43,10 @@
       "origin": "中文数字写法——需求解析明确支持的写法",
       "input": "三千块以内的手机，拍照好一点",
       "expected": {
-        "demand": {"category": "phone", "budget": 3000},
+        "demand": {
+          "category": "phone",
+          "budget": 3000
+        },
         "must_all_satisfy_budget": true
       }
     },
@@ -39,91 +54,94 @@
       "id": "demand_004",
       "category": "需求理解",
       "origin": "不带预算——解析应当留空而不是猜",
-      "input": "想买个机械键盘，办公用，安静一点",
+      "input": "想买台笔记本，办公用，要轻一点",
       "expected": {
-        "demand": {"category": "keyboard"},
+        "demand": {
+          "category": "laptop"
+        },
         "must_all_satisfy_budget": true
       }
     },
     {
       "id": "demand_005",
-      "category": "需求理解",
-      "origin": "按系统支持的类别与用途词表构造",
-      "input": "预算 2000 元，跑步用的运动装备，要耐用",
+      "category": "不支持的类别",
+      "origin": "品类收缩到三类电子产品——表外品类应当明确回「暂不支持」而不是推一堆无关商品",
+      "input": "想买个冰箱，预算 3000",
       "expected": {
-        "demand": {"category": "sports", "budget": 2000},
-        "must_all_satisfy_budget": true
+        "unsupported_category": "冰箱"
       }
     },
     {
       "id": "demand_006",
-      "category": "需求理解",
-      "origin": "按系统支持的类别与用途词表构造",
+      "category": "不支持的类别",
+      "origin": "品类收缩到三类电子产品——表外品类应当明确回「暂不支持」而不是推一堆无关商品",
       "input": "想买张床垫，预算 3000，家里用的",
       "expected": {
-        "demand": {"category": "furniture", "budget": 3000},
-        "must_all_satisfy_budget": true
+        "unsupported_category": "床垫"
       }
     },
     {
       "id": "demand_007",
-      "category": "需求理解",
-      "origin": "按系统支持的类别与用途词表构造",
+      "category": "不支持的类别",
+      "origin": "品类收缩到三类电子产品——表外品类应当明确回「暂不支持」而不是推一堆无关商品",
       "input": "1500 元以内买台微波炉，厨房用",
       "expected": {
-        "demand": {"category": "appliance", "budget": 1500},
-        "must_all_satisfy_budget": true
+        "unsupported_category": "微波炉"
       }
     },
     {
       "id": "demand_008",
-      "category": "需求理解",
-      "origin": "按系统支持的类别与用途词表构造",
+      "category": "不支持的类别",
+      "origin": "品类收缩到三类电子产品——表外品类应当明确回「暂不支持」而不是推一堆无关商品",
       "input": "预算 500 元，买件通勤穿的外套",
       "expected": {
-        "demand": {"category": "apparel", "budget": 500},
-        "must_all_satisfy_budget": true
+        "unsupported_category": "外套"
       }
     },
     {
       "id": "demand_009",
-      "category": "需求理解",
-      "origin": "按系统支持的类别与用途词表构造",
+      "category": "不支持的类别",
+      "origin": "品类收缩到三类电子产品——表外品类应当明确回「暂不支持」而不是推一堆无关商品",
       "input": "想买个吹风机，预算 300",
       "expected": {
-        "demand": {"category": "personal_care", "budget": 300},
-        "must_all_satisfy_budget": true
+        "unsupported_category": "吹风机"
       }
     },
     {
       "id": "demand_010",
-      "category": "需求理解",
-      "origin": "按系统支持的类别与用途词表构造",
+      "category": "不支持的类别",
+      "origin": "品类收缩到三类电子产品——表外品类应当明确回「暂不支持」而不是推一堆无关商品",
       "input": "给宝宝买辆婴儿车，2000 以内",
       "expected": {
-        "demand": {"category": "baby", "budget": 2000},
-        "must_all_satisfy_budget": true
+        "unsupported_category": "婴儿车"
       }
     },
-
     {
       "id": "boundary_001",
       "category": "预算边界",
       "origin": "预算恰好等于最低价商品——边界值",
-      "input": "2499 元以内的笔记本电脑",
+      "input": "3519 元以内的笔记本电脑",
       "expected": {
-        "demand": {"category": "laptop", "budget": 2499},
+        "demand": {
+          "category": "laptop",
+          "budget": 3519
+        },
         "must_all_satisfy_budget": true,
-        "must_include": ["LP004"]
+        "must_include": [
+          "LP001"
+        ]
       }
     },
     {
       "id": "boundary_002",
       "category": "预算边界",
       "origin": "预算比最低价少一元——应当无匹配且不得伪造",
-      "input": "2498 元以内的笔记本电脑",
+      "input": "3518 元以内的笔记本电脑",
       "expected": {
-        "demand": {"category": "laptop", "budget": 2498},
+        "demand": {
+          "category": "laptop",
+          "budget": 3518
+        },
         "should_have_no_within_budget": true
       }
     },
@@ -131,9 +149,12 @@
       "id": "boundary_003",
       "category": "预算边界",
       "origin": "预算覆盖全品类——所有候选都应在预算内",
-      "input": "10000 元以内的笔记本电脑",
+      "input": "11199 元以内的笔记本电脑",
       "expected": {
-        "demand": {"category": "laptop", "budget": 10000},
+        "demand": {
+          "category": "laptop",
+          "budget": 11199
+        },
         "must_all_satisfy_budget": true,
         "should_have_no_over_budget": true
       }
@@ -144,7 +165,10 @@
       "origin": "预算只有最低价的零头——超预算列表应被截断并如实说明",
       "input": "预算 300 元买笔记本电脑",
       "expected": {
-        "demand": {"category": "laptop", "budget": 300},
+        "demand": {
+          "category": "laptop",
+          "budget": 300
+        },
         "should_have_no_within_budget": true
       }
     },
@@ -152,11 +176,18 @@
       "id": "boundary_005",
       "category": "预算边界",
       "origin": "预算刚好卡在两件商品之间",
-      "input": "399 元以内的耳机",
+      "input": "1850 元以内的手机",
       "expected": {
-        "demand": {"category": "headphone", "budget": 399},
+        "demand": {
+          "category": "phone",
+          "budget": 1850
+        },
         "must_all_satisfy_budget": true,
-        "must_include": ["HP001", "HP005", "HP009", "HP010", "HP011"]
+        "must_include": [
+          "PH001",
+          "PH002",
+          "PH003"
+        ]
       }
     },
     {
@@ -165,175 +196,338 @@
       "origin": "无匹配——不得伪造结果",
       "input": "10 元以内的手机",
       "expected": {
-        "demand": {"category": "phone", "budget": 10},
+        "demand": {
+          "category": "phone",
+          "budget": 10
+        },
         "should_have_no_within_budget": true
       }
     },
-
     {
       "id": "knowledge_001",
       "category": "知识检索",
-      "origin": "语料中有专门一节讲这个",
-      "input": "主动降噪和被动降噪有什么区别",
-      "expected": {"knowledge": {"should_find": true, "expected_type": ["服务级", "品类级"]}}
+      "origin": "FAQ 里有专门一节讲这个",
+      "input": "处理器档位是什么意思",
+      "expected": {
+        "knowledge": {
+          "should_find": true,
+          "expected_type": [
+            "服务级"
+          ]
+        }
+      }
     },
     {
       "id": "knowledge_002",
       "category": "知识检索",
       "origin": "语料中有专门一节讲这个",
       "input": "笔记本多重适合带出门",
-      "expected": {"knowledge": {"should_find": true, "expected_type": ["品类级"]}}
+      "expected": {
+        "knowledge": {
+          "should_find": true,
+          "expected_type": [
+            "品类级"
+          ]
+        }
+      }
     },
     {
       "id": "knowledge_003",
       "category": "知识检索",
-      "origin": "语料中有专门一节讲这个",
-      "input": "机械键盘选什么轴",
-      "expected": {"knowledge": {"should_find": true, "expected_type": ["品类级"]}}
+      "origin": "笔记本指南里有专门一节讲独立显卡",
+      "input": "笔记本什么时候需要独立显卡",
+      "expected": {
+        "knowledge": {
+          "should_find": true,
+          "expected_type": [
+            "品类级"
+          ]
+        }
+      }
     },
     {
       "id": "knowledge_004",
       "category": "知识检索",
-      "origin": "语料中有专门一节讲这个",
-      "input": "婴儿车怎么挑",
-      "expected": {"knowledge": {"should_find": true, "expected_type": ["品类级"]}}
+      "origin": "手机指南里有专门一节讲拍照",
+      "input": "手机拍照怎么选",
+      "expected": {
+        "knowledge": {
+          "should_find": true,
+          "expected_type": [
+            "品类级"
+          ]
+        }
+      }
     },
     {
       "id": "knowledge_005",
       "category": "知识检索",
-      "origin": "FAQ 里有档位释义",
-      "input": "能效等级是什么意思",
-      "expected": {"knowledge": {"should_find": true, "expected_type": ["服务级", "品类级"]}}
+      "origin": "FAQ 里有专门一节讲这个",
+      "input": "为什么没有销量和用户评价",
+      "expected": {
+        "knowledge": {
+          "should_find": true,
+          "expected_type": [
+            "服务级",
+            "品类级"
+          ]
+        }
+      }
     },
     {
       "id": "knowledge_006",
       "category": "知识检索",
       "origin": "FAQ 里有评分口径说明",
       "input": "系统匹配评分是怎么算出来的",
-      "expected": {"knowledge": {"should_find": true, "expected_type": ["服务级"]}}
+      "expected": {
+        "knowledge": {
+          "should_find": true,
+          "expected_type": [
+            "服务级"
+          ]
+        }
+      }
     },
-
     {
       "id": "nocorpus_001",
       "category": "语料外反例",
       "origin": "语料里确实没有对应资料——应当判定为检索不到",
       "input": "今天天气怎么样",
-      "expected": {"knowledge": {"should_find": false}}
+      "expected": {
+        "knowledge": {
+          "should_find": false
+        }
+      }
     },
     {
       "id": "nocorpus_002",
       "category": "语料外反例",
       "origin": "语料里确实没有对应资料",
       "input": "怎么给自行车补胎",
-      "expected": {"knowledge": {"should_find": false}}
+      "expected": {
+        "knowledge": {
+          "should_find": false
+        }
+      }
     },
     {
       "id": "nocorpus_003",
       "category": "语料外反例",
       "origin": "语料里确实没有对应资料",
       "input": "周杰伦的新歌好听吗",
-      "expected": {"knowledge": {"should_find": false}}
+      "expected": {
+        "knowledge": {
+          "should_find": false
+        }
+      }
     },
     {
       "id": "nocorpus_004",
       "category": "语料外反例",
       "origin": "语料里确实没有对应资料",
       "input": "明天股市会涨吗",
-      "expected": {"knowledge": {"should_find": false}}
+      "expected": {
+        "knowledge": {
+          "should_find": false
+        }
+      }
     },
-
     {
       "id": "compare_001",
       "category": "多商品比较",
       "origin": "同类两件——合法的比较",
       "input": "比较 LP001 和 LP002",
-      "expected": {"compare": {"ids": ["LP001", "LP002"], "should_succeed": true}}
+      "expected": {
+        "compare": {
+          "ids": [
+            "LP001",
+            "LP002"
+          ],
+          "should_succeed": true
+        }
+      }
     },
     {
       "id": "compare_002",
       "category": "多商品比较",
       "origin": "跨类别混选——应当被拒绝",
       "input": "比较 LP001 和 PH001",
-      "expected": {"compare": {"ids": ["LP001", "PH001"], "should_succeed": false}}
+      "expected": {
+        "compare": {
+          "ids": [
+            "LP001",
+            "PH001"
+          ],
+          "should_succeed": false
+        }
+      }
     },
     {
       "id": "compare_003",
       "category": "多商品比较",
       "origin": "数量不足——应当被拒绝",
       "input": "只比较 LP001",
-      "expected": {"compare": {"ids": ["LP001"], "should_succeed": false}}
+      "expected": {
+        "compare": {
+          "ids": [
+            "LP001"
+          ],
+          "should_succeed": false
+        }
+      }
     },
-
     {
       "id": "halluc_001",
       "category": "幻觉场景1_不存在的商品",
       "origin": "幻觉场景 1：用户询问数据库中不存在的商品",
       "input": "有没有某某牌 X999 笔记本电脑",
-      "expected": {"demand": {"should_be_empty_or_no_match": true}}
+      "expected": {
+        "demand": {
+          "should_be_empty_or_no_match": true
+        }
+      }
     },
     {
       "id": "halluc_002",
       "category": "幻觉场景2_商品缺参数",
       "origin": "幻觉场景 2：商品缺少某个参数时不得给出数值",
-      "input": "预算 3000 的笔记本，续航多久",
-      "expected": {"demand": {"category": "laptop", "budget": 3000}, "must_all_satisfy_budget": true}
+      "input": "预算 6000 的笔记本，续航多久",
+      "expected": {
+        "demand": {
+          "category": "laptop",
+          "budget": 6000
+        },
+        "must_all_satisfy_budget": true
+      }
     },
     {
       "id": "halluc_003",
       "category": "幻觉场景3_预算低于全部候选",
       "origin": "幻觉场景 3：预算低于所有候选价格时应说明并给放宽建议",
       "input": "预算 100 元买笔记本电脑",
-      "expected": {"demand": {"category": "laptop", "budget": 100}, "should_have_no_within_budget": true}
+      "expected": {
+        "demand": {
+          "category": "laptop",
+          "budget": 100
+        },
+        "should_have_no_within_budget": true
+      }
     },
     {
       "id": "halluc_004",
       "category": "幻觉场景4_知识库无资料",
       "origin": "幻觉场景 4：知识库检索不到资料时应明确说明",
       "input": "怎么挑选天文望远镜",
-      "expected": {"knowledge": {"should_find": false}}
+      "expected": {
+        "knowledge": {
+          "should_find": false
+        }
+      }
     },
     {
       "id": "halluc_005",
       "category": "幻觉场景5_资料自相矛盾",
       "origin": "幻觉场景 5：商品记录内部矛盾时应被标记为资料存疑",
       "input": "评测内部矛盾检测——夹具商品 LP900",
-      "expected": {"consistency": {"fixture": "self_contradictory", "should_be_flagged": true}}
+      "expected": {
+        "consistency": {
+          "fixture": "self_contradictory",
+          "should_be_flagged": true
+        }
+      }
     },
     {
       "id": "halluc_006",
       "category": "幻觉场景6_无依据的性能结论",
       "origin": "幻觉场景 6：AI 解读中出现数据里没有的断言时应当被丢弃",
       "input": "评测断言校验——构造含编造数值的解读",
-      "expected": {"claim_guard": {"text": "这款续航长达 20 小时", "should_be_rejected": true}}
+      "expected": {
+        "claim_guard": {
+          "text": "这款续航长达 20 小时",
+          "should_be_rejected": true
+        }
+      }
     },
-
     {
       "id": "tool_001",
       "category": "工具调用",
       "origin": "工具调用的合法路径",
-      "input": "search_products(category=headphone, budget_max=500)",
-      "expected": {"tool": {"name": "search_products", "args": {"category": "headphone", "budget_max": 500}, "should_succeed": true}}
+      "input": "search_products(category=laptop, budget_max=5000)",
+      "expected": {
+        "tool": {
+          "name": "search_products",
+          "args": {
+            "category": "laptop",
+            "budget_max": 5000
+          },
+          "should_succeed": true
+        }
+      }
     },
     {
       "id": "tool_002",
       "category": "工具调用",
       "origin": "编造品类——参数校验应当拦住",
       "input": "search_products(category=平板)",
-      "expected": {"tool": {"name": "search_products", "args": {"category": "平板"}, "should_succeed": false}}
+      "expected": {
+        "tool": {
+          "name": "search_products",
+          "args": {
+            "category": "平板"
+          },
+          "should_succeed": false
+        }
+      }
     },
     {
       "id": "tool_003",
       "category": "工具调用",
       "origin": "编造商品 ID——语义层校验应当拦住",
       "input": "get_product_detail(product_id=不存在的商品)",
-      "expected": {"tool": {"name": "get_product_detail", "args": {"product_id": "不存在的商品"}, "should_succeed": false}}
+      "expected": {
+        "tool": {
+          "name": "get_product_detail",
+          "args": {
+            "product_id": "不存在的商品"
+          },
+          "should_succeed": false
+        }
+      }
     },
     {
       "id": "tool_004",
       "category": "工具调用",
       "origin": "未注册的工具名——应当被拒绝并列出可用工具",
       "input": "drop_table({})",
-      "expected": {"tool": {"name": "drop_table", "args": {}, "should_succeed": false}}
+      "expected": {
+        "tool": {
+          "name": "drop_table",
+          "args": {},
+          "should_succeed": false
+        }
+      }
+    },
+    {
+      "id": "demand_011",
+      "category": "需求理解",
+      "origin": "按系统支持的类别与用途词表构造",
+      "input": "预算 3000 元，想买个拍照好的手机，主要是日常用",
+      "expected": {
+        "demand": {
+          "category": "phone",
+          "budget": 3000
+        },
+        "must_all_satisfy_budget": true
+      }
+    },
+    {
+      "id": "demand_012",
+      "category": "不支持的类别",
+      "origin": "品类收缩到两类电子产品——耳机已移出，应当明确回「暂不支持」",
+      "input": "想买一款通勤用的耳机，预算 300",
+      "expected": {
+        "unsupported_category": "耳机"
+      }
     }
   ]
 }
