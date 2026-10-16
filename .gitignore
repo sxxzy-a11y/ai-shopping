@@ -34,3 +34,8 @@ htmlcov/
 
 # --- Office 临时文件 ---
 ~$*
+
+# --- data scraping scratch files ---
+_scratch*/
+_scratch_*.py
+_scratch_*
