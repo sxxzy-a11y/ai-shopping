@@ -29,11 +29,8 @@ def _product(**overrides) -> Product:
 
 
 # 真实文案（取自 data/products.json），用于证明匹配器认得出肯定式提及。
-# LP002 锋刃 X15：参数 has_dedicated_gpu=true，pros 里写着「带独立显卡」。
-_REAL_GPU_PRO_TEXT = "带独立显卡，3D 游戏与渲染有实际加成"
-# BB001 云梯 可折叠婴儿车：参数 foldable=true，名称与 pros 都写着折叠。
-_REAL_FOLDABLE_TEXT = "可折叠婴儿车"
-_REAL_FOLDABLE_PRO = "一键折叠，单手收车"
+# LP006 戴尔 游匣 G15 5530：参数 has_dedicated_gpu=true，pros 里写着「独显」。
+_REAL_GPU_PRO_TEXT = "i7-13650HX + RTX4060 满血独显直连，1080p 高刷游戏流畅"
 
 
 # --------------------------------------------------------------------------
@@ -83,14 +80,17 @@ def test_tier_within_range_is_not_flagged(value: int):
     assert check_product(_product(specs={"cpu_tier": value})) == []
 
 
-def test_tier_rule_covers_unsuffixed_keys():
-    """noise_level / energy_grade 不带 _tier 后缀，同样按档位校验。"""
-    assert [i.field for i in check_product(_product(specs={"noise_level": 9}))] == [
-        "noise_level"
+def test_tier_rule_only_covers_tier_keys():
+    """档位校验只认档位键，别的参数取大数值不算越界。
+
+    `noise_level`（键盘）与 `energy_grade`（家电）曾作为「不带 _tier 后缀的
+    档位字段」走同一套校验，随那两个品类一起移除了。剩下的边界是反方向：
+    不能把 `storage_gb = 9` 这种正常取值当成越界的档位。
+    """
+    assert [i.field for i in check_product(_product(specs={"cpu_tier": 9}))] == [
+        "cpu_tier"
     ]
-    assert [i.field for i in check_product(_product(specs={"energy_grade": 0}))] == [
-        "energy_grade"
-    ]
+    assert check_product(_product(specs={"storage_gb": 9})) == []
 
 
 def test_boolean_is_not_treated_as_a_tier_number():
@@ -172,19 +172,10 @@ def test_negated_claim_with_false_spec_is_not_flagged():
     assert check_product(product) == []
 
 
-def test_foldable_rule_checks_the_name_too():
-    """名称写着「可折叠」而参数为 false，同样是矛盾。"""
-    product = _product(name="某某 可折叠婴儿车", specs={"foldable": False})
-    assert [i.field for i in check_product(product)] == ["foldable"]
-
-
-def test_not_foldable_wording_is_not_flagged():
-    product = _product(
-        name="某某 婴儿车",
-        specs={"foldable": False},
-        cons=["不可折叠，收纳占地方"],
-    )
-    assert check_product(product) == []
+def test_boolean_claim_rule_checks_the_name_too():
+    """名称写着「独立显卡」而参数为 false，同样是矛盾。"""
+    product = _product(name="某某 独立显卡笔记本", specs={"has_dedicated_gpu": False})
+    assert [i.field for i in check_product(product)] == ["has_dedicated_gpu"]
 
 
 def test_true_spec_with_positive_claim_is_consistent():
@@ -224,24 +215,20 @@ def test_flag_fires_on_real_text_when_spec_contradicts():
     assert [i.field for i in check_product(contradicted)] == ["has_dedicated_gpu"]
 
 
-def test_flag_fires_on_real_foldable_text():
-    consistent = _product(
-        name=_REAL_FOLDABLE_TEXT,
-        specs={"foldable": True},
-        pros=[_REAL_FOLDABLE_PRO],
-    )
+def test_flag_fires_on_a_second_real_text():
+    """换一条真实文案再验一次，证明不是碰巧只认得出那一句话。"""
+    # 缺点里提到独显，参数却说没有——这是真会出现的写法：
+    # 吐槽某个功能的副作用，仍然是在肯定它存在。
+    real = "散热一般，独显满载时风扇声明显"
+    consistent = _product(specs={"has_dedicated_gpu": True}, cons=[real])
     assert check_product(consistent) == []
 
-    contradicted = _product(
-        name=_REAL_FOLDABLE_TEXT,
-        specs={"foldable": False},
-        pros=[_REAL_FOLDABLE_PRO],
-    )
-    assert [i.field for i in check_product(contradicted)] == ["foldable"]
+    contradicted = _product(specs={"has_dedicated_gpu": False}, cons=[real])
+    assert [i.field for i in check_product(contradicted)] == ["has_dedicated_gpu"]
 
 
 def test_real_catalog_is_not_flagged():
-    """硬验收线：现有 112 条商品，误报必须为 0。
+    """硬验收线：现有全部商品，误报必须为 0。
 
     这条一旦失败，说明新加的规则把正常商品判成了「资料存疑」——
     先判断是规则误报还是数据确有缺陷，**不要为了让它变绿而改数据**。

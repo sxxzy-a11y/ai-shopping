@@ -1,9 +1,14 @@
 """用户偏好设置的读写。
 
-存成独立的 JSON 文件（`storage/settings.json`），不放进数据库：
-设置项很少，而且它与「分析历史」是性质完全不同的数据——历史是不可变的
-记录，设置是可随时改的配置。混在一张表里反而要额外区分。
-阶段四接入 SQLite 时若确实需要统一存储再迁移。
+**按用户存在数据库里**（`user_preferences` 表，见 `src/database.py`）。
+
+旧版本是一份全局的 `storage/settings.json`。那在多用户下不是「功能缺失」，
+而是**一个人的设置作用在另一个人身上**：李四的分析会被张三的偏好影响
+（design D6）。
+
+那份文件没有丢：内容被收编成**新用户的初始偏好模板**（`preference_template`
+表），文件本身改名为 `settings.json.bak`。不把它归给初始管理员——
+单用户时期那份偏好是谁设的我们并不知道，编一个归属不如让它成为默认值。
 
 放在业务层而不是界面层，是为了让「偏好如何影响需求」这件事可以被单元测试。
 """
@@ -15,10 +20,13 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from src import config
+from src.auth import User
 from src.demand_parser import Demand
+from src.errors import PermissionDenied, ZhigouError
+from src import database
 
 #: 价格取向。取值与界面选项一一对应。
 PricePriority = Literal["none", "value", "performance", "brand"]
@@ -38,25 +46,20 @@ _PRIORITY_TO_NEED: dict[str, str] = {
     "performance": "性能",
 }
 
-#: 可选的关注项。与解析器识别的核心需求词保持一致。
-FOCUS_OPTIONS: tuple[str, ...] = ("性能", "性价比", "续航", "便携", "音质", "降噪", "静音", "拍照")
-
 
 class UserPreferences(BaseModel):
-    """用户偏好设置。所有字段都有默认值，文件缺失时也能正常构造。"""
+    """用户偏好设置。所有字段都有默认值，没有记录时也能正常构造。"""
 
     model_config = ConfigDict(extra="ignore")
 
-    #: 常用品牌。填了就在分析时优先按这些品牌筛选。
-    brand_preferences: list[str] = Field(default_factory=list)
+    #: **全局 AI 总开关**。开启且已配置密钥时，智能分析与 AI 问答走 AI 增强；
+    #: 关闭则全部走本地规则。默认开启——「一直保持增强」是默认体验。
+    ai_enhanced: bool = True
 
     #: 价格取向。
     #: 默认 **"none"** 而不是某个具体取向：全新安装时用户并没有做过这个选择，
     #: 替他默认「性价比优先」等于每次分析都悄悄往需求里塞一个核心需求。
     price_priority: PricePriority = "none"
-
-    #: 长期关注的点，会自动并入每次分析的核心需求。
-    focus_areas: list[str] = Field(default_factory=list)
 
     #: 是否在结果里展示超预算商品。关掉后只保留预算内。
     show_over_budget: bool = True
@@ -73,9 +76,6 @@ class UserPreferences(BaseModel):
         priority_need = _PRIORITY_TO_NEED.get(self.price_priority)
         if priority_need:
             needs.append(priority_need)
-        for area in self.focus_areas:
-            if area not in needs:
-                needs.append(area)
         return needs
 
 
@@ -84,47 +84,112 @@ def default_preferences() -> UserPreferences:
 
 
 def settings_path(path: Path | None = None) -> Path:
+    """单用户时期那份 JSON 文件的路径。
+
+    **它已经不是偏好的存储了**，只剩下一个用途：`adopt_legacy_settings_file()`
+    要知道去哪儿找那份需要收编的旧文件。
+    """
     return Path(path) if path is not None else config.settings_path()
 
 
-def load_preferences(path: Path | None = None) -> UserPreferences:
-    """读取偏好设置。
+def _parse(raw: str) -> UserPreferences:
+    """把一段 JSON 解析成偏好。字段类型不对就整体退回默认值。
 
-    **不抛异常**：设置文件损坏或缺失时静默退回默认值。
-    理由是这个文件只影响便利性，不影响正确性——为它中断整个应用不值得。
-    想排查的话，返回值上的 `loaded` 标记可以看。
+    偏好只影响便利性，不影响正确性——为它中断整个应用不值得。
+    旧版本可能留着 `brand_preferences` / `focus_areas` 键，
+    `extra="ignore"` 会静默忽略。
     """
-    target = settings_path(path)
-    if not target.is_file():
+    try:
+        decoded = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return default_preferences()
+    if not isinstance(decoded, dict):
         return default_preferences()
     try:
-        raw = json.loads(target.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
-        return default_preferences()
-
-    if not isinstance(raw, dict):
-        return default_preferences()
-
-    try:
-        return UserPreferences.model_validate(raw)
+        return UserPreferences.model_validate(decoded)
     except Exception:  # noqa: BLE001 - 字段类型不对就整体退回默认值
         return default_preferences()
 
 
-def save_preferences(prefs: UserPreferences, path: Path | None = None) -> Path:
-    """写入偏好设置，返回实际写入的路径。
+def _template_preferences(path: Path | None = None) -> UserPreferences:
+    """新用户的初始偏好：模板 → 没有模板则代码默认值。"""
+    try:
+        raw = database.read_template_json(path)
+    except ZhigouError:
+        return default_preferences()
+    return _parse(raw) if raw is not None else default_preferences()
 
-    先写临时文件再原子替换，避免写到一半被中断留下半个 JSON。
+
+def load_preferences(user: User | None, path: Path | None = None) -> UserPreferences:
+    """读取**该用户**的偏好。
+
+    - 未登录（`user is None`）→ 默认值，**不碰数据库**
+    - 没有记录 → 用「新用户初始模板」，仍没有则用代码默认值。
+      **不写库**：读操作不留副作用，第一次保存设置时才落行。
+    - 数据库读不出来 → 默认值（偏好坏了不该让页面打不开）
     """
-    target = settings_path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".json.tmp")
-    tmp.write_text(
-        json.dumps(prefs.model_dump(), ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    if user is None:
+        return default_preferences()
+
+    try:
+        raw = database.read_preferences_json(user.username, path)
+    except ZhigouError:
+        return default_preferences()
+
+    return _parse(raw) if raw is not None else _template_preferences(path)
+
+
+def save_preferences(
+    user: User | None, prefs: UserPreferences, path: Path | None = None
+) -> None:
+    """保存该用户的偏好。
+
+    Raises:
+        PermissionDenied: 未登录。**这是刻意的**——偏好必须有归属，
+        没有归属就只能丢掉；静默丢掉一个用户刚点的保存，比报错更糟。
+    """
+    if user is None:
+        raise PermissionDenied(
+            "未登录，无法保存偏好设置。", detail="save_preferences 收到 user=None"
+        )
+
+    database.write_preferences_json(
+        user.username,
+        json.dumps(prefs.model_dump(), ensure_ascii=False),
+        path,
     )
-    os.replace(tmp, target)
-    return target
+
+
+def adopt_legacy_settings_file(path: Path | None = None) -> Path | None:
+    """把单用户时期那份 `settings.json` 收编成「新用户初始偏好模板」。
+
+    两件事的顺序**不能反**：先把内容读进模板，再把文件改名。
+    反过来先改名的话，中途失败就只剩一个 `.bak`，模板里什么都没有。
+
+    幂等：文件不在就什么都不做。返回改名后的备份路径（没做事则 `None`）。
+
+    注意 `path` 只指定**那份旧文件**在哪；模板写进当前生效的数据库
+    （与其他读写一样走 `database` 的默认路径）。
+    """
+    source = settings_path(path)
+    if not source.is_file():
+        return None
+
+    try:
+        raw = source.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raw = ""
+
+    prefs = _parse(raw) if raw else default_preferences()
+    database.write_template_json(json.dumps(prefs.model_dump(), ensure_ascii=False))
+
+    backup = source.with_name(source.name + ".bak")
+    try:
+        os.replace(source, backup)
+    except OSError:
+        # 改名失败不影响已经写好的模板：下次启动还会再试一遍（幂等）。
+        return None
+    return backup
 
 
 def apply_preferences(prefs: UserPreferences, demand: Demand) -> Demand:
@@ -141,15 +206,8 @@ def apply_preferences(prefs: UserPreferences, demand: Demand) -> Demand:
         if need not in merged_needs:
             merged_needs.append(need)
 
-    merged_brands = list(demand.brand_preferences)
-    if not merged_brands:
-        merged_brands = list(prefs.brand_preferences)
-
-    # Demand 是 pydantic 模型，用 model_copy 而不是 dataclasses.replace
+    # Demand 是 pydantic 模型，用 model_copy 而不是 dataclasses.replace。
+    # source 改为 "merged"：标记这条需求混入了偏好，界面据此提示。
     return demand.model_copy(
-        update={
-            "core_needs": merged_needs,
-            "brand_preferences": merged_brands,
-            "source": "merged",
-        }
+        update={"core_needs": merged_needs, "source": "merged"}
     )

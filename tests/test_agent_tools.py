@@ -122,7 +122,7 @@ def test_tool_modules_do_not_import_network_libraries():
 def test_search_products_executes(registry, context):
     result = _call(
         registry, context, "search_products",
-        category="headphone", budget_max=500, use_cases=["通勤"],
+        category="phone", budget_max=2000, use_cases=["游戏"],
     )
     assert result.ok
     assert result.payload["products"], "应当有候选"
@@ -138,7 +138,7 @@ def test_search_products_rejects_unknown_category(registry, context):
     result = _call(registry, context, "search_products", category="平板")
     assert result.ok is False
     assert "平板" in result.error
-    assert "headphone" in result.error, "要列出可用类别"
+    assert "laptop" in result.error, "要列出可用类别"
 
 
 @pytest.mark.parametrize("budget", [0, -1, -999])
@@ -248,7 +248,7 @@ def test_compare_products_rejects_mixed_categories(registry, context):
 def test_search_knowledge_executes(registry, context):
     result = _call(
         registry, context, "search_knowledge",
-        query="主动降噪和被动降噪有什么区别",
+        query="处理器档位是什么意思",
     )
     assert result.ok
     assert result.payload["found"] >= 1

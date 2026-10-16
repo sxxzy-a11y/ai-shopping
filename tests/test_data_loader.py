@@ -33,15 +33,29 @@ def test_dataset_covers_all_configured_categories(catalog):
         assert catalog.by_category(category), f"{category} 类别没有商品"
 
 
-def test_every_product_is_labelled_as_demo_data(catalog):
-    """需求硬性要求：不得把模拟数据冒充成真实在售商品。"""
+def test_every_product_carries_its_source_and_status(catalog):
+    """需求硬性要求：不得把整理来的数据冒充成核实过的行情。
+
+    这条断言跟着数据一起变过。以前守的是「来源说明里必须含『演示』二字」，
+    因为那时全部商品都是本项目编的；数据集换成真实品牌之后，该守的变成了
+    **不许自称已核验**——没有人逐条对照过来源，标成 verified 就是撒谎，
+    而等级比「来源写得不够好」严重得多。
+    """
     for product in catalog.products:
-        assert "演示" in product.data_source, f"{product.id} 的来源说明未标注演示数据"
+        assert product.data_source, f"{product.id} 缺少来源说明"
         assert product.updated_at, f"{product.id} 缺少数据更新时间"
+        assert not product.is_verified, f"{product.id} 自称已核验，但没有任何核验记录"
 
 
 def test_dataset_itself_carries_a_disclaimer(catalog):
-    assert "演示数据" in catalog.disclaimer
+    """数据集级说明要把「哪些是真的、哪些不是」讲清楚。
+
+    只断言「有一句免责声明」太松——换成真实品牌后，最容易被误读成
+    「品牌是真的，所以价格也是真的」，所以这两层边界必须写在说明里。
+    """
+    assert catalog.disclaimer
+    assert "未核验" in catalog.disclaimer, "必须说明数据未经逐条核验"
+    assert "不是实时价格" in catalog.disclaimer, "必须说明价格不是实时价"
 
 
 def test_products_have_unique_ids_and_vary_within_category(catalog):

@@ -21,17 +21,42 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 from src import config
-from src.errors import HistoryReadError, HistoryWriteError, ZhigouError
+from src.auth import (
+    ROLE_ADMIN,
+    ROLE_USER,
+    User,
+    hash_password,
+    is_admin,
+    require_admin,
+)
+from src.errors import (
+    HistoryReadError,
+    HistoryWriteError,
+    LastAdminProtected,
+    UsernameTaken,
+    ZhigouError,
+)
 from src.report_service import DecisionReport, now_local
 
-#: 历史库的表结构：分析历史与收藏。
+#: 历史库的表结构：账号、分析历史、收藏、按用户的偏好。
 _SCHEMA_HISTORY = """
+-- 账号表。字段刻意只有这些：用户名、角色、状态、凭据、创建时间。
+-- 没有邮箱/手机号/姓名——本应用不需要它们，收了也只是白拿用户信息。
+CREATE TABLE IF NOT EXISTS users (
+    username      TEXT PRIMARY KEY,
+    role          TEXT    NOT NULL DEFAULT 'user',
+    is_active     INTEGER NOT NULL DEFAULT 1,
+    password_hash TEXT    NOT NULL DEFAULT '',
+    created_at    TEXT    NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS analysis_history (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at     TEXT    NOT NULL,
@@ -40,15 +65,40 @@ CREATE TABLE IF NOT EXISTS analysis_history (
     top_score      REAL,
     result_count   INTEGER NOT NULL DEFAULT 0,
     report_json    TEXT    NOT NULL,
-    signature      TEXT
+    signature      TEXT,
+    -- 可空：单用户时期留下的记录没有归属，如实标成 NULL，
+    -- 不硬塞给某个账号（design D4）。
+    user_id        TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_history_created_at
     ON analysis_history (created_at DESC);
 
+-- 收藏：主键带上用户维度。旧形态是 `product_id` 单列主键，
+-- 那意味着**全站只能有一个人收藏某件商品**——第二个人点收藏是覆盖第一个人那条。
+-- SQLite 改不了主键，所以老库走「建新表→搬→删旧→改名」（design D5）。
 CREATE TABLE IF NOT EXISTS favorites (
-    product_id TEXT PRIMARY KEY,
-    added_at   TEXT NOT NULL
+    -- 可空仅对**遗留收藏**有意义：不知道是谁的，就不编一个归属。
+    user_id    TEXT,
+    product_id TEXT NOT NULL,
+    added_at   TEXT NOT NULL,
+    PRIMARY KEY (user_id, product_id)
+);
+
+-- 按用户存的偏好。原来是一份全局的 storage/settings.json——
+-- 那意味着李四的分析会被张三的偏好影响（design D6）。
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id    TEXT PRIMARY KEY,
+    prefs_json TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL DEFAULT ''
+);
+
+-- 单用户时期那份 settings.json 的归宿：作为**新用户的初始偏好模板**。
+-- 它是数据集级的东西（不属于任何账号），所以单独一行存着。
+-- 不把它归给初始管理员——那是编造归属（design D6）。
+CREATE TABLE IF NOT EXISTS preference_template (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    prefs_json TEXT NOT NULL DEFAULT '{}'
 );
 """
 
@@ -71,9 +121,17 @@ CREATE TABLE IF NOT EXISTS products (
     pros         TEXT NOT NULL DEFAULT '[]',
     cons         TEXT NOT NULL DEFAULT '[]',
     data_source  TEXT NOT NULL DEFAULT '',
-    source_url   TEXT,                                -- 可空：自造数据没有真实来源
+    source_url   TEXT,                                -- 可空：取不到来源就留空
+    image_url    TEXT,                                -- 可空：外链图片，挂了由界面回落图标
     data_status  TEXT NOT NULL DEFAULT 'unverified',  -- verified / unverified
-    updated_at   TEXT NOT NULL DEFAULT ''
+    updated_at   TEXT NOT NULL DEFAULT '',
+    -- 是否在售。下架的商品不参与搜索与推荐，但**历史记录里的引用仍可读**——
+    -- 下架不等于删除，已经做过的分析报告不该因为商品下架就打不开。
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    -- 由哪个管理员在界面上录入、什么时候录的。**可空**：
+    -- 命令行导入与种子数据都没有「录入者」这个概念，留空才是如实的。
+    entered_by   TEXT,
+    entered_at   TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products (category);
@@ -105,15 +163,56 @@ CREATE TABLE IF NOT EXISTS dataset_meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT ''
 );
+
+-- 分类元数据。**只放既有分类的覆盖项**，全集永远是 config.CATEGORY_LABELS——
+-- 分类键不可增删（见 design D9：新增分类要配权重、档位与知识指南，
+-- 那是代码与语料的工作量，不是一次点击）。
+CREATE TABLE IF NOT EXISTS category_meta (
+    category_key  TEXT PRIMARY KEY,
+    display_label TEXT,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    is_active     INTEGER NOT NULL DEFAULT 1,
+    updated_by    TEXT,
+    updated_at    TEXT
+);
+
+-- 品牌字典。键是**商品里的写法**，与商品表对得上。
+-- 由 `catalog_meta.sync_brands()` 从商品自动补齐，管理员只改元数据。
+CREATE TABLE IF NOT EXISTS brand_meta (
+    brand_name   TEXT PRIMARY KEY,
+    display_name TEXT,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    is_active     INTEGER NOT NULL DEFAULT 1,
+    entered_by   TEXT,
+    entered_at   TEXT
+);
 """
 
-#: 同一组条件只存一条的唯一索引。
-#: 部分索引（WHERE signature IS NOT NULL）让**老记录**（签名列为 NULL）
-#: 与「没算出签名的报告」互不冲突，升级老库时不会因为历史重复数据而失败。
+#: 同一组条件只存一条的唯一索引——**按用户**。
+#:
+#: 旧的索引是全局 `(signature)` 唯一，那会闹出一个很隐蔽的错：
+#: 李四提交与张三完全相同的条件时，去重查询会命中张三那条，
+#: `save_analysis` 于是把**张三记录的 ID 返回给李四**——不报错、不崩溃，
+#: 只是把别人的报告当成自己的交出去（design D4）。
+#:
+#: 部分索引条件同时要求 `user_id` 非空：SQLite 把 UNIQUE 索引里的 NULL
+#: 视为互不相等，所以遗留记录（两列都是 NULL）既不会互相冲突，
+#: 也不会挡住新用户的同名签名——它们就此退出去重体系，正是想要的。
 _SIGNATURE_INDEX = """
 CREATE UNIQUE INDEX IF NOT EXISTS idx_history_signature
-    ON analysis_history (signature)
-    WHERE signature IS NOT NULL;
+    ON analysis_history (user_id, signature)
+    WHERE signature IS NOT NULL AND user_id IS NOT NULL;
+"""
+
+#: 按用户查历史的索引。
+#:
+#: **刻意不放在 `_SCHEMA_HISTORY` 里。** 建表脚本先于补列执行，而老库的
+#: `analysis_history` 还没有 `user_id` 列——`CREATE TABLE IF NOT EXISTS` 对已存在的表
+#: 是空操作，紧接着的这条 `CREATE INDEX ... (user_id, ...)` 就会以
+#: `no such column: user_id` 失败，把整个升级卡死。索引必须在补列**之后**建。
+_USER_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_history_user
+    ON analysis_history (user_id, created_at DESC);
 """
 
 
@@ -127,6 +226,8 @@ class HistoryEntry:
     top_product: str
     top_score: float | None
     result_count: int
+    #: 归属账号。单用户时期的遗留记录为空——**如实留空，不编一个归属**。
+    user_id: str | None = None
 
     @property
     def created_at_label(self) -> str:
@@ -137,6 +238,11 @@ class HistoryEntry:
     @property
     def score_label(self) -> str:
         return f"{self.top_score:.0f} 分" if self.top_score is not None else "无推荐"
+
+    @property
+    def owner_label(self) -> str:
+        """归属展示名。全站概览直接用它，避免在界面里再判一次空。"""
+        return self.user_id if self.user_id else "无归属（单用户时期遗留）"
 
 
 # --------------------------------------------------------------------------
@@ -176,12 +282,110 @@ def connect(path: Path | None = None):
         connection.close()
 
 
+def _database_shape(path: Path) -> tuple[set[str], dict[str, set[str]], dict[str, str]]:
+    """一次读齐库的形状：`(表集合, 表->列集合, 索引名->建索引 SQL)`。
+
+    读不出来就返回空集合——**这里只回答「要不要先备份」，不负责报错**。
+    真正的报错留给后面的建表：库真的坏了，用户应该看到的是
+    「历史记录读取失败」，而不是这句体检失败。
+    """
+    tables: set[str] = set()
+    columns: dict[str, set[str]] = {}
+    indexes: dict[str, str] = {}
+
+    if not path.exists():
+        return tables, columns, indexes
+
+    try:
+        with connect(path) as connection:
+            for row in connection.execute(
+                "SELECT type, name, sql FROM sqlite_master"
+            ):
+                if row["type"] == "table":
+                    tables.add(row["name"])
+                    columns[row["name"]] = {
+                        info["name"]
+                        for info in connection.execute(
+                            f"PRAGMA table_info({row['name']})"
+                        )
+                    }
+                elif row["type"] == "index":
+                    indexes[row["name"]] = row["sql"] or ""
+    except (sqlite3.Error, ZhigouError):
+        return set(), {}, {}
+
+    return tables, columns, indexes
+
+
+def _needs_multiuser_migration(path: Path) -> bool:
+    """这个库文件需要升级到多用户形态吗。
+
+    **判据必须先确认「它像历史库」。** 商品库里同样没有 users 表，
+    若拿「users 表不存在」当判据，每个商品库都会被当成待升级的老库拿去备份，
+    而它其实什么都不用迁。
+    """
+    tables, columns, indexes = _database_shape(path)
+    if not ({"analysis_history", "favorites"} & tables):
+        return False  # 不是历史库：商品库或空库，没有要迁的东西
+
+    if "users" not in tables:
+        return True
+    if "user_id" not in columns.get("analysis_history", set()):
+        return True
+    if "favorites" in tables and "user_id" not in columns.get("favorites", set()):
+        return True
+    # 索引列变了也算待迁移：老索引是全局 (signature)，新索引是 (user_id, signature)
+    legacy_index = indexes.get("idx_history_signature", "")
+    return bool(legacy_index) and "user_id" not in legacy_index
+
+
+def _backup_database(path: Path) -> Path | None:
+    """迁移前把库文件复制一份，返回备份路径（复制失败则 None）。
+
+    命名只到日期：一天里反复启动只留一份，不会堆一地文件。
+
+    **复制失败不阻断迁移。** 备份是「迁完之后后悔」的保险，而「迁移中途出错」
+    由 `_run_schema` 的事务兜住——两件事各管一头。为了备份把应用卡成不可用，
+    是本末倒置。
+    """
+    stamp = now_local().strftime("%Y%m%d")
+    target = path.with_name(f"{path.name}.bak-{stamp}")
+    try:
+        shutil.copy2(path, target)
+    except OSError:
+        return None
+    return target
+
+
 def _run_schema(path: Path | None, script: str) -> None:
-    with connect(path) as connection:
+    """建表并迁移。
+
+    顺序是**先备份、再迁移**：备份必须在写入发生之前，否则备份里已经是
+    半迁移的状态。`with connection:` 让整段迁移成为一个事务——
+    任何一步抛错都整体回滚，老库保持原样（任务 2.7、2.11）。
+
+    注意 `executescript` 会先隐式提交，所以建表本身不在那个事务里；
+    这是可接受的：`CREATE TABLE IF NOT EXISTS` 全是幂等的，
+    重复执行不会留下中间状态。真正危险的表重建都在 `_migrate` 里。
+    """
+    target = Path(path) if path is not None else config.database_path()
+    _ensure_parent(target)
+
+    if _needs_multiuser_migration(target):
+        _backup_database(target)
+
+    with connect(target) as connection:
         try:
             connection.executescript(script)
-            _migrate(connection)
-            connection.commit()
+            with connection:
+                # **必须显式 BEGIN。** Python 的 sqlite3 只在 DML（INSERT/UPDATE/
+                # DELETE）前隐式开事务，DDL 不是——`ALTER TABLE` / `CREATE INDEX`
+                # 会各自自动提交。不写这一句，「整段迁移在一个事务里」就是空话：
+                # 中途失败时表已经被改掉了，而 `with connection:` 的 rollback
+                # 无事可回滚，一路静悄悄（这个坑由 test_migration 里的
+                # 「迁移中途失败」用例逮住）。
+                connection.execute("BEGIN")
+                _migrate(connection)
         except sqlite3.Error as exc:
             raise HistoryWriteError(
                 "本地数据库初始化失败，历史记录功能暂不可用。",
@@ -201,38 +405,121 @@ def init_db(path: Path | None = None) -> None:
 
 
 def init_history_db(path: Path | None = None) -> None:
-    """只建历史库的表。读历史时用它。"""
-    _run_schema(path, _SCHEMA_HISTORY)
+    """只建历史库的表。读历史时用它。
+
+    **不带路径时落到哪个库，是按库的范围定的**：历史库 → `zhigou.db`。
+    这一点原先靠 `_run_schema` 里的通用默认值（永远是历史库）间接成立，
+    于是 `init_product_db()` 不带路径时会把**商品表建进历史库**——
+    实测被在一条「历史库损坏不影响分析」的用例上逮到。
+    """
+    _run_schema(path if path is not None else config.database_path(), _SCHEMA_HISTORY)
 
 
 def init_product_db(path: Path | None = None) -> None:
-    """只建商品库的表。商品仓储层用它。"""
-    _run_schema(path, _SCHEMA_PRODUCTS)
+    """只建商品库的表。商品仓储层用它。不带路径时落到 `products.db`。"""
+    _run_schema(path if path is not None else config.products_db_path(), _SCHEMA_PRODUCTS)
+
+
+def _table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
+    return {
+        row["name"] for row in connection.execute(f"PRAGMA table_info({table})")
+    }
+
+
+def _rebuild_favorites(connection: sqlite3.Connection) -> None:
+    """把单用户形态的 `favorites` 重建成带用户维度的形态。
+
+    SQLite 不支持 `ALTER TABLE` 改主键，只能「建新表 → 搬 → 删旧 → 改名」。
+
+    遗留收藏的 `user_id` 置为 NULL：**不知道是谁的，就不编一个归属**。
+    它们因此只对管理员可见，与遗留历史记录的处理一致。
+    """
+    connection.execute("DROP TABLE IF EXISTS favorites_new")
+    connection.execute(
+        """
+        CREATE TABLE favorites_new (
+            user_id    TEXT,
+            product_id TEXT NOT NULL,
+            added_at   TEXT NOT NULL,
+            PRIMARY KEY (user_id, product_id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO favorites_new (user_id, product_id, added_at)
+        SELECT NULL, product_id, added_at FROM favorites
+        """
+    )
+    connection.execute("DROP TABLE favorites")
+    connection.execute("ALTER TABLE favorites_new RENAME TO favorites")
+
+
+def _drop_legacy_signature_index(connection: sqlite3.Connection) -> None:
+    """删掉全局唯一的旧签名索引，好让新索引能建起来。
+
+    不删的话 `CREATE UNIQUE INDEX IF NOT EXISTS idx_history_signature`
+    会因为**同名索引已存在**而直接跳过，新库看似升级了、实际仍在用旧索引——
+    那正是串号缺陷留存的方式。
+    """
+    row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_history_signature'"
+    ).fetchone()
+    if row is not None and "user_id" not in (row["sql"] or ""):
+        connection.execute("DROP INDEX idx_history_signature")
 
 
 def _migrate(connection: sqlite3.Connection) -> None:
-    """老库升级。当前唯一的一步：给没有 signature 列的 analysis_history 补列。
+    """老库升级。**必须幂等**——每次建表都会跑一遍。
 
-    `CREATE TABLE IF NOT EXISTS` 对已存在的表不生效，所以老库的
-    signature 列只能在这里补。列加了之后签名是 NULL，配合
-    `_SIGNATURE_INDEX` 的部分索引，历史数据不需要回填也不会冲突。
+    升级内容（design 的 Migration Plan 第 2–4 步）：
+    给 `analysis_history` 补 `signature` 与 `user_id` 两列；
+    把单用户形态的 `favorites` 重建成 `(user_id, product_id)` 主键；
+    把全局唯一的签名索引换成按用户的。
 
-    **只在表存在时才动。** 这个函数会被两种建表路径调用，而商品库那条路上
+    表层的建表不在这里——`CREATE TABLE IF NOT EXISTS` 对已存在的表不生效，
+    所以**只有补列与改形状**才需要写在这里。
+
+    **只在表存在时才动。** 这个函数会被三条建表路径共用，而商品库那条路上
     根本没有 analysis_history——不加这道判断就会在商品库上抛「表不存在」。
     """
     tables = {
         row["name"]
         for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
+
+    # 商品库的补列走这一支
+    if "products" in tables:
+        product_columns = _table_columns(connection, "products")
+        if "image_url" not in product_columns:
+            connection.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
+        if "is_active" not in product_columns:
+            # 老库里的商品默认为**在售**：它们本来就在参与推荐，
+            # 加这一列不该让整个商品库凭空下架。
+            connection.execute(
+                "ALTER TABLE products ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+            )
+        if "entered_by" not in product_columns:
+            connection.execute("ALTER TABLE products ADD COLUMN entered_by TEXT")
+        if "entered_at" not in product_columns:
+            connection.execute("ALTER TABLE products ADD COLUMN entered_at TEXT")
+
     if "analysis_history" not in tables:
         return
 
-    columns = {
-        row["name"] for row in connection.execute("PRAGMA table_info(analysis_history)")
-    }
+    columns = _table_columns(connection, "analysis_history")
     if "signature" not in columns:
         connection.execute("ALTER TABLE analysis_history ADD COLUMN signature TEXT")
+    if "user_id" not in columns:
+        # 可空：遗留记录没有归属，如实留空而不是硬塞给某个账号（design D4）
+        connection.execute("ALTER TABLE analysis_history ADD COLUMN user_id TEXT")
+
+    if "favorites" in tables and "user_id" not in _table_columns(connection, "favorites"):
+        _rebuild_favorites(connection)
+
+    _drop_legacy_signature_index(connection)
     connection.execute(_SIGNATURE_INDEX)
+    connection.execute(_USER_INDEX)
 
 
 def _ensure_ready(path: Path | None) -> None:
@@ -269,18 +556,342 @@ def check_health(path: Path | None = None) -> tuple[bool, str]:
 
 
 # --------------------------------------------------------------------------
+# 账号
+# --------------------------------------------------------------------------
+#
+# 这一节是**账号的唯一写入口**。两条不变式钉在这里，而不是钉在界面上：
+#
+# 1. **明文密码不可能落库**：写函数只收明文，在内部派生。
+#    把「传进来的必须已经是派生结果」交给调用方，早晚会有人传错，
+#    而那种错一旦发生就是把明文写进了库。
+# 2. **系统不会失去全部管理员**：降级或停用最后一个可用管理员会被拒绝。
+#    守卫放在真正写库的那个事务里，界面绕不过去（design D3 的同一原则）。
+
+
+def _row_to_user(row: sqlite3.Row) -> User:
+    return User(
+        username=row["username"],
+        role=row["role"],
+        is_active=bool(row["is_active"]),
+        password_hash=row["password_hash"],
+        created_at=row["created_at"],
+    )
+
+
+def create_user(
+    username: str,
+    password: str,
+    role: str = ROLE_USER,
+    path: Path | None = None,
+) -> User:
+    """新建账号。**只收明文密码，在这里派生**。
+
+    Raises:
+        UsernameTaken: 用户名已存在。
+        HistoryWriteError: 写入失败。
+    """
+    created_at = now_local().isoformat(timespec="seconds")
+    credential = hash_password(password)
+
+    try:
+        init_history_db(path)
+        with connect(path) as connection:
+            connection.execute(
+                """
+                INSERT INTO users (username, role, is_active, password_hash, created_at)
+                VALUES (?, ?, 1, ?, ?)
+                """,
+                (username, role, credential, created_at),
+            )
+            connection.commit()
+    except sqlite3.IntegrityError as exc:
+        raise UsernameTaken(
+            f"用户名「{username}」已被占用，请换一个。", detail=str(exc)
+        ) from exc
+    except sqlite3.Error as exc:
+        raise HistoryWriteError(
+            "账号创建失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+    return User(
+        username=username,
+        role=role,
+        is_active=True,
+        password_hash=credential,
+        created_at=created_at,
+    )
+
+
+def get_user(username: str, path: Path | None = None) -> User | None:
+    """按用户名取账号。不存在返回 None。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                """
+                SELECT username, role, is_active, password_hash, created_at
+                FROM users WHERE username = ?
+                """,
+                (username,),
+            ).fetchone()
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "账号信息读取失败，可能是本地数据库文件损坏。",
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+    return _row_to_user(row) if row is not None else None
+
+
+def list_users(path: Path | None = None) -> list[User]:
+    """列出全部账号，按创建时间与用户名排序。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            rows = connection.execute(
+                """
+                SELECT username, role, is_active, password_hash, created_at
+                FROM users ORDER BY created_at, username
+                """
+            ).fetchall()
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "账号列表读取失败，可能是本地数据库文件损坏。",
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+    return [_row_to_user(row) for row in rows]
+
+
+def count_users(path: Path | None = None) -> int:
+    """账号总数。初始管理员的引导靠它判断「表是不是空的」（任务 11.1）。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute("SELECT COUNT(*) AS n FROM users").fetchone()
+            return int(row["n"])
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "账号数量统计失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def count_active_admins(path: Path | None = None) -> int:
+    """还有几个**可用的**管理员。停用的不算——停用等于不能用。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS n FROM users WHERE role = ? AND is_active = 1",
+                (ROLE_ADMIN,),
+            ).fetchone()
+            return int(row["n"])
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "管理员数量统计失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def _guard_last_admin(connection: sqlite3.Connection, username: str) -> None:
+    """拒绝「让系统失去最后一个可用管理员」的操作。
+
+    **判断放在同一个事务里**：先查后改之间若被插入另一个停用操作，
+    两个操作各自都以为「还有别人」，结果一个都不剩。
+
+    Raises:
+        LastAdminProtected: 该账号是最后一个可用管理员。
+    """
+    row = connection.execute(
+        "SELECT role, is_active FROM users WHERE username = ?", (username,)
+    ).fetchone()
+    if row is None or row["role"] != ROLE_ADMIN or not row["is_active"]:
+        return
+
+    others = connection.execute(
+        """
+        SELECT COUNT(*) AS n FROM users
+        WHERE role = ? AND is_active = 1 AND username <> ?
+        """,
+        (ROLE_ADMIN, username),
+    ).fetchone()
+    if int(others["n"]) == 0:
+        raise LastAdminProtected(
+            detail=f"{username} 是最后一个可用管理员，拒绝该操作"
+        )
+
+
+def set_user_role(
+    username: str, role: str, path: Path | None = None, *, viewer: User | None
+) -> None:
+    """改角色。**只有管理员能调**，且降级最后一个可用管理员会被拒绝。
+
+    `viewer` 是必填的关键字参数：给默认值的话，某条路径漏传就会静默放行，
+    而「普通用户直接调管理员操作」正是要挡住的那条路（design D3）。
+    """
+    require_admin(viewer)
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            with connection:
+                if role != ROLE_ADMIN:
+                    _guard_last_admin(connection, username)
+                connection.execute(
+                    "UPDATE users SET role = ? WHERE username = ?", (role, username)
+                )
+    except sqlite3.Error as exc:
+        raise HistoryWriteError(
+            "修改角色失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def set_user_password(
+    username: str, password: str, path: Path | None = None, *, viewer: User | None
+) -> None:
+    """重置密码。**只有管理员能调**，且只收明文、在这里派生。"""
+    require_admin(viewer)
+    credential = hash_password(password)
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            connection.execute(
+                "UPDATE users SET password_hash = ? WHERE username = ?",
+                (credential, username),
+            )
+            connection.commit()
+    except sqlite3.Error as exc:
+        raise HistoryWriteError(
+            "重置密码失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def set_user_active(
+    username: str,
+    is_active: bool,
+    path: Path | None = None,
+    *,
+    viewer: User | None,
+) -> None:
+    """停用 / 启用账号。只有管理员能调，停用最后一个可用管理员会被拒绝。"""
+    require_admin(viewer)
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            with connection:
+                if not is_active:
+                    _guard_last_admin(connection, username)
+                connection.execute(
+                    "UPDATE users SET is_active = ? WHERE username = ?",
+                    (1 if is_active else 0, username),
+                )
+    except sqlite3.Error as exc:
+        raise HistoryWriteError(
+            "修改账号状态失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+# --------------------------------------------------------------------------
+# 按用户的偏好（JSON 存取）
+# --------------------------------------------------------------------------
+#
+# `src/settings.py` 负责把 JSON 解析成 `UserPreferences`，SQL 全在这里。
+# 分开是为了守住「SQL 只出现在本模块」这条既有约定。
+
+
+def read_preferences_json(user_id: str, path: Path | None = None) -> str | None:
+    """读某个用户存的偏好 JSON。没有记录返回 None。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                "SELECT prefs_json FROM user_preferences WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            return row["prefs_json"] if row is not None else None
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "偏好设置读取失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def write_preferences_json(
+    user_id: str, prefs_json: str, path: Path | None = None
+) -> None:
+    try:
+        init_history_db(path)
+        with connect(path) as connection:
+            connection.execute(
+                """
+                INSERT INTO user_preferences (user_id, prefs_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    prefs_json = excluded.prefs_json,
+                    updated_at = excluded.updated_at
+                """,
+                (user_id, prefs_json, now_local().isoformat(timespec="seconds")),
+            )
+            connection.commit()
+    except sqlite3.Error as exc:
+        raise HistoryWriteError(
+            "偏好设置保存失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def read_template_json(path: Path | None = None) -> str | None:
+    """读「新用户初始偏好模板」。没有则 None（表示用代码里的默认值）。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                "SELECT prefs_json FROM preference_template WHERE id = 1"
+            ).fetchone()
+            return row["prefs_json"] if row is not None else None
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "偏好模板读取失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def write_template_json(prefs_json: str, path: Path | None = None) -> None:
+    try:
+        init_history_db(path)
+        with connect(path) as connection:
+            connection.execute(
+                """
+                INSERT INTO preference_template (id, prefs_json) VALUES (1, ?)
+                ON CONFLICT(id) DO UPDATE SET prefs_json = excluded.prefs_json
+                """,
+                (prefs_json,),
+            )
+            connection.commit()
+    except sqlite3.Error as exc:
+        raise HistoryWriteError(
+            "偏好模板保存失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+# --------------------------------------------------------------------------
 # 分析历史
 # --------------------------------------------------------------------------
 
 
-def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
-    """写入一条分析记录，返回记录 ID。
+def save_analysis(
+    report: DecisionReport,
+    path: Path | None = None,
+    *,
+    user_id: str | None = None,
+) -> int:
+    """写入一条分析记录，返回记录 ID。`user_id` 是归属账号。
 
-    **按条件指纹去重**：数据库里已有同指纹记录时不新增，
-    直接返回已有记录的 ID。去重在数据库层完成——所以跨会话
-    （刷新页面、重开浏览器后再提交同一组条件）同样只存一条，
-    这是对 spec「同一组条件只存一条记录」场景的兑现。
-    签名为空的报告（老版本生成的记录）不做去重，保持历史行为。
+    **按条件指纹去重，而且按用户去重**：同一个用户提交同一组条件只存一条；
+    不同用户提交相同条件**各存一条**。
+
+    这条用户维度是整个变更里最要紧的一处修复。之前查询是
+    `WHERE signature = ?`，全局唯一——李四提交与张三完全相同的条件时，
+    它会命中张三那条并把**张三的 ID 返回给李四**，于是李四打开历史看到的
+    是别人的报告。不报错、不崩溃，只是把别人的数据当成自己的给出去。
+
+    `user_id` 为空（遗留调用）时按「无归属」去重：SQLite 的 `IS` 把两个 NULL
+    视为相等，所以这类记录仍然只存一条，行为与单用户时期一致。
 
     Raises:
         HistoryWriteError: 写入失败。调用方应提示用户，但**不中断**当前页面——
@@ -292,7 +903,7 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
         init_db(path)
     except HistoryWriteError as exc:
         # init_db 失败时它说的是「数据库初始化失败」，但用户此刻做的是「保存」。
-        # 报错要按用户正在做的事来说，不然他会以为是自己点错了地方。
+        # 报错要按用户正在做的事来说，不然他会以为自己点错了地方。
         raise HistoryWriteError(
             "本次分析记录保存失败，结果仍可在当前页面查看。",
             detail=exc.detail,
@@ -304,8 +915,12 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
         with connect(path) as connection:
             if signature is not None:
                 existing = connection.execute(
-                    "SELECT id FROM analysis_history WHERE signature = ? LIMIT 1",
-                    (signature,),
+                    """
+                    SELECT id FROM analysis_history
+                    WHERE signature = ? AND user_id IS ?
+                    LIMIT 1
+                    """,
+                    (signature, user_id),
                 ).fetchone()
                 if existing is not None:
                     return int(existing["id"])
@@ -315,8 +930,8 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
                     """
                     INSERT INTO analysis_history
                         (created_at, demand_summary, top_product, top_score,
-                         result_count, report_json, signature)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                         result_count, report_json, signature, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         report.created_at,
@@ -326,6 +941,7 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
                         len(report.recommendations),
                         json.dumps(report.to_dict(), ensure_ascii=False),
                         signature,
+                        user_id,
                     ),
                 )
                 connection.commit()
@@ -335,8 +951,12 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
                 # 查回来按「已存在」处理；真的查不到再往外抛。
                 connection.rollback()
                 existing = connection.execute(
-                    "SELECT id FROM analysis_history WHERE signature = ? LIMIT 1",
-                    (signature,),
+                    """
+                    SELECT id FROM analysis_history
+                    WHERE signature = ? AND user_id IS ?
+                    LIMIT 1
+                    """,
+                    (signature, user_id),
                 ).fetchone()
                 if existing is not None:
                     return int(existing["id"])
@@ -348,15 +968,62 @@ def save_analysis(report: DecisionReport, path: Path | None = None) -> int:
         ) from exc
 
 
+def find_analysis_by_signature(
+    signature: str, user_id: str | None = None, path: Path | None = None
+) -> int | None:
+    """按条件指纹找一条**属于该用户**的记录 ID。没有则 None。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                """
+                SELECT id FROM analysis_history
+                WHERE signature = ? AND user_id IS ?
+                LIMIT 1
+                """,
+                (signature, user_id),
+            ).fetchone()
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "历史记录查找失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+    return int(row["id"]) if row is not None else None
+
+
+def _rows_to_entries(rows) -> list[HistoryEntry]:
+    return [
+        HistoryEntry(
+            id=row["id"],
+            created_at=row["created_at"],
+            demand_summary=row["demand_summary"],
+            top_product=row["top_product"],
+            top_score=row["top_score"],
+            result_count=row["result_count"],
+            user_id=row["user_id"],
+        )
+        for row in rows
+    ]
+
+
+_HISTORY_COLUMNS = (
+    "id, created_at, demand_summary, top_product, top_score, result_count, user_id"
+)
+
+
 def list_analyses(limit: int = 50, path: Path | None = None) -> list[HistoryEntry]:
-    """列出历史记录，按时间由新到旧。"""
+    """列出**全部**历史记录，按时间由新到旧。
+
+    **这个函数是给管理员的全站概览用的**（design D3：界面隐藏不算权限，
+    所以「能不能看全部」由调用方是不是管理员决定，而这个入口本身就意味着
+    「我要看全部」）。普通用户的历史页请用 `list_analyses_of()`。
+    """
     try:
         _ensure_ready(path)
         with connect(path) as connection:
             rows = connection.execute(
-                """
-                SELECT id, created_at, demand_summary, top_product,
-                       top_score, result_count
+                f"""
+                SELECT {_HISTORY_COLUMNS}
                 FROM analysis_history
                 ORDER BY created_at DESC, id DESC
                 LIMIT ?
@@ -369,23 +1036,71 @@ def list_analyses(limit: int = 50, path: Path | None = None) -> list[HistoryEntr
             detail=f"{type(exc).__name__}: {exc}",
         ) from exc
 
-    return [
-        HistoryEntry(
-            id=row["id"],
-            created_at=row["created_at"],
-            demand_summary=row["demand_summary"],
-            top_product=row["top_product"],
-            top_score=row["top_score"],
-            result_count=row["result_count"],
-        )
-        for row in rows
-    ]
+    return _rows_to_entries(rows)
 
 
-def get_analysis(entry_id: int, path: Path | None = None) -> DecisionReport | None:
-    """按 ID 取回完整报告。不存在返回 None。"""
+def list_analyses_of(
+    user_id: str, limit: int = 50, path: Path | None = None
+) -> list[HistoryEntry]:
+    """列出**某个用户本人**的历史记录，按时间由新到旧。
+
+    遗留记录（`user_id` 为空）不会出现在任何人的列表里——它们没有归属，
+    谁都认领不了，只在全站概览里单独标注。
+    """
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT {_HISTORY_COLUMNS}
+                FROM analysis_history
+                WHERE user_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            ).fetchall()
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "历史记录读取失败，可能是本地数据库文件损坏。当前仍可进行新的分析。",
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+    return _rows_to_entries(rows)
+
+
+def _may_read(connection: sqlite3.Connection, entry_id: int, viewer: User | None) -> bool:
+    """这条记录能不能给这个访问者看。
+
+    三种情况放行：管理员；记录归他本人；**遗留记录**（`user_id` 为空）只对管理员放行。
+    其余一律拒绝——普通用户按 ID 猜别人的记录是必须挡住的一条路。
+    """
+    if is_admin(viewer):
+        return True
+    if viewer is None:
+        return False
+
+    row = connection.execute(
+        "SELECT user_id FROM analysis_history WHERE id = ?", (entry_id,)
+    ).fetchone()
+    if row is None:
+        return False
+    return row["user_id"] == viewer.username
+
+
+def get_analysis(
+    entry_id: int, path: Path | None = None, *, viewer: User | None
+) -> DecisionReport | None:
+    """按 ID 取回完整报告。不存在**或无权查看**都返回 `None`。
+
+    `viewer` 是**必填的关键字参数**，没有默认值：每一次读都必须说清楚
+    「是谁在读」。给个默认值的话，某条路径漏传就会静默地按「全都能读」放行，
+    而那正是要防的事。
+    """
     try:
         with connect(path) as connection:
+            if not _may_read(connection, entry_id, viewer):
+                return None
             row = connection.execute(
                 "SELECT report_json FROM analysis_history WHERE id = ?", (entry_id,)
             ).fetchone()
@@ -407,10 +1122,17 @@ def get_analysis(entry_id: int, path: Path | None = None) -> DecisionReport | No
         ) from exc
 
 
-def delete_analysis(entry_id: int, path: Path | None = None) -> bool:
-    """删除一条历史记录。返回是否真的删掉了。"""
+def delete_analysis(
+    entry_id: int, path: Path | None = None, *, viewer: User | None
+) -> bool:
+    """删除一条历史记录。返回是否真的删掉了。
+
+    与 `get_analysis` 同一条归属校验：**能读才谈得上删**。
+    """
     try:
         with connect(path) as connection:
+            if not _may_read(connection, entry_id, viewer):
+                return False
             cursor = connection.execute(
                 "DELETE FROM analysis_history WHERE id = ?", (entry_id,)
             )
@@ -424,6 +1146,7 @@ def delete_analysis(entry_id: int, path: Path | None = None) -> bool:
 
 
 def count_analyses(path: Path | None = None) -> int:
+    """历史总数（含遗留记录）。全站概览用。"""
     try:
         _ensure_ready(path)
         with connect(path) as connection:
@@ -438,19 +1161,63 @@ def count_analyses(path: Path | None = None) -> int:
         ) from exc
 
 
+def count_analyses_of(user_id: str, path: Path | None = None) -> int:
+    """某个用户本人的历史条数。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS n FROM analysis_history WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            return int(row["n"])
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "历史记录数量统计失败。",
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+
+def count_unowned_analyses(path: Path | None = None) -> int:
+    """无归属的遗留历史条数。全站概览要**单独标注**它们（任务 7.3）。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS n FROM analysis_history WHERE user_id IS NULL"
+            ).fetchone()
+            return int(row["n"])
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "历史记录数量统计失败。",
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+
 # --------------------------------------------------------------------------
 # 收藏
 # --------------------------------------------------------------------------
 
 
-def add_favorite(product_id: str, path: Path | None = None) -> None:
-    """收藏一件商品。重复收藏不报错。"""
+def add_favorite(user_id: str, product_id: str, path: Path | None = None) -> None:
+    """收藏一件商品，归属该用户。
+
+    同一用户重复收藏**不报错、也不更新收藏时间**——保留第一次的那个时刻，
+    列表顺序才稳定（早先的实现是整行替换，重复点一下就把条目挪到最前面）。
+
+    两个用户可以各自收藏同一件商品：主键是 `(user_id, product_id)`。
+    旧的单列主键下，第二个人点收藏是**覆盖**第一个人那条。
+    """
     try:
-        init_db(path)
+        init_history_db(path)
         with connect(path) as connection:
             connection.execute(
-                "INSERT OR REPLACE INTO favorites (product_id, added_at) VALUES (?, ?)",
-                (product_id, now_local().isoformat(timespec="seconds")),
+                """
+                INSERT INTO favorites (user_id, product_id, added_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, product_id) DO NOTHING
+                """,
+                (user_id, product_id, now_local().isoformat(timespec="seconds")),
             )
             connection.commit()
     except sqlite3.Error as exc:
@@ -460,16 +1227,17 @@ def add_favorite(product_id: str, path: Path | None = None) -> None:
         ) from exc
 
 
-def remove_favorite(product_id: str, path: Path | None = None) -> None:
+def remove_favorite(user_id: str, product_id: str, path: Path | None = None) -> None:
     try:
-        init_db(path)
+        init_history_db(path)
     except HistoryWriteError as exc:
         raise HistoryWriteError("取消收藏失败。", detail=exc.detail) from exc
 
     try:
         with connect(path) as connection:
             connection.execute(
-                "DELETE FROM favorites WHERE product_id = ?", (product_id,)
+                "DELETE FROM favorites WHERE user_id = ? AND product_id = ?",
+                (user_id, product_id),
             )
             connection.commit()
     except sqlite3.Error as exc:
@@ -479,13 +1247,21 @@ def remove_favorite(product_id: str, path: Path | None = None) -> None:
         ) from exc
 
 
-def list_favorites(path: Path | None = None) -> list[tuple[str, str]]:
-    """返回 [(product_id, added_at)]，按收藏时间由新到旧。"""
+def list_favorites(user_id: str, path: Path | None = None) -> list[tuple[str, str]]:
+    """返回该用户的 [(product_id, added_at)]，按收藏时间由新到旧。
+
+    无归属的遗留收藏**不会出现在任何人的列表里**（`user_id` 为 NULL，
+    谁也认领不了它们）；它们仍在库中，可被全站概览统计到。
+    """
     try:
         _ensure_ready(path)
         with connect(path) as connection:
             rows = connection.execute(
-                "SELECT product_id, added_at FROM favorites ORDER BY added_at DESC"
+                """
+                SELECT product_id, added_at FROM favorites
+                WHERE user_id = ? ORDER BY added_at DESC
+                """,
+                (user_id,),
             ).fetchall()
     except sqlite3.Error as exc:
         raise HistoryReadError(
@@ -496,12 +1272,29 @@ def list_favorites(path: Path | None = None) -> list[tuple[str, str]]:
     return [(row["product_id"], row["added_at"]) for row in rows]
 
 
-def is_favorite(product_id: str, path: Path | None = None) -> bool:
+def count_unowned_favorites(path: Path | None = None) -> int:
+    """无归属的遗留收藏条数。给全站概览用（design D5）。"""
     try:
         _ensure_ready(path)
         with connect(path) as connection:
             row = connection.execute(
-                "SELECT 1 FROM favorites WHERE product_id = ?", (product_id,)
+                "SELECT COUNT(*) AS n FROM favorites WHERE user_id IS NULL"
+            ).fetchone()
+            return int(row["n"])
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "收藏数量统计失败。",
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+
+def is_favorite(user_id: str, product_id: str, path: Path | None = None) -> bool:
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                "SELECT 1 FROM favorites WHERE user_id = ? AND product_id = ?",
+                (user_id, product_id),
             ).fetchone()
             return row is not None
     except (sqlite3.Error, ZhigouError):

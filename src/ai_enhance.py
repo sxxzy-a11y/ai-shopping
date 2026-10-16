@@ -294,7 +294,6 @@ _SPEC_UNIT_KEYS: dict[str, tuple[str, float]] = {
     "storage_gb": ("storage", 1.0),
     "battery_mah": ("battery", 1.0),
     "screen_size": ("length", 1.0),
-    "driver_mm": ("small_length", 1.0),
 }
 
 _UNIT_ALTERNATION = "|".join(
@@ -319,11 +318,30 @@ _SPEC_TOLERANCE_RATIO = 0.02
 #: 相对容差的绝对下限，避免极小的数值因比例容差过窄而误杀。
 _SPEC_TOLERANCE_FLOOR = 0.05
 
+#: **小数**断言额外允许的取整半径：写到几位小数，就是精确到那一位的一半。
+#:
+#: 只对带小数点的断言生效，整数断言**不适用**——这正是上面那条注释担心的情况：
+#: 若把 `1TB` 也按写法精度取半径，它就变成区间 [0.5, 1.5] TB，足以吞掉数据里的
+#: 512GB。而 `1.4 千克` 的半径只有 0.05 千克，吞不掉任何东西。
+#:
+#: 真实参数的位数是杂的（1.36 千克、6.7 英寸、1.39 千克），模型顺手取整是
+#: 正常表达，按 2% 相对容差卡会把「1.36 → 1.4」这类正常取整判成编造，
+#: 进而丢掉整条解读——「校验过严」是这个模块踩过的坑，别再踩一次。
+def _rounding_allowance(raw_number: str, factor: float) -> float:
+    if "." not in raw_number:
+        return 0.0
+    decimals = len(raw_number.partition(".")[2])
+    return 0.5 * (10.0**-decimals) * factor
 
-def _matches_any_known(value: float, candidates: Sequence[float]) -> bool:
+
+def _matches_any_known(
+    value: float, candidates: Sequence[float], *, rounding: float = 0.0
+) -> bool:
     """该数值是否落在任一已知取值的容差范围内。"""
     for known in candidates:
-        tolerance = max(_SPEC_TOLERANCE_FLOOR, abs(known) * _SPEC_TOLERANCE_RATIO)
+        tolerance = max(
+            _SPEC_TOLERANCE_FLOOR, abs(known) * _SPEC_TOLERANCE_RATIO, rounding
+        )
         if abs(value - known) <= tolerance:
             return True
     return False
@@ -460,7 +478,8 @@ def find_unsupported_spec_claims(
         if not candidates:
             continue  # 这一类数据压根没有，无从谈「与数据不符」
         scaled = float(raw_number) * factor
-        if _matches_any_known(scaled, candidates):
+        rounding = _rounding_allowance(raw_number, factor)
+        if _matches_any_known(scaled, candidates, rounding=rounding):
             continue
         unsupported.append(match.group(0).strip())
     return unsupported
@@ -616,19 +635,24 @@ def explain_recommendations(
 # 知识问答：基于检索片段组织回答
 # --------------------------------------------------------------------------
 
-_ANSWER_SYSTEM = """你是消费决策助手。用户问了一个选购问题，系统已经从知识库里\
-检索到若干资料片段。你的任务是把这些片段组织成一段通顺的回答。
+_ANSWER_SYSTEM = """你是消费决策助手的问答助手。用户问了一个选购问题，系统已经从\
+知识库里检索到若干资料片段。请**直接回答用户的问题**。
 
 严格遵守：
 1. 只输出 JSON，不要任何解释文字，不要用 markdown 代码块。
-2. **只依据提供的片段作答。** 片段里没有的内容一律不说，即使你知道也不说。
-3. 片段不足以回答这个问题时，answer 里直接说明「现有资料没有覆盖这一点」，\
-不要用常识补全。
-4. 不要给结论性排名或口碑判断——不要出现「销量第一」「口碑最好」「全网最低」\
-这类说法，知识库里没有这些依据。
-5. 不要给出具体价格。片段里若出现参考价，那是商品数据里的记录值，\
-不是实时价格，也不要据此比较贵贱。
-6. 回答用中文，**控制在 200 字以内**，直接说要点，不要客套。
+2. **回答只依据提供的片段。** 片段里没有的事实（参数、价格、评价）一律不说，\
+即使你知道也不说。
+3. **直接回答问题本身**：把片段里的信息综合成一段给用户看的建议。\
+不要出现「资料」「片段」「知识库」「没有覆盖」这类词，不要复述任务。
+4. 用户问得宽（只问品牌、只问品类）也没关系：把片段里该品牌或该品类的要点\
+综合起来讲，最后给一句「怎么选」的建议。
+5. 实在没有任何片段能回答时，才用一句话说明暂时答不了这个问题、缺什么信息。\
+除此之外不要做任何免责声明或自我说明。
+6. 不要给结论性排名或口碑判断——不要出现「销量第一」「口碑最好」「全网最低」\
+这类说法。
+7. 不要给出具体价格。片段里若出现参考价，那是记录值，不是实时价格，\
+也不要据此比较贵贱。
+8. 回答用中文，**控制在 200 字以内**，直接说要点，不要客套。
 
 输出格式：
 {"answer": "……", "used_fragment_indexes": [1, 2]}"""
@@ -651,8 +675,7 @@ def answer_from_knowledge(
     """基于检索到的片段组织一段回答。
 
     Raises:
-        领域异常。调用方应降级为**直接展示片段原文**——那是本地模式的形态，
-        已经能用了，不是「没得看」。
+        领域异常。调用方应说明失败并建议重试，**不展示任何未通过校验的半成品**。
 
     校验用的是 `harden-ai-enhancement` 落地的那条链：价格必须来自片段原文，
     排他性结论一律拒绝。片段不足时要求模型自己说明，而不是补全。
@@ -720,6 +743,7 @@ def data_sharing_notice(demand: Demand, item_count: int) -> str:
     parts.append("")
     parts.append(
         "不会发送：你的收藏、历史记录、任何身份或设备信息。"
-        "商品数据全部是本地演示数据。如果不想发送，保持本地演示模式即可。"
+        "商品数据是本机数据库里那份公开资料整理的数据（品牌与型号真实、参数经简化、未核验）。"
+        "如果不想发送，保持本地模式即可。"
     )
     return "\n".join(parts)

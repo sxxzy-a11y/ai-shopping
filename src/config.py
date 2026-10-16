@@ -117,9 +117,38 @@ def products_db_path() -> Path:
 
 
 def knowledge_dir() -> Path:
-    """知识语料目录。缺失时知识问答提示无资料，其余功能不受影响。"""
+    """知识语料目录。缺失时 AI 问答提示无资料，其余功能不受影响。"""
     override = _env_str("ZHIGOU_KNOWLEDGE_DIR")
     return Path(override) if override else PROJECT_ROOT / "data" / "knowledge"
+
+
+# --------------------------------------------------------------------------
+# 账号
+# --------------------------------------------------------------------------
+
+#: 初始管理员的凭据来源。
+#:
+#: 起作用的时机只有一次：**账号表为空时**。之后这两个变量改了也不生效——
+#: 管理员已经建好了，改环境变量不会悄悄把别人变成管理员（任务 11.2）。
+ADMIN_USERNAME_ENV: Final[str] = "ZHIGOU_ADMIN_USERNAME"
+ADMIN_PASSWORD_ENV: Final[str] = "ZHIGOU_ADMIN_PASSWORD"
+
+#: 未配置时生成的随机密码长度。够长，因为它是打字复制粘贴一次就改掉的东西。
+ADMIN_RANDOM_PASSWORD_BYTES: Final[int] = 12
+
+
+def admin_username() -> str:
+    """配置里的管理员用户名。未配置返回空串。"""
+    return _env_str(ADMIN_USERNAME_ENV)
+
+
+def admin_password() -> str:
+    """配置里的管理员密码。未配置返回空串——调用方据此决定是否随机生成。
+
+    **不设默认值**：「没配置就用 admin/123456」这种兜底，等于给每个
+    克隆这份代码的人发一个公开密码。
+    """
+    return _env_str(ADMIN_PASSWORD_ENV)
 
 
 # --------------------------------------------------------------------------
@@ -151,18 +180,37 @@ KNOWLEDGE_TYPE_WEIGHTS: Final[dict[str, float]] = {
 #: 就该优先，这一条比纯词频匹配更贴近意图。
 KNOWLEDGE_CATEGORY_BOOST: Final[float] = 1.6
 
+#: 品牌加权系数。查询点名了品牌（「华为怎么样」「红米怎么样」）时，该品牌的
+#: 商品条目额外加权。品牌词只有两三个字，BM25 天然分低——不加权的话，
+#: 这类宽问题会被阈值挡成「检索不到」，而用户明明问到了点子上。
+#:
+#: 品类加权与品牌加权可以叠加，但品牌加权有品类约束：点名了「华为笔记本」时，
+#: 华为的手机条目不吃这个加权——问的是电脑，不该把手机顶上来。
+KNOWLEDGE_BRAND_BOOST: Final[float] = 3.0
+
 #: 相关度阈值。最高分低于它即判定为「检索不到」。
 #: 定高了会把「明明有资料」判成找不到，定低了会把弱相关结果当答案返回——
 #: 后者的危害更大，所以取值偏保守。
 KNOWLEDGE_MIN_SCORE: Final[float] = 3.0
 
-#: 单次检索返回的最大条数。
-KNOWLEDGE_MAX_RESULTS: Final[int] = 5
+#: 单次检索返回的最大条数。配合相对截断使用，把噪声挡在模型之外。
+KNOWLEDGE_MAX_RESULTS: Final[int] = 3
 
-#: 追问价格意图的词。命中后知识问答**不给检索答案**，改为引导到商品筛选。
+#: 相对相关度截断系数。只保留得分不低于「最高分 × 系数」的命中。
+#:
+#: 为什么需要它：绝对阈值只能判断「有没有」，判断不了「准不准」——实测一次
+#: 查询的第一名 8.57 分时，后面跟着一串 2.x / 1.x 的弱命中，它们都过了绝对
+#: 阈值，一起喂给模型只会稀释答案。按「与第一名同一量级」取舍更贴近意图。
+#:
+#: 0.35 是按当前语料的实测分布取的：术语题（8.57 / 4.13）与商品查询
+#: （4.35 / 2.09 / 2.00）都能保留第二条，而 2.x 的噪声被挡住。
+#: 调高会更容易漏掉并列相关的第二篇资料，调低则截断失效。
+KNOWLEDGE_RELATIVE_CUT: Final[float] = 0.35
+
+#: 追问价格意图的词。命中后 AI 问答**不作答**，改为引导到商品筛选。
 #:
 #: 为什么必须挡住：检索按文本相关性找资料，**完全不理解数值约束**。
-#: 原型实测——问「500 元以内降噪耳机」，检索返回的是一款 2499 元的商品。
+#: 原型实测——问「2000 元以内买什么手机」，检索返回的是一款远超预算的商品。
 #: 这不是缺陷而是检索的本性，所以价格问题一律走结构化查询。
 KNOWLEDGE_PRICE_INTENT_TERMS: Final[tuple[str, ...]] = (
     "多少钱",
@@ -283,17 +331,14 @@ def is_ai_configured() -> bool:
 # 商品类别
 # --------------------------------------------------------------------------
 
+#: 商品库实际覆盖的类别。**只有这两类电子产品**——每个类别要做 10 款真实型号，
+#: 摊薄了每类只剩个位数，参数可比性和说服力都会垮掉。
+#: 键盘与耳机曾在这一版里，因为品类聚焦（只演示笔记本电脑与手机）而被移除。
+#: 用户提到表外的品类时由 `demand_parser.detect_unsupported_category`
+#: 明确回「暂不支持」，而不是跨类别乱推一堆无关商品。
 CATEGORY_LABELS: Final[dict[str, str]] = {
     "laptop": "笔记本电脑",
     "phone": "手机",
-    "headphone": "耳机",
-    "keyboard": "键盘",
-    "appliance": "家用电器",
-    "apparel": "服饰鞋包",
-    "furniture": "家居家具",
-    "sports": "运动户外",
-    "personal_care": "个护美妆",
-    "baby": "母婴用品",
 }
 
 
@@ -309,7 +354,7 @@ def category_label(category: str) -> str:
 # 每个类别一张维度权重表，同一类别内权重之和必须为 1.0——
 # tests/test_recommender.py 有断言守护这一点，漏配或改错会直接测试失败。
 #
-# 维度差异是有意为之：笔记本与手机看重便携性，耳机与键盘则没有这个维度。
+# 维度差异是有意为之：笔记本与手机都保留便携性，但需求与性价比的权重不同。
 
 DIMENSION_LABELS: Final[dict[str, str]] = {
     "budget_fit": "预算匹配",
@@ -317,7 +362,6 @@ DIMENSION_LABELS: Final[dict[str, str]] = {
     "performance_fit": "性能功能适配",
     "value": "性价比",
     "portability": "便携性",
-    "durability": "耐用性",
 }
 
 #: 商品参数键 → 中文标签（单一来源）。
@@ -336,39 +380,7 @@ SPEC_LABELS: Final[dict[str, str]] = {
     "battery_h": "续航",
     "battery_mah": "电池容量",
     "camera_tier": "拍照档位",
-    "driver_mm": "驱动单元",
-    "connection": "连接方式",
-    "noise_cancelling": "主动降噪",
-    "audio_tier": "音质档位",
-    "layout": "键位布局",
-    "switch_type": "轴体",
-    "wireless": "无线",
-    "hot_swappable": "热插拔",
-    "noise_level": "噪音等级",
     "has_dedicated_gpu": "独立显卡",
-    # 家用电器
-    "capacity_l": "容量",
-    "energy_grade": "能效等级",
-    "power_w": "功率",
-    "noise_db": "噪音",
-    "warranty_years": "质保年限",
-    # 服饰鞋包 / 家居家具 / 运动户外
-    "material": "材质",
-    "comfort_tier": "舒适档位",
-    "breathability_tier": "透气档位",
-    "width_cm": "宽度",
-    "load_kg": "承重",
-    "assembly_required": "组装方式",
-    "cushion_tier": "缓冲档位",
-    "waterproof": "防水",
-    # 个护美妆
-    "suit_for": "适用对象",
-    # 母婴用品
-    "age_min_months": "适用起始月龄",
-    "safety_cert": "安全认证",
-    "foldable": "折叠",
-    # 通用
-    "durability_tier": "耐用档位",
 }
 
 SCORING_WEIGHTS: Final[dict[str, dict[str, float]]] = {
@@ -385,61 +397,6 @@ SCORING_WEIGHTS: Final[dict[str, dict[str, float]]] = {
         "performance_fit": 0.25,
         "value": 0.10,
         "portability": 0.10,
-    },
-    "headphone": {
-        "budget_fit": 0.30,
-        "need_fit": 0.30,
-        "performance_fit": 0.25,
-        "value": 0.15,
-    },
-    "keyboard": {
-        "budget_fit": 0.30,
-        "need_fit": 0.25,
-        "performance_fit": 0.30,
-        "value": 0.15,
-    },
-    # 以下为非电子品类。维度按品类调整：家电/服饰/母婴以「耐用性」衡量寿命，
-    # 家具把耐用权重提到 0.20（大件更看重用得住），个护美妆不设耐用与便携。
-    "appliance": {
-        "budget_fit": 0.25,
-        "need_fit": 0.30,
-        "performance_fit": 0.20,
-        "value": 0.15,
-        "durability": 0.10,
-    },
-    "apparel": {
-        "budget_fit": 0.25,
-        "need_fit": 0.30,
-        "performance_fit": 0.20,
-        "value": 0.15,
-        "durability": 0.10,
-    },
-    "furniture": {
-        "budget_fit": 0.25,
-        "need_fit": 0.25,
-        "performance_fit": 0.20,
-        "value": 0.10,
-        "durability": 0.20,
-    },
-    "sports": {
-        "budget_fit": 0.25,
-        "need_fit": 0.30,
-        "performance_fit": 0.20,
-        "value": 0.10,
-        "durability": 0.15,
-    },
-    "personal_care": {
-        "budget_fit": 0.25,
-        "need_fit": 0.30,
-        "performance_fit": 0.25,
-        "value": 0.20,
-    },
-    "baby": {
-        "budget_fit": 0.25,
-        "need_fit": 0.30,
-        "performance_fit": 0.20,
-        "value": 0.10,
-        "durability": 0.15,
     },
 }
 

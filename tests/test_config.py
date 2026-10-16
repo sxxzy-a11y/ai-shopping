@@ -111,3 +111,93 @@ def test_env_vars_still_win_over_defaults(
     monkeypatch.setenv(config.LLM_MODEL_ENV, "some-other-model")
     assert config.llm_base_url() == "https://example.invalid/v1"
     assert config.llm_model() == "some-other-model"
+
+
+# --------------------------------------------------------------------------
+# 类别与参数的交叉引用
+# --------------------------------------------------------------------------
+#
+# 系统里有十来张按「类别」或「参数」写的表，散在 config / scoring /
+# comparison / ingest / demand_parser 各处。它们**没有一张是单一来源**，
+# 全靠人工保持一致，而漂移的后果全是静默的：
+#
+# - 类别表里多留一个商品库没有的类别 → 那个类别没人用，看着无害
+# - 参数表里留着一个没人读的键 → 比较表显示原始键名，像数据缺失
+# - 需求映射指向一个不存在的参数 → 用户说的话识别得出，就是加不上分
+#
+# 所以在这里集中守一道：**凡是引用类别或参数的地方，目标必须真实存在。**
+
+
+def _referenced_specs() -> dict[str, set[str]]:
+    """收集全项目按类别/需求写下的所有参数键引用。"""
+    from src import comparison, ingest, scoring
+
+    refs: dict[str, set[str]] = {}
+
+    refs["scoring._SPEC_RANGES"] = {
+        key for bounds in scoring._SPEC_RANGES.values() for key in bounds
+    }
+    refs["scoring._PERFORMANCE_SPECS"] = {
+        key for keys in scoring._PERFORMANCE_SPECS.values() for key in keys
+    }
+    refs["scoring._NEED_SIGNALS"] = {
+        key for keys in scoring._NEED_SIGNALS.values() for key in keys
+    }
+    refs["comparison._PARAM_ORDER"] = {
+        key for keys in comparison._PARAM_ORDER.values() for key in keys
+    }
+    refs["comparison._PARAM_UNITS"] = set(comparison._PARAM_UNITS)
+    refs["comparison._PARAM_BOOL"] = set(comparison._PARAM_BOOL)
+    refs["comparison._PARAM_TIER"] = set(comparison._PARAM_TIER)
+    refs["ingest.SPEC_ALIASES"] = set(ingest.SPEC_ALIASES.values())
+    refs["ingest.TIER_KEYS"] = set(ingest.TIER_KEYS)
+    return refs
+
+
+def test_every_referenced_spec_has_a_chinese_label():
+    """所有被引用的参数键都要在 `config.SPEC_LABELS` 里有中文名。
+
+    这条同时守住两件事：键还在用，以及界面能把它显示成人话。
+    """
+    unknown = {
+        name: sorted(keys - set(config.SPEC_LABELS))
+        for name, keys in _referenced_specs().items()
+        if keys - set(config.SPEC_LABELS)
+    }
+    assert unknown == {}, f"这些表引用了没有中文标签的参数：{unknown}"
+
+
+def test_parameter_tables_are_partitioned_by_color():
+    """布尔型与档位型的参数表不能重叠。
+
+    同一个键既被当布尔值渲染（「支持 / 不支持」）又被当档位渲染（「3/5」），
+    比较表里会出现同一参数两种写法，取决于哪张表先命中。
+    """
+    from src import comparison
+
+    overlap = set(comparison._PARAM_BOOL) & set(comparison._PARAM_TIER)
+    assert overlap == set(), f"这些参数同时被登记成布尔和档位：{sorted(overlap)}"
+
+
+def test_every_category_table_uses_the_catalog_categories():
+    """按类别写的表只能提到商品库覆盖的那四个类别。
+
+    多留一个没有商品的类别，单看那行代码永远是对的；错位要等到
+    某件商品的类别在那张表里查不到、行为悄悄退化时才暴露。
+    """
+    from src import comparison, ingest, scoring
+
+    catalog = set(config.CATEGORY_LABELS)
+    # 表名 → 该表里代表「类别」的那一侧
+    keyed = {
+        "scoring._SPEC_RANGES": set(scoring._SPEC_RANGES),
+        "scoring._PERFORMANCE_SPECS": set(scoring._PERFORMANCE_SPECS),
+        "config.SCORING_WEIGHTS": set(config.SCORING_WEIGHTS),
+        "comparison._PARAM_ORDER": set(comparison._PARAM_ORDER),
+        # 类目映射表的方向相反：中文类目名 → 类别键，类别在值那一侧
+        "ingest.DEFAULT_CATEGORY_MAP": set(ingest.DEFAULT_CATEGORY_MAP.values()),
+    }
+    for name, categories in keyed.items():
+        assert categories <= catalog, (
+            f"{name} 提到了商品库不覆盖的类别：{sorted(categories - catalog)}"
+        )

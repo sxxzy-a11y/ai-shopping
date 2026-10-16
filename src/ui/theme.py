@@ -190,8 +190,16 @@ _STYLES = f"""
     background: {BRAND_50}; border: 1px solid {BRAND_100};
     display: flex; align-items: center; justify-content: center;
     color: {BRAND};
+    /* 图片叠在类别图标之上；图片加载失败时把它藏掉，
+       下面垫着的图标就露出来了——不需要 JS 回调整理状态。 */
+    position: relative; overflow: hidden;
   }}
   .zg-thumb.is-lg {{ width: 62px; height: 62px; border-radius: 13px; }}
+  .zg-thumb img {{
+    position: absolute; inset: 0;
+    width: 100%; height: 100%; object-fit: cover;
+    background: #fff;
+  }}
 
   /* ===================================================================
      商品行

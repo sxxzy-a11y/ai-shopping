@@ -21,53 +21,11 @@ from src.scoring import DimensionScore, ScoreResult
 from src.ui import icons, theme
 from src.ui.theme import bullet_list, chip, esc, facts, notice, section
 
-#: 卡片与商品行上优先展示的核心参数。
+#: 卡片与商品行上优先展示的核心参数。**只覆盖商品库实际的两个类别**——
+#: 表外的类别会落到下面那句 `sorted(product.specs)[:3]` 兜底，不会不显示。
 _HEADLINE_SPECS: dict[str, list[str]] = {
     "laptop": ["cpu", "ram_gb", "storage_gb", "weight_kg"],
     "phone": ["chip", "ram_gb", "storage_gb", "weight_g"],
-    "headphone": ["driver_mm", "connection", "battery_h", "noise_cancelling"],
-    "keyboard": ["layout", "switch_type", "connection"],
-    "appliance": ["capacity_l", "energy_grade", "power_w"],
-    "apparel": ["material", "comfort_tier", "durability_tier"],
-    "furniture": ["material", "width_cm", "load_kg"],
-    "sports": ["material", "cushion_tier", "durability_tier"],
-    "personal_care": ["power_w", "battery_h", "noise_db"],
-    "baby": ["material", "age_min_months", "durability_tier"],
-}
-
-_SPEC_LABELS = {
-    "cpu": "处理器",
-    "chip": "芯片",
-    "ram_gb": "内存",
-    "storage_gb": "存储",
-    "weight_kg": "重量",
-    "weight_g": "重量",
-    "battery_h": "续航",
-    "battery_mah": "电池",
-    "driver_mm": "单元",
-    "connection": "连接",
-    "noise_cancelling": "降噪",
-    "layout": "布局",
-    "switch_type": "轴体",
-    "has_dedicated_gpu": "独显",
-    "capacity_l": "容量",
-    "energy_grade": "能效",
-    "power_w": "功率",
-    "noise_db": "噪音",
-    "warranty_years": "质保",
-    "material": "材质",
-    "comfort_tier": "舒适",
-    "breathability_tier": "透气",
-    "durability_tier": "耐用",
-    "width_cm": "宽度",
-    "load_kg": "承重",
-    "assembly_required": "组装",
-    "cushion_tier": "缓冲",
-    "waterproof": "防水",
-    "suit_for": "适用",
-    "age_min_months": "适龄",
-    "safety_cert": "认证",
-    "foldable": "折叠",
 }
 
 #: 匹配档位 → 标签色调
@@ -421,7 +379,7 @@ def product_row(
         f'<div class="zg-card{" is-accent" if highlight else ""}">'
         f'  <div class="zg-row">'
         f"    {rank_html}"
-        f'    <div class="zg-thumb">{icons.category_icon(product.category, size=27)}</div>'
+        f'    {_thumb(product, size=27)}'
         f'    <div class="zg-row-main">'
         f'      <div class="zg-row-name">{esc(product.name or product.id)}</div>'
         f'      <div class="zg-row-spec">{esc(product.brand or "品牌未知")}'
@@ -458,7 +416,7 @@ def _source_line(product) -> str:
     """商品卡片底部的来源信息行。
 
     需求硬性要求「看到资料来源与更新时间」，这个变更又加了核验状态与
-    逐条来源链接。**未核验要显眼**——不标注的话，用户会把演示数据
+    逐条来源链接。**未核验要显眼**——不标注的话，用户会把整理来的数据
     当成核实过的信息。
 
     价格来自价格记录，所以它有自己的来源与采集时间；与整条记录的来源
@@ -482,6 +440,28 @@ def _source_line(product) -> str:
         parts.append(f"价格来自：{esc(price_source)}{suffix}")
 
     return '<div class="zg-source">' + "　·　".join(parts) + "</div>"
+
+
+def _thumb(product, *, size: int = 27, large: bool = False, style: str = "") -> str:
+    """商品缩略图：有图片显示图片，没有或加载失败回落类别图标。
+
+    **外链图片随时会挂，而演示现场最不能接受的就是破图。** 做法是把类别图标
+    垫在底下、图片绝对定位盖在上面，图片 `onerror` 时把自己隐藏——
+    「图挂了」于是退化成「看到图标」，而不是「看到一张破图」。
+    """
+    klass = "zg-thumb is-lg" if large else "zg-thumb"
+    attrs = f' style="{style}"' if style else ""
+    icon = icons.category_icon(product.category, size=size)
+    # 要 strip：只有空白的地址不是地址，拼进 `src` 之后浏览器会把它当成
+    # 当前页面地址再请求一次——多一个无意义的请求，还得靠 onerror 兜回来。
+    url = str(getattr(product, "image_url", "") or "").strip()
+    if not url:
+        return f'<div class="{klass}"{attrs}>{icon}</div>'
+    return (
+        f'<div class="{klass}"{attrs}>{icon}'
+        f'<img src="{esc(url)}" alt="" loading="lazy" '
+        f"onerror=\"this.style.display='none'\"></div>"
+    )
 
 
 def render_product_row(
@@ -530,7 +510,7 @@ def product_mini(product: Product, *, budget_label: str = "") -> str:
     return (
         f'<div class="zg-card is-flat">'
         f'  <div class="zg-row">'
-        f'    <div class="zg-thumb is-lg">{icons.category_icon(product.category, size=30)}</div>'
+        f'    {_thumb(product, size=30, large=True)}'
         f'    <div class="zg-row-main">'
         f'      <div class="zg-row-name">{esc(product.name or product.id)}</div>'
         f'      <div class="zg-row-spec">{esc(product.brand or "品牌未知")}'
@@ -564,7 +544,7 @@ def compare_overview(products, *, budgets: dict[str, str], scores: dict) -> str:
         budget = budgets.get(product.id, "")
         cells.append(
             f'<div class="zg-compare-cell">'
-            f'  <div class="zg-thumb">{icons.category_icon(product.category, size=26)}</div>'
+            f'  {_thumb(product, size=26)}'
             f'  <div class="zg-compare-name">{esc(product.name or product.id)}</div>'
             f'  <div class="zg-compare-brand">{esc(product.brand or "品牌未知")}'
             f"    · {esc(product.category_label)}</div>"
@@ -589,8 +569,7 @@ def pros_cons_grid(products) -> str:
         cards.append(
             f'<div class="zg-proscons-card">'
             f'  <div class="zg-proscons-title">'
-            f'    <span class="zg-thumb" style="width:30px;height:30px;border-radius:8px">'
-            f"{icons.category_icon(product.category, size=17)}</span>"
+            f'    {_thumb(product, size=17, style="width:30px;height:30px;border-radius:8px")}'
             f"    {esc(product.name or product.id)}</div>"
             f'  <div class="zg-proscons-sub">优点</div>'
             f'  <ul class="zg-list">{pros}</ul>'

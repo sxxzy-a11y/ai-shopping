@@ -14,6 +14,7 @@ from typing import Any
 import streamlit as st
 
 from src import config
+from src.auth import User
 from src.data_loader import Catalog, load_catalog
 from src.knowledge.corpus import build_corpus
 from src.knowledge.index import BM25Index
@@ -45,6 +46,38 @@ KEY_COMPARE_PREFILL = "zg_compare_prefill"  # 请求填充比较页的商品选�
 
 #: 默认落地页
 DEFAULT_PAGE = "首页"
+
+#: 登录页的页面名。未登录时应用只渲染它（见 app.py 的入口短路）。
+LOGIN_PAGE = "登录"
+
+# --- 当前登录用户 -----------------------------------------------------------
+
+KEY_USER = "zg_current_user"  # User | None
+
+
+def current_user() -> User | None:
+    """当前登录用户，未登录返回 `None`。
+
+    **唯一的出处就是 session_state，不留模块级缓存。** Streamlit 每次交互
+    都重跑整个脚本，但模块只加载一次——把当前用户放进模块变量，
+    它会跨会话串味，那是比「刷新要重新登录」严重得多的取舍。
+    """
+    return st.session_state.get(KEY_USER)
+
+
+def set_current_user(user: User | None) -> None:
+    st.session_state[KEY_USER] = user
+
+
+def sign_out() -> None:
+    """登出：**清空整个会话**，然后回到登录页。
+
+    不是只清 `KEY_USER`：上一个用户的推荐结果、完整报告、比较选择都还在
+    会话里，换个账号登录就会看到上一个人的东西。整体清空比逐个列举可靠——
+    这里漏一个就是一次数据泄漏，而逐个列举必然会在以后新增会话键时漏掉。
+    """
+    st.session_state.clear()
+    request_page(LOGIN_PAGE)
 
 
 def get(key: str, default: Any = None) -> Any:
@@ -163,11 +196,29 @@ def get_knowledge_index() -> BM25Index:
     )
 
 
+def ai_enhanced_active() -> bool:
+    """AI 增强现在是否真的在起作用。
+
+    两个条件缺一不可：个人设置里的全局开关（默认开）+ 密钥已配置。
+    分析页、AI 问答页、模式标识都从这里取答案——「AI 什么时候在起作用」
+    只允许有一个出处，否则三处口径迟早漂移。
+    """
+    from src import ai_service, settings
+
+    if not settings.load_preferences(current_user()).ai_enhanced:
+        return False
+    return ai_service.get_service().configured
+
+
 def current_mode() -> tuple[str, str]:
     """返回 (模式名, 说明)，供界面顶部展示当前运行模式。"""
-    if config.is_ai_configured():
-        return "AI 增强模式", f"已接入模型 {config.llm_model()}"
-    return "本地演示模式", "未配置模型密钥，全部由本地规则完成，不联网"
+    if not config.is_ai_configured():
+        return "本地演示模式", "未配置模型密钥，全部由本地规则完成，不联网"
+    from src import settings
+
+    if not settings.load_preferences(current_user()).ai_enhanced:
+        return "本地模式", "AI 增强已在个人设置中关闭，全部由本地规则完成"
+    return "AI 增强模式", f"已接入模型 {config.llm_model()}"
 
 
 # --------------------------------------------------------------------------

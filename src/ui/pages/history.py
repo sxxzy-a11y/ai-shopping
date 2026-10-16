@@ -54,7 +54,7 @@ def _render_entry_row(entry: database.HistoryEntry) -> None:
 def _render_report_detail(entry_id: int) -> None:
     """右侧：打开某条历史记录的完整报告。"""
     try:
-        report = database.get_analysis(entry_id)
+        report = database.get_analysis(entry_id, viewer=state.current_user())
     except ZhigouError as exc:
         components.show_notice(to_user_message(exc), "stop")
         return
@@ -95,8 +95,13 @@ def _render_report_detail(entry_id: int) -> None:
 
 
 def _render_history_tab(catalog: Catalog) -> None:
+    user = state.current_user()
+    if user is None:
+        return
+
     try:
-        entries = database.list_analyses()
+        # **只列本人的记录**：`list_analyses()` 是全站视角，给管理员概览用的。
+        entries = database.list_analyses_of(user.username)
     except ZhigouError as exc:
         components.show_notice(to_user_message(exc), "stop")
         components.caption(
@@ -135,8 +140,12 @@ def _render_history_tab(catalog: Catalog) -> None:
 
 
 def _render_favorites_tab(catalog: Catalog) -> None:
+    user = state.current_user()
+    if user is None:
+        return
+
     try:
-        favorites = database.list_favorites()
+        favorites = database.list_favorites(user.username)
     except ZhigouError as exc:
         components.show_notice(to_user_message(exc), "stop")
         return
@@ -167,7 +176,7 @@ def _render_favorites_tab(catalog: Catalog) -> None:
             st.write("")
             if st.button("取消收藏", key=f"unfav_{product_id}", use_container_width=True):
                 try:
-                    database.remove_favorite(product_id)
+                    database.remove_favorite(user.username, product_id)
                 except ZhigouError as exc:
                     components.show_notice(to_user_message(exc), "stop")
                 else:

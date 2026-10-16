@@ -244,8 +244,13 @@ def test_build_corpus_without_products_still_works(tmp_path: Path):
 
 def test_real_corpus_is_well_formed():
     """项目自带的语料必须全部合法——写错格式会让知识问答静默变哑。"""
+    from src import config
+
     documents = load_documents(corpus_config_dir())
-    assert len(documents) >= 11, "品类指南或 FAQ 缺失"
+    # 篇数不用写死：语料随品类收缩而变，写死一个数只会让人在删文档时
+    # 顺手把阈值改小。这里要守的是「每个品类一篇指南，外加服务级文档」。
+    assert len(documents) >= len(config.CATEGORY_LABELS) + 1, "品类指南或 FAQ 缺失"
+    assert any(doc.doc_type == TYPE_SERVICE for doc in documents), "缺少服务级文档"
 
     for doc in documents:
         assert doc.title

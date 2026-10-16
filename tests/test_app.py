@@ -18,7 +18,8 @@ import httpx
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from src import config
+from src import config, data_loader
+from src.auth import ROLE_ADMIN, ROLE_USER, User
 from src.ui import icons, state, theme
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -27,16 +28,34 @@ APP_FILE = str(PROJECT_ROOT / "app.py")
 #: app.py 兜底处理未预期异常时的文案。出现它就说明有东西炸了。
 FALLBACK_TEXT = "操作未能完成，请稍后重试"
 
+#: 这些用例测的是**页面本身**，所以直接从一个「已登录」的会话起步。
+#: 登录流程有自己的用例（见文件末的登录/越权小节），那些用 `_run(user=None)`
+#: 从登录页开始走。这样分工的好处是：页面回归测试不必每次都先跑一遍登录，
+#: 而登录本身也不会因为「反正都会被跳过」而失去覆盖。
+TEST_USERNAME = "tester"
+DEFAULT_USER = User(username=TEST_USERNAME, role=ROLE_USER)
+
+#: 管理员会话。账号本身要不要真的建在库里，由各条用例自己决定——
+#: 有些只关心「侧边栏露不露入口」，那只需要一个身份对象。
+ADMIN_USERNAME = "root"
+ADMIN_USER = User(username=ADMIN_USERNAME, role=ROLE_ADMIN)
+
 
 EXAMPLE_TEXT = (
-    "我是一名大学生，预算 3000 元，想买一台主要用于 Python 编程、"
+    "我是一名大学生，预算 6000 元，想买一台主要用于 Python 编程、"
     "日常学习和偶尔玩游戏的笔记本电脑。我比较看重性能和性价比，"
     "不希望电脑太重。"
 )
 
 
-def _run(timeout: float = 60) -> AppTest:
+def _run(timeout: float = 60, user: User | None = DEFAULT_USER) -> AppTest:
+    """跑一次应用。**默认已登录**（见 `DEFAULT_USER` 的说明）。
+
+    未登录的用例显式传 `user=None`。
+    """
     at = AppTest.from_file(APP_FILE, default_timeout=timeout)
+    if user is not None:
+        at.session_state[state.KEY_USER] = user
     at.run()
     return at
 
@@ -62,9 +81,13 @@ def _all_text(at: AppTest) -> str:
 
     # 控件上的文案（toogle 的说明、输入框的标题、按钮的字）也是"页面上可见文本"，
     # 不收进来会漏判——曾经因此以为「AI 开关没渲染」，其实只是断言取不到。
+    #
+    # `expander` 同理，而且它更隐蔽：折叠面板的标题在浏览器里明明白白
+    # 显示着，但不在上面那些集合里。漏收它的代价是实测过的——管理页
+    # 「已停用」与分类展示名两处断言都因此误判成「没生效」。
     for attr in (
         "selectbox", "multiselect", "text_input", "text_area", "toggle",
-        "radio", "checkbox", "button", "slider", "number_input",
+        "radio", "checkbox", "button", "slider", "number_input", "expander",
     ):
         for element in getattr(at, attr, []):
             label = getattr(element, "label", "")
@@ -134,7 +157,7 @@ def test_sidebar_is_dark():
 
 @pytest.mark.parametrize(
     "page",
-    ["首页", "智能分析", "商品比较", "知识问答", "历史记录", "个人设置", "项目说明"],
+    ["首页", "智能分析", "商品比较", "AI 问答", "历史记录", "个人设置", "项目说明"],
 )
 def test_every_page_renders_without_exception(page):
     at = _run()
@@ -146,15 +169,26 @@ def test_navigation_lists_every_page():
     """导航项与规格里的页面清单必须一致——加页忘挂导航是很容易漏的。"""
     from app import NAV_ITEMS
 
-    assert [name for name, _icon, _renderer in NAV_ITEMS] == [
+    assert [item.name for item in NAV_ITEMS] == [
         "首页",
         "智能分析",
         "商品比较",
-        "知识问答",
+        "AI 问答",
         "历史记录",
         "个人设置",
         "项目说明",
+        "用户管理",
+        "全站概览",
+        "商品维护",
     ]
+
+
+def test_admin_pages_are_marked_admin_only():
+    """三个管理页必须挂上 `admin_only`，否则普通用户的侧边栏会露出它们。"""
+    from app import NAV_ITEMS
+
+    admin_only = {item.name for item in NAV_ITEMS if item.admin_only}
+    assert admin_only == {"用户管理", "全站概览", "商品维护"}
 
 
 # --------------------------------------------------------------------------
@@ -174,7 +208,7 @@ def test_home_input_jumps_to_analysis_and_runs_it():
     _assert_clean(at)
 
     assert _state(at, "zg_current_page") == "智能分析"
-    assert "预算 3000 元" in at.text_area[0].value, "需求没有带过去"
+    assert "预算 6000 元" in at.text_area[0].value, "需求没有带过去"
 
     body = _all_text(at)
     assert "需求摘要" in body
@@ -251,19 +285,19 @@ def test_compare_options_are_scoped_to_the_chosen_category(catalog):
     phone_labels = {_label_of(p) for p in catalog.by_category("phone")}
     assert set(at.multiselect[0].options) == phone_labels
 
-    # 选两件手机，再换到服饰：上一类别的选择应被清掉，候选换成服饰
+    # 选两件手机，再换到笔记本电脑：上一类别的选择应被清掉，候选换成笔记本
     picks = sorted(phone_labels)[: config.MIN_COMPARE_COUNT]
     at.multiselect[0].set_value(picks).run()
     _assert_clean(at)
     assert list(at.session_state["zg_compare_pick"]) == picks
 
-    at.selectbox[0].set_value(config.category_label("apparel")).run()
+    at.selectbox[0].set_value(config.category_label("laptop")).run()
     _assert_clean(at)
     assert list(at.session_state["zg_compare_pick"]) == [], (
         "换类别后应清空上一类别的选择，否则会留下不在候选里的幽灵选中项"
     )
-    apparel_labels = {_label_of(p) for p in catalog.by_category("apparel")}
-    assert set(at.multiselect[0].options) == apparel_labels
+    laptop_labels = {_label_of(p) for p in catalog.by_category("laptop")}
+    assert set(at.multiselect[0].options) == laptop_labels
 
 
 def test_clearing_conditions_does_not_blow_up():
@@ -470,143 +504,72 @@ def test_clean_catalog_shows_no_data_issue_marker():
 # --------------------------------------------------------------------------
 
 
-def _ask_knowledge(at: AppTest, question: str):
-    """在知识问答页提问并返回渲染后的页面对象。"""
-    _go_to_page(at, "知识问答")
+def _ask_ai_qa(at: AppTest, question: str):
+    """在 AI 问答页提问并返回渲染后的页面对象。"""
+    _go_to_page(at, "AI 问答")
     at.text_area[0].set_value(question).run()
-    _button(at, "查找资料").click().run()
+    _button(at, "提问").click().run()
     return at
 
 
-def test_knowledge_page_shows_passages_with_sources():
-    """本地模式展示**原文片段与来源**，不做生成。"""
-    at = _ask_knowledge(_run(), "主动降噪和被动降噪有什么区别")
+def _answer_reply(text: str) -> httpx.Response:
+    """打桩一条知识问答作答（模型输出 JSON）。"""
+    import json
+
+    return _ai_reply(json.dumps({"answer": text, "used_fragment_indexes": [1]}, ensure_ascii=False))
+
+
+def test_ai_qa_shows_answer_without_passages(enable_ai):
+    """恒开 AI：只展示回答，**不展示片段与来源**，页面上也没有 AI 开关。"""
+    enable_ai(lambda request: _answer_reply("先看内存和整机重量，这两项每天都在影响体验。"))
+
+    at = _ask_ai_qa(_run(), "笔记本多重适合带出门")
     _assert_clean(at)
 
     body = _all_text(at)
-    assert "找到的资料" in body
-    assert "来源：" in body, "结果必须带出处"
-    assert "更新于" in body, "需求明确要求展示资料来源与更新时间"
+    assert "先看内存和整机重量" in body, "没有展示回答"
+    assert "找到的资料" not in body, "按要求不再展示检索片段"
+    assert "来源：" not in body and "更新于" not in body, "不应再出现来源引用"
 
 
-def test_knowledge_page_says_so_when_nothing_is_found():
-    """检索不到时明确说明，且**不展示任何来源**——没资料就没有可引用的来源。"""
-    at = _ask_knowledge(_run(), "今天天气怎么样")
+def test_ai_qa_has_no_ai_toggle(enable_ai):
+    """该页恒开 AI，不再提供开关。"""
+    enable_ai(lambda request: _answer_reply("看内存。"))
+
+    at = _run()
+    _go_to_page(at, "AI 问答")
+    _assert_clean(at)
+
+    assert "启用 AI 增强" not in _all_text(at)
+    assert len(at.toggle) == 0, "AI 问答页不应再有开关控件"
+
+
+def test_ai_qa_without_key_explains_how_to_configure():
+    """未配置密钥：说明怎么配（可行动），并给出走筛选的入口——不是报错。"""
+    at = _ask_ai_qa(_run(), "笔记本多重适合带出门")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "需要配置模型密钥" in body
+    assert "ZHIGOU_LLM_API_KEY" in body, "要写清配置项名称"
+    assert "智能分析" in body, "要给出去筛选的入口"
+    assert "找到的资料" not in body
+
+
+def test_ai_qa_says_so_when_nothing_is_found(enable_ai):
+    """语料外问题：明确说明没找到，不编造回答。"""
+    enable_ai(lambda request: _answer_reply("不该被调用"))
+
+    at = _ask_ai_qa(_run(), "今天天气怎么样")
     _assert_clean(at)
 
     body = _all_text(at)
     assert "没有找到" in body
-    assert "来源：" not in body, "没有资料却给出了来源"
-    assert "更新于" not in body
+    assert "不该被调用" not in body, "检索为空时不应作答"
 
 
-def test_knowledge_page_refuses_price_questions():
-    """价格类问题不给检索结论，改为引导去筛选——检索不理解数值约束。"""
-    at = _ask_knowledge(_run(), "500 元以内有什么降噪耳机")
-    _assert_clean(at)
-
-    body = _all_text(at)
-    assert "价格" in body and "筛选" in body
-    assert "找到的资料" not in body, "价格问题不该走检索"
-
-
-def test_knowledge_page_guides_to_analysis_on_click():
-    at = _ask_knowledge(_run(), "预算 2000 的耳机推荐")
-    _button(at, "带着这个问题去筛选商品").click().run()
-    _assert_clean(at)
-
-    assert _state(at, "zg_current_page") == "智能分析"
-
-
-def test_knowledge_page_empty_input_is_rejected():
-    at = _run()
-    _go_to_page(at, "知识问答")
-    _button(at, "查找资料").click().run()
-    _assert_clean(at)
-
-    assert "请先输入" in _all_text(at)
-
-
-def test_knowledge_page_example_buttons_work():
-    at = _run()
-    _go_to_page(at, "知识问答")
-    _button(at, "通勤戴的耳机怎么选").click().run()
-    _assert_clean(at)
-
-    assert "找到的资料" in _all_text(at)
-
-
-def test_knowledge_index_reloads_after_corpus_edit(tmp_path, monkeypatch):
-    """编辑语料后，应用下一次渲染就用新语料——不用重启。
-
-    缓存键里带着语料文件的修改时间。只取目录 mtime 是不够的：
-    **改文件内容不会改目录的 mtime**，那是最常见的编辑方式。
-    """
-    import os
-
-    knowledge = tmp_path / "knowledge"
-    knowledge.mkdir()
-
-    def write(body: str, stamp: float) -> None:
-        path = knowledge / "guide.md"
-        path.write_text(
-            "---\ntitle: 测试指南\ntype: service\nsource: 测试\n"
-            "updated_at: 2026-01-01\n---\n" + body,
-            encoding="utf-8",
-        )
-        os.utime(path, (stamp, stamp))
-
-    monkeypatch.setenv("ZHIGOU_KNOWLEDGE_DIR", str(knowledge))
-
-    def written_bodies() -> list[str]:
-        """只看**手写文档**的正文。
-
-        索引里还始终含 112 条商品级合成条目（它们来自商品数据，不受语料目录
-        影响），所以判断「语料换了没有」必须把手写部分单独拎出来。
-        """
-        return [
-            document.body
-            for document in corpus_documents()
-            if document.doc_type != "product"
-        ]
-
-    def corpus_documents():
-        import src.knowledge.corpus as corpus_module
-        from src import config as config_module
-
-        return corpus_module.load_documents(config_module.knowledge_dir())
-
-    write("关于折叠屏手机的转轴寿命。", 1_000_000)
-    state.get_knowledge_index()  # 建一次，让缓存生效
-    assert any("折叠屏" in body for body in written_bodies())
-
-    write("关于机械键盘的轴体手感。", 2_000_000)
-    state.get_knowledge_index()  # 缓存键变了，应当重建
-    bodies = written_bodies()
-    assert any("机械键盘" in body for body in bodies), "改语料后没有重新加载"
-    assert not any("折叠屏" in body for body in bodies), "旧语料还在索引里"
-
-
-def test_knowledge_index_survives_missing_corpus(tmp_path, monkeypatch):
-    """语料目录不存在时，手写部分为空、页面提示无资料，**其余功能不受影响**。
-
-    注意索引**不是空的**：112 条商品级条目来自商品数据，与语料目录无关。
-    """
-    monkeypatch.setenv("ZHIGOU_KNOWLEDGE_DIR", str(tmp_path / "不存在"))
-
-    import src.knowledge.corpus as corpus_module
-    from src import config as config_module
-
-    assert corpus_module.load_documents(config_module.knowledge_dir()) == []
-    assert state.get_knowledge_index().size == 112, "商品级条目不该受语料目录影响"
-
-
-def test_knowledge_page_degrades_when_ai_fails(monkeypatch):
-    """AI 作答失败时**降级为直接展示片段**，并说明已降级。
-
-    片段展示本来就是本地模式的形态——失败只丢掉「组织好的回答」，
-    不是把整个问答功能弄没了。
-    """
+def test_ai_qa_reports_failure_without_partial_output(monkeypatch):
+    """作答失败：说明失败并建议重试，不展示任何半成品。"""
     from src import ai_enhance, config
     from src.errors import UpstreamUnavailable
 
@@ -617,18 +580,51 @@ def test_knowledge_page_degrades_when_ai_fails(monkeypatch):
 
     monkeypatch.setattr(ai_enhance, "answer_from_knowledge", _boom)
 
-    at = _run()
-    _go_to_page(at, "知识问答")
-    at.toggle[0].set_value(True).run()
-    at.text_area[0].set_value("通勤戴的耳机怎么选").run()
-    _button(at, "查找资料").click().run()
+    at = _ask_ai_qa(_run(), "笔记本多重适合带出门")
     _assert_clean(at)
 
     body = _all_text(at)
-    assert "降级" in body, "没有告知用户已降级"
-    assert "找到的资料" in body, "AI 失败把片段展示也一起弄没了"
-    assert "基于资料的回答" not in body, "作答失败了却还是展示了回答区"
+    assert "没能生成回答" in body
+    assert "重试" in body, "要告诉用户可以怎么办"
+    assert "找到的资料" not in body, "不应回退成片段展示"
 
+
+def test_ai_qa_refuses_price_questions():
+    """价格类问题不给问答答案，改为引导去筛选。"""
+    at = _ask_ai_qa(_run(), "500 元以内有什么手机")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "价格" in body and "筛选" in body
+    assert "找到的资料" not in body
+
+
+def test_ai_qa_guides_to_analysis_on_click():
+    at = _ask_ai_qa(_run(), "预算 2000 的手机推荐")
+    _button(at, "带着这个问题去筛选商品").click().run()
+    _assert_clean(at)
+
+    assert _state(at, "zg_current_page") == "智能分析"
+
+
+def test_ai_qa_empty_input_is_rejected():
+    at = _run()
+    _go_to_page(at, "AI 问答")
+    _button(at, "提问").click().run()
+    _assert_clean(at)
+
+    assert "请先输入" in _all_text(at)
+
+
+def test_ai_qa_example_buttons_work(enable_ai):
+    enable_ai(lambda request: _answer_reply("示例回答：先看内存与重量。"))
+
+    at = _run()
+    _go_to_page(at, "AI 问答")
+    _button(at, "笔记本多重适合带出门").click().run()
+    _assert_clean(at)
+
+    assert "示例回答" in _all_text(at)
 
 # --------------------------------------------------------------------------
 # Agent 执行轨迹（界面）
@@ -671,8 +667,7 @@ def _run_agent_analysis(enable_ai, handler) -> AppTest:
     enable_ai(handler)
     at = _run()
     _go_to_page(at, "智能分析")
-    at.toggle[0].set_value(True).run()
-    at.text_area[0].set_value("预算 3000 买笔记本，主要编程，看重性能").run()
+    at.text_area[0].set_value("预算 6000 买笔记本，主要编程，看重性能").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
     return at
@@ -774,7 +769,7 @@ def test_local_mode_does_not_show_any_ai_section():
     """不配密钥时整条 AI 路径都不出现——这是断网也能演示的保障。"""
     at = _run()
     _go_to_page(at, "智能分析")
-    at.text_area[0].set_value("预算 3000 买笔记本，主要编程").run()
+    at.text_area[0].set_value("预算 6000 买笔记本，主要编程").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -798,7 +793,7 @@ def test_over_budget_count_shown_is_the_real_total(catalog):
     """
     at = _run()
     _go_to_page(at, "智能分析")
-    at.text_area[0].set_value("预算 500 元的通勤降噪耳机").run()
+    at.text_area[0].set_value("预算 2000 元的手机").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -816,7 +811,7 @@ def test_no_extra_note_when_all_over_budget_shown(catalog):
     """全部展示时不出「还有 N 件未列出」——那是噪音。"""
     at = _run()
     _go_to_page(at, "智能分析")
-    at.text_area[0].set_value("预算 500 元的通勤降噪耳机").run()
+    at.text_area[0].set_value("预算 2000 元的手机").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -825,11 +820,26 @@ def test_no_extra_note_when_all_over_budget_shown(catalog):
     assert "没有列出" not in _all_text(at)
 
 
-def test_truncation_is_disclosed(catalog):
-    """截断时说明还有多少件未列出。"""
+def test_truncation_is_disclosed(tmp_path, monkeypatch):
+    """截断时说明还有多少件未列出。
+
+    候选集**自造**并写进临时商品库，让应用真的读到它：截断只在候选数超过
+    展示上限时才发生，而真实数据集每个类别恰好 10 件、上限也正好是 10——
+    走真数据这条永远到不了截断，界面上那句「还有 N 件没有列出」也就
+    从来不会被渲染出来验收。
+    """
+    from src import product_store
+
+    db = tmp_path / "big.db"
+    product_store.save_products(
+        [p.model_dump() for p in _fake_laptops(config.MAX_OVER_BUDGET_SHOWN + 5)],
+        path=db,
+    )
+    monkeypatch.setenv("ZHIGOU_PRODUCTS_DB_PATH", str(db))
+
     at = _run()
     _go_to_page(at, "智能分析")
-    at.text_area[0].set_value("预算 100 元的耳机").run()
+    at.text_area[0].set_value("预算 100 元的笔记本电脑").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -840,10 +850,37 @@ def test_truncation_is_disclosed(catalog):
     assert str(result.over_budget_hidden) in body
     assert "调高" in body, "要告诉用户怎么办"
 
-def test_demo_data_disclaimer_is_visible_on_home():
+
+def _fake_laptops(count: int) -> list:
+    """一批自造笔记本电脑，价格 800 元起、每件递增 100 元。"""
+    from src.data_loader import Product
+
+    return [
+        Product(
+            id=f"FL{index:03d}",
+            name=f"测试笔记本 {index}",
+            category="laptop",
+            price=800.0 + index * 100,
+            brand="测试品牌",
+            specs={
+                "cpu_tier": 3, "ram_gb": 16, "battery_h": 8,
+                "weight_kg": 1.4, "storage_gb": 512,
+            },
+            use_cases=["办公"],
+            pros=["测试用"],
+            cons=["测试用"],
+            data_source="测试夹具 · 非真实数据",
+            updated_at="2026-10-15",
+        )
+        for index in range(count)
+    ]
+
+
+def test_data_boundary_notice_is_visible_on_home():
+    """首页要把数据边界说清楚——品牌是真的，价格与参数是整理的。"""
     at = _run()
     body = _all_text(at)
-    assert "演示数据" in body
+    assert "未核验" in body or "不是实时价格" in body
 
 
 #: 这些词如果出现在**肯定**语境里，就等于把系统评分冒充成了真实市场数据。
@@ -949,9 +986,10 @@ def test_settings_page_renders_and_exposes_the_real_options(catalog):
     _go_to_page(at, "个人设置")
     _assert_clean(at)
 
-    assert "品牌偏好" in _all_text(at)
     assert "价格取向" in _all_text(at)
-    assert "长期关注项" in _all_text(at)
+    assert "AI 增强模式" in _all_text(at)
+    assert "品牌偏好" not in _all_text(at), "品牌偏好设置项已移除"
+    assert "长期关注项" not in _all_text(at), "长期关注项设置项已移除"
 
 
 def test_preference_notice_is_not_shown_when_nothing_was_applied():
@@ -976,10 +1014,17 @@ def test_preferences_are_applied_and_reported():
     at = _run()
     _go_to_page(at, "个人设置")
 
-    at.session_state["zg_pref_focus"] = ["续航", "便携"]
+    at.session_state["zg_pref_priority"] = "value"
+    at.session_state["zg_pref_show_over"] = False
     at.run()
     _button(at, "保存设置").click().run()
     _assert_clean(at)
+
+    from src import settings as _settings
+
+    saved = _settings.load_preferences(DEFAULT_USER)
+    assert saved.price_priority == "value", "价格取向没有保存成功"
+    assert saved.show_over_budget is False
 
     _go_to_page(at, "首页")
     _go_to_page(at, "首页")
@@ -991,8 +1036,7 @@ def test_preferences_are_applied_and_reported():
     assert "已自动带上" in _all_text(at)
 
     demand = _state(at, "zg_demand")
-    assert "续航" in demand.core_needs
-    assert "便携" in demand.core_needs
+    assert "性价比" in demand.core_needs
 
 
 # --------------------------------------------------------------------------
@@ -1153,7 +1197,7 @@ def test_favorite_of_a_missing_product_is_labelled():
     """spec：收藏的商品已从数据文件移除时，界面标注且不崩溃。"""
     from src import database
 
-    database.add_favorite("GONE-9999")
+    database.add_favorite(TEST_USERNAME, "GONE-9999")
 
     at = _run()
     _go_to_page(at, "历史记录")
@@ -1175,7 +1219,7 @@ def test_typed_demand_survives_a_page_switch():
     at = _run()
     _go_to_page(at, "智能分析")
 
-    typed = "预算 2500，想买一副通勤用的降噪耳机"
+    typed = "预算 2500，想买一台办公用的笔记本电脑"
     at.text_area[0].set_value(typed).run()
     assert at.text_area[0].value == typed
 
@@ -1264,7 +1308,10 @@ def _parse_payload(**overrides) -> str:
 
     payload = {
         "category": "laptop",
-        "budget": 3000,
+        # 预算要能真的买到东西：真实数据里最便宜的笔记本 3519 元，
+        # 填 3000 会让 AI 路径下的分析一件都推不出来，AI 那一段区块
+        # 整个不渲染，下面一串断言集体失败在无关的地方。
+        "budget": 6000,
         "use_cases": ["编程"],
         "core_needs": ["性能"],
         "compromises": [],
@@ -1324,7 +1371,6 @@ def test_enabling_ai_shows_the_data_sharing_notice(enable_ai):
 
     at = _run()
     _go_to_page(at, "智能分析")
-    at.toggle[0].set_value(True).run()
     _assert_clean(at)
 
     body = _all_text(at)
@@ -1337,21 +1383,20 @@ def test_ai_parse_is_used_when_enabled(enable_ai):
 
     def handler(request):
         seen.append(request)
-        return _ai_reply(_parse_payload(category="headphone", budget=800, core_needs=["降噪"]))
+        return _ai_reply(_parse_payload(category="phone", budget=4000, core_needs=["拍照"]))
 
     enable_ai(handler)
 
     at = _run()
     _go_to_page(at, "智能分析")
-    at.toggle[0].set_value(True).run()
-    at.text_area[0].set_value("想买副通勤用的耳机，预算 800").run()
+    at.text_area[0].set_value("想买台拍照好的手机，预算 4000").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
     assert _state(at, "zg_parse_engine") == "ai", "没有走 AI 解析"
     demand = _state(at, "zg_demand")
-    assert demand.category == "headphone"
-    assert demand.core_needs == ["降噪"]
+    assert demand.category == "phone"
+    assert demand.core_needs == ["拍照"]
     assert seen, "没有向模型发出请求"
 
 
@@ -1361,8 +1406,7 @@ def test_ai_failure_degrades_to_rules_with_a_notice(enable_ai):
 
     at = _run()
     _go_to_page(at, "智能分析")
-    at.toggle[0].set_value(True).run()
-    at.text_area[0].set_value("预算 3000 买笔记本电脑，主要编程").run()
+    at.text_area[0].set_value("预算 6000 买笔记本电脑，主要编程").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -1382,8 +1426,7 @@ def test_ai_timeout_degrades_gracefully(enable_ai):
 
     at = _run()
     _go_to_page(at, "智能分析")
-    at.toggle[0].set_value(True).run()
-    at.text_area[0].set_value("预算 3000 买笔记本电脑").run()
+    at.text_area[0].set_value("预算 6000 买笔记本电脑").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -1404,8 +1447,7 @@ def test_ai_agent_answer_and_trace_are_shown(enable_ai):
 
     at = _run()
     _go_to_page(at, "智能分析")
-    at.toggle[0].set_value(True).run()
-    at.text_area[0].set_value("预算 3000 买笔记本，主要编程，看重性能").run()
+    at.text_area[0].set_value("预算 6000 买笔记本，主要编程，看重性能").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -1420,7 +1462,7 @@ def test_ai_agent_not_used_when_switch_is_off():
     """没打开 AI 开关时不出现执行过程——那条路径根本没跑编排。"""
     at = _run()
     _go_to_page(at, "智能分析")
-    at.text_area[0].set_value("预算 3000 买笔记本，主要编程").run()
+    at.text_area[0].set_value("预算 6000 买笔记本，主要编程").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -1441,8 +1483,7 @@ def test_explanation_failure_keeps_the_recommendations(enable_ai):
 
     at = _run()
     _go_to_page(at, "智能分析")
-    at.toggle[0].set_value(True).run()
-    at.text_area[0].set_value("预算 3000 买笔记本，主要编程").run()
+    at.text_area[0].set_value("预算 6000 买笔记本，主要编程").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -1475,8 +1516,7 @@ def test_ai_explanations_never_reach_the_stored_report(enable_ai, catalog):
 
     at = _run()
     _go_to_page(at, "智能分析")
-    at.toggle[0].set_value(True).run()
-    at.text_area[0].set_value("预算 3000 买笔记本，主要编程").run()
+    at.text_area[0].set_value("预算 6000 买笔记本，主要编程").run()
     _button(at, "开始分析").click().run()
     _assert_clean(at)
 
@@ -1492,17 +1532,21 @@ def test_ai_explanations_never_reach_the_stored_report(enable_ai, catalog):
 # --------------------------------------------------------------------------
 
 
-def test_product_card_carries_the_demo_data_source():
-    """spec：商品卡片要显示演示数据来源标注。
+def test_product_card_carries_the_data_source_label():
+    """spec：商品卡片要显示数据来源标注与核验状态。
 
-    之前只在首页断言过免责声明，卡片本身的标注没测。
+    **断言的是数据集里真实那句 `data_source`。** 这条用例早先找的是
+    「演示数据」这个词，而它其实来自侧边栏的声明——卡片一个字都不渲染
+    也照样通过，是一条假绿的断言。数据换成真实型号之后侧边栏那句改了，
+    它才露出来。
     """
     at = _analyze_laptop(_run())
     _assert_clean(at)
 
     body = _all_text(at)
     assert "数据来源" in body
-    assert "演示数据" in body
+    assert "公开资料整理" in body, "卡片上没有渲染数据集里的来源标注"
+    assert "未核验" in body
     assert "更新时间" in body
 
 
@@ -1511,7 +1555,7 @@ def test_reset_preferences_restores_defaults():
     at = _run()
     _go_to_page(at, "个人设置")
 
-    at.session_state["zg_pref_focus"] = ["续航", "便携"]
+    at.session_state["zg_pref_ai"] = False
     at.session_state["zg_pref_priority"] = "performance"
     at.run()
     _button(at, "保存设置").click().run()
@@ -1519,15 +1563,15 @@ def test_reset_preferences_restores_defaults():
 
     from src import settings
 
-    saved = settings.load_preferences()
-    assert saved.focus_areas == ["续航", "便携"]
+    saved = settings.load_preferences(DEFAULT_USER)
+    assert saved.ai_enhanced is False
     assert saved.price_priority == "performance"
 
     _button(at, "恢复默认").click().run()
     _assert_clean(at)
 
-    restored = settings.load_preferences()
-    assert restored.focus_areas == []
+    restored = settings.load_preferences(DEFAULT_USER)
+    assert restored.ai_enhanced is True, "恢复默认后 AI 增强没有回到默认开启"
     assert restored.price_priority == "none", "恢复默认后没有回到初始状态"
 
 
@@ -1609,3 +1653,662 @@ def test_product_without_price_record_is_marked_as_missing(tmp_path, monkeypatch
 
     body = _all_text(at)
     assert "价格未知" in body, "没有价格记录时应标注为价格未知"
+
+
+# --------------------------------------------------------------------------
+# 登录、注册与访问边界
+# --------------------------------------------------------------------------
+#
+# 这一组用例从**未登录**的会话起步（`_run(user=None)`），把登录页真的走一遍。
+# 上面的页面回归测试都从已登录起步，两组分工明确：登录流程不会因为
+# 「反正都会被跳过」而失去覆盖。
+
+
+def _text_input(at: AppTest, label: str):
+    """按标签取输入框。AppTest 没有按 label 查询的接口，和 `_button` 一个手法。"""
+    for widget in at.text_input:
+        if widget.label == label:
+            return widget
+    raise AssertionError(
+        f"找不到输入框「{label}」，现有：{[w.label for w in at.text_input]}"
+    )
+
+
+def _sign_up(username: str, password: str) -> None:
+    """直接建一个账号（不走界面），供登录用例使用。"""
+    from src import accounts
+
+    accounts.register(username, password)
+
+
+def test_unauthenticated_visitor_lands_on_the_login_page():
+    at = _run(user=None)
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "登录" in body
+    assert "开始分析" not in body, "未登录不该看到任何功能页的内容"
+    assert _state(at, state.KEY_USER) is None
+
+
+def test_unauthenticated_visitor_triggers_no_data_query(monkeypatch):
+    """spec：未登录不触发任何数据查询。
+
+    直接把取数据集的那一步换成「一调用就炸」，这样「查没查」是断言出来的，
+    而不是靠读代码推断的。
+    """
+    from src.ui import state as state_module
+
+    def explode(*_args, **_kwargs):
+        raise AssertionError("未登录时不该去取数据集")
+
+    monkeypatch.setattr(state_module, "get_catalog", explode)
+    monkeypatch.setattr(state_module, "get_knowledge_index", explode)
+
+    at = _run(user=None)
+    _assert_clean(at)
+
+
+def test_login_with_correct_credentials_enters_the_app():
+    _sign_up("lisi", "good-pass-1")
+
+    at = _run(user=None)
+    _text_input(at, "用户名").set_value("lisi")
+    _text_input(at, "密码").set_value("good-pass-1")
+    _button(at, "登录").click().run()
+
+    _assert_clean(at)
+    assert _state(at, state.KEY_USER).username == "lisi"
+    assert "开始分析" in _all_text(at), "登录后应当进入首页"
+
+
+def test_failed_login_does_not_reveal_which_part_was_wrong():
+    """两种失败在界面上必须完全一样——否则等于提供了枚举用户名的办法。"""
+    _sign_up("lisi", "good-pass-1")
+
+    at = _run(user=None)
+    _text_input(at, "用户名").set_value("nobody")
+    _text_input(at, "密码").set_value("good-pass-1")
+    _button(at, "登录").click().run()
+    unknown_user_body = _all_text(at)
+
+    at = _run(user=None)
+    _text_input(at, "用户名").set_value("lisi")
+    _text_input(at, "密码").set_value("wrong-pass-1")
+    _button(at, "登录").click().run()
+    wrong_password_body = _all_text(at)
+
+    assert "用户名或密码不正确" in unknown_user_body
+    assert "用户名或密码不正确" in wrong_password_body
+    assert "不存在" not in unknown_user_body, "不能透露用户名是否存在"
+    assert "不存在" not in wrong_password_body
+
+
+def test_disabled_account_cannot_log_in():
+    _sign_up("lisi", "good-pass-1")
+    from src import database
+    from src.auth import ROLE_ADMIN, User
+
+    # 停用是管理员操作，所以这里要装作管理员来调（守卫只看传入的对象）。
+    database.set_user_active(
+        "lisi", False, viewer=User(username="root", role=ROLE_ADMIN)
+    )
+
+    at = _run(user=None)
+    _text_input(at, "用户名").set_value("lisi")
+    _text_input(at, "密码").set_value("good-pass-1")
+    _button(at, "登录").click().run()
+
+    assert _state(at, state.KEY_USER) is None
+    assert "用户名或密码不正确" in _all_text(at)
+
+
+def test_registration_from_the_ui_creates_a_regular_user():
+    at = _run(user=None)
+    _button(at, "没有账号？注册一个").click().run()
+
+    _text_input(at, "用户名").set_value("newcomer")
+    _text_input(at, "密码").set_value("good-pass-1")
+    _text_input(at, "确认密码").set_value("good-pass-1")
+    _button(at, "注册").click().run()
+    _assert_clean(at)
+
+    from src import database
+
+    created = database.get_user("newcomer")
+    assert created is not None
+    assert created.role == "user", "自助注册只能是普通用户"
+    assert "注册成功" in _all_text(at)
+
+
+def test_registration_refuses_mismatched_passwords():
+    at = _run(user=None)
+    _button(at, "没有账号？注册一个").click().run()
+
+    _text_input(at, "用户名").set_value("newcomer")
+    _text_input(at, "密码").set_value("good-pass-1")
+    _text_input(at, "确认密码").set_value("good-pass-2")
+    _button(at, "注册").click().run()
+
+    from src import database
+
+    assert database.get_user("newcomer") is None, "两次密码不一致不该建号"
+    assert "不一致" in _all_text(at)
+
+
+def test_registration_refuses_a_short_password():
+    at = _run(user=None)
+    _button(at, "没有账号？注册一个").click().run()
+
+    _text_input(at, "用户名").set_value("newcomer")
+    _text_input(at, "密码").set_value("short")
+    _text_input(at, "确认密码").set_value("short")
+    _button(at, "注册").click().run()
+
+    from src import database
+
+    assert database.get_user("newcomer") is None
+
+
+def test_the_login_page_discloses_the_auth_boundary():
+    """spec：登录页要有「演示级鉴权」说明，并列出不具备的能力。"""
+    at = _run(user=None)
+    body = _all_text(at)
+
+    assert "演示级鉴权" in body
+    assert "没有会话过期" in body
+    assert "刷新浏览器页面后需要重新登录" in body
+    assert "只绑定本机" in body
+
+    for claim in ("安全的用户系统", "生产级鉴权"):
+        assert claim not in body, f"不得自称「{claim}」"
+
+
+def test_signing_out_returns_to_the_login_page_and_clears_the_session():
+    """spec：登出清空会话并回到登录页。
+
+    **整个会话**都要清掉，不只是当前用户——上一个用户的推荐结果、
+    完整报告、比较选择都还在内存里，换个账号登录就会看到上一个人的东西。
+    """
+    at = _run()
+    assert _state(at, state.KEY_USER) is not None
+
+    _button(at, "登出").click().run()
+    _assert_clean(at)
+
+    assert _state(at, state.KEY_USER) is None
+    assert "登录" in _all_text(at)
+    assert "开始分析" not in _all_text(at)
+
+
+def test_sidebar_shows_the_current_account():
+    at = _run()
+    body = _all_text(at)
+
+    assert TEST_USERNAME in body
+    assert "普通用户" in body
+
+
+# --------------------------------------------------------------------------
+# 管理员页面：用户管理与全站概览
+# --------------------------------------------------------------------------
+
+
+def _selectbox(at: AppTest, label: str):
+    for widget in at.selectbox:
+        if widget.label == label:
+            return widget
+    raise AssertionError(
+        f"找不到下拉框「{label}」，现有：{[w.label for w in at.selectbox]}"
+    )
+
+
+def test_regular_user_does_not_see_the_admin_entries():
+    at = _run()
+    _go_to_page(at, "首页")
+
+    labels = [button.label for button in at.button]
+    assert "用户管理" not in labels
+    assert "全站概览" not in labels
+
+
+def test_admin_sees_the_admin_entries():
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "首页")
+
+    labels = [button.label for button in at.button]
+    assert "用户管理" in labels
+    assert "全站概览" in labels
+
+
+def test_jumping_straight_to_an_admin_page_is_refused():
+    """**界面隐藏不算权限。**
+
+    普通用户点不到「用户管理」，但页面名只是 `session_state` 里的一个值——
+    把它改成「用户管理」就能让应用跳到那个页面函数。这条用例就是那么干的，
+    断言的是它被挡住。
+    """
+    at = _run()
+    at.session_state[state.KEY_PAGE] = "用户管理"
+    at.run()
+    _assert_clean(at)
+
+    assert "没有执行该操作的权限" in _all_text(at)
+
+
+def test_admin_can_create_an_account():
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+    _assert_clean(at)
+
+    _text_input(at, "用户名").set_value("newbie")
+    _text_input(at, "初始密码").set_value("good-pass-1")
+    _button(at, "创建").click().run()
+    _assert_clean(at)
+
+    from src import database
+
+    created = database.get_user("newbie")
+    assert created is not None
+    assert created.role == "user"
+    assert "已创建账号" in _all_text(at)
+
+
+def test_admin_page_offers_no_way_to_delete_an_account():
+    """spec：不提供删除账号。
+
+    删除会让历史记录失去归属——要么级联删掉用户数据，要么留下一堆
+    指向空账号的记录，两种都更糟。
+    """
+    from src import database
+
+    database.create_user("lisi", "good-pass-1")
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+    _assert_clean(at)
+
+    assert not any("删除" in button.label for button in at.button)
+
+
+def test_admin_can_change_a_role_and_reset_a_password():
+    from src import accounts, database
+
+    database.create_user("lisi", "good-pass-1")
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+
+    _selectbox(at, "修改角色").set_value("admin").run()
+    _button(at, "保存角色").click().run()
+    _assert_clean(at)
+    assert database.get_user("lisi").role == "admin"
+
+    _text_input(at, "重置密码").set_value("brand-new-pass-1")
+    _button(at, "重置密码").click().run()
+    _assert_clean(at)
+    assert accounts.authenticate("lisi", "brand-new-pass-1").username == "lisi"
+
+
+def test_admin_can_disable_an_account():
+    from src import database
+
+    database.create_user("lisi", "good-pass-1")
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+
+    _button(at, "停用账号").click().run()
+    _assert_clean(at)
+
+    assert database.get_user("lisi").is_active is False
+    assert "已停用" in _all_text(at)
+
+
+def test_the_last_admin_cannot_be_demoted_through_the_ui():
+    """spec：不能把最后一个管理员降级——系统必须始终保有一个可用管理员。"""
+    from src import database
+
+    database.create_user(ADMIN_USER.username, "good-pass-1", role="admin")
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+
+    _selectbox(at, "修改角色").set_value("user").run()
+    _button(at, "保存角色").click().run()
+    _assert_clean(at)
+
+    # 断言的是**被拒绝那句话**，不是「至少保留一个管理员」——
+    # 后者在页面的静态说明里就有，拿它做断言等于没测。
+    assert "该操作已被拒绝" in _all_text(at)
+    assert database.get_user(ADMIN_USER.username).role == "admin"
+
+
+def test_the_last_admin_cannot_be_disabled_through_the_ui():
+    from src import database
+
+    database.create_user(ADMIN_USER.username, "good-pass-1", role="admin")
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+
+    _button(at, "停用账号").click().run()
+    _assert_clean(at)
+
+    assert database.get_user(ADMIN_USER.username).is_active is True
+
+
+def test_overview_lists_every_users_records_and_flags_legacy_ones(report):
+    """spec：管理员的全站概览列出所有用户的分析记录及其归属用户。
+
+    无归属的遗留记录要**单独标注**，不能混进某个账号那一栏。
+    """
+    from src import database
+
+    database.save_analysis(report, user_id=TEST_USERNAME)
+    database.save_analysis(report, user_id="someone-else")
+    database.save_analysis(report)  # 单用户时期的遗留记录
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "全站概览")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert TEST_USERNAME in body
+    assert "someone-else" in body
+    assert "无归属" in body, "遗留记录必须标注出来"
+    assert "3 条" in body, "总数应包含无归属的记录"
+
+
+def test_overview_is_refused_for_a_regular_user():
+    at = _run()
+    at.session_state[state.KEY_PAGE] = "全站概览"
+    at.run()
+    _assert_clean(at)
+
+    assert "没有执行该操作的权限" in _all_text(at)
+
+
+# --------------------------------------------------------------------------
+# 管理员页面：商品维护（三个分块）
+# --------------------------------------------------------------------------
+
+
+def _widget(at: AppTest, kind: str, key: str):
+    """按 **key** 取控件。
+
+    商品维护页里同一个标签会出现二十多次（每件商品一个「名称」输入框），
+    按标签找只能拿到第一个。`WidgetList` 支持按 key 取，用它。
+    """
+    return getattr(at, kind)(key)
+
+
+def _open_catalog_page(at: AppTest) -> AppTest:
+    _go_to_page(at, "商品维护")
+    _assert_clean(at)
+    return at
+
+
+def test_catalog_page_offers_three_blocks():
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+    body = _all_text(at)
+
+    for label in ("商品", "分类", "品牌"):
+        assert label in body, f"缺少「{label}」这一块"
+    assert "新增商品" in body
+
+
+def test_regular_user_cannot_open_the_catalog_page():
+    at = _run()
+    at.session_state[state.KEY_PAGE] = "商品维护"
+    at.run()
+    _assert_clean(at)
+
+    assert "没有执行该操作的权限" in _all_text(at)
+
+
+def test_admin_adds_a_product_through_the_ui():
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+
+    _widget(at, "text_input", "zg_cat_new_id").set_value("UI-NEW-001")
+    _widget(at, "text_input", "zg_cat_new_name").set_value("界面录入的笔记本")
+    _widget(at, "text_input", "zg_cat_new_brand").set_value("测试品牌")
+    _widget(at, "text_input", "zg_cat_new_model").set_value("T-1")
+    _widget(at, "number_input", "zg_cat_new_price").set_value(5200.0)
+    _widget(at, "text_input", "zg_cat_new_image").set_value("https://example.com/a.jpg")
+    _widget(at, "text_area", "zg_cat_new_specs").set_value("cpu_tier: 3\nram_gb: 16")
+    _widget(at, "text_area", "zg_cat_new_use_cases").set_value("办公")
+    _widget(at, "text_area", "zg_cat_new_pros").set_value("轻便")
+    _widget(at, "text_area", "zg_cat_new_cons").set_value("接口少")
+    _button(at, "新增").click().run()
+    _assert_clean(at)
+
+    from src.data_loader import load_catalog
+
+    created = load_catalog().get("UI-NEW-001")
+    assert created is not None, "新增的商品应当立刻出现在数据集里"
+    assert created.data_status == "unverified"
+    assert created.entered_by == ADMIN_USERNAME
+    assert "未核验" in _all_text(at)
+
+
+def test_admin_adds_a_product_with_an_invalid_image_and_it_is_refused():
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+
+    _widget(at, "text_input", "zg_cat_new_id").set_value("UI-BAD-001")
+    _widget(at, "text_input", "zg_cat_new_name").set_value("图片地址非法的商品")
+    _widget(at, "text_input", "zg_cat_new_brand").set_value("测试品牌")
+    _widget(at, "number_input", "zg_cat_new_price").set_value(3000.0)
+    _widget(at, "text_input", "zg_cat_new_image").set_value("javascript:alert(1)")
+    _widget(at, "text_area", "zg_cat_new_specs").set_value("cpu_tier: 3")
+    _widget(at, "text_area", "zg_cat_new_use_cases").set_value("办公")
+    _widget(at, "text_area", "zg_cat_new_pros").set_value("轻便")
+    _widget(at, "text_area", "zg_cat_new_cons").set_value("接口少")
+    _button(at, "新增").click().run()
+    _assert_clean(at)
+
+    from src.data_loader import load_catalog
+
+    assert load_catalog().get("UI-BAD-001") is None, "非法图片地址不该写进库"
+    assert "http://" in _all_text(at), "应当给出中文说明"
+
+
+def test_admin_adds_a_product_with_an_unknown_spec_and_it_is_refused():
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+
+    _widget(at, "text_input", "zg_cat_new_id").set_value("UI-BAD-002")
+    _widget(at, "text_input", "zg_cat_new_name").set_value("参数名写错的商品")
+    _widget(at, "text_input", "zg_cat_new_brand").set_value("测试品牌")
+    _widget(at, "number_input", "zg_cat_new_price").set_value(3000.0)
+    _widget(at, "text_area", "zg_cat_new_specs").set_value("cpu_tierr: 3")
+    _widget(at, "text_area", "zg_cat_new_use_cases").set_value("办公")
+    _widget(at, "text_area", "zg_cat_new_pros").set_value("轻便")
+    _widget(at, "text_area", "zg_cat_new_cons").set_value("接口少")
+    _button(at, "新增").click().run()
+    _assert_clean(at)
+
+    from src.data_loader import load_catalog
+
+    assert load_catalog().get("UI-BAD-002") is None
+    assert "不属于该分类" in _all_text(at)
+
+
+def test_admin_can_delist_a_product_from_the_ui():
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+    product_id = "LP001"
+
+    at.button(f"zg_cat_active_{product_id}").click().run()
+    _assert_clean(at)
+
+    from src.data_loader import load_catalog
+
+    assert load_catalog().get(product_id).is_active is False
+    assert "已下架" in _all_text(at)
+
+
+def test_admin_renames_a_category_and_product_records_are_untouched():
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+
+    from src import product_store
+
+    before = [
+        (record["id"], record["category"])
+        for record in product_store.load_product_records()
+    ]
+
+    _widget(at, "text_input", "zg_cat_label_laptop").set_value("笔记本·精选")
+    _button(at, "保存分类").click().run()
+    _assert_clean(at)
+
+    from src import catalog_meta
+
+    entry = next(
+        item for item in catalog_meta.category_entries() if item.key == "laptop"
+    )
+    assert entry.label == "笔记本·精选", "展示名没有落到库里"
+    assert "笔记本·精选" in _all_text(at)
+
+    after = [
+        (record["id"], record["category"])
+        for record in product_store.load_product_records()
+    ]
+    assert before == after, "改展示名不该动商品记录"
+
+
+def test_catalog_page_says_new_categories_cannot_be_added():
+    """spec：界面不提供新增分类，并说明原因。"""
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+    body = _all_text(at)
+
+    assert "键集合不可增删" in body
+    assert "停用不等于删除" in body
+    assert not any("新增分类" in button.label for button in at.button)
+
+
+def test_brand_block_explains_that_registering_a_brand_does_not_teach_the_parser():
+    """界面上要写明：登记一个商品库里没有的品牌**不会**让解析器认识它。
+
+    不写清楚的话，管理员登记完发现「分析里还是识别不出这个品牌」，
+    会当成 bug 反复试。
+    """
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+    body = _all_text(at)
+
+    assert "让需求解析认识它" in body
+    assert "解析仍以商品数据为准" in body
+
+
+# --------------------------------------------------------------------------
+# 分析页的表单精简与品牌级联（simplify-analysis-form 的界面用例）
+# --------------------------------------------------------------------------
+
+
+def _brand_options(at: AppTest) -> list[str]:
+    from src.ui.pages.analysis import _BRAND_KEY
+
+    return list(at.selectbox(_BRAND_KEY).proto.options)
+
+
+def test_brand_control_only_appears_after_a_category_is_chosen(catalog):
+    """spec：品牌控件在选定商品类别后才出现。
+
+    不级联的话，用户能选出「类别里不存在的品牌」，筛选结果必然是空集，
+    而界面不会告诉他为什么。
+    """
+    from src import config
+    from src.ui.pages.analysis import _BRAND_KEY, _CATEGORY_KEY, _NO_BRAND
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+    _assert_clean(at)
+
+    assert _BRAND_KEY not in [widget.key for widget in at.selectbox], (
+        "未选类别时不该渲染品牌控件"
+    )
+
+    at.selectbox(_CATEGORY_KEY).set_value(config.CATEGORY_LABELS["laptop"]).run()
+    _assert_clean(at)
+
+    options = _brand_options(at)
+    assert options[0] == _NO_BRAND, "第一个选项应当是「不限品牌」"
+    assert set(options[1:]) == {
+        product.brand for product in catalog.by_category("laptop") if product.brand
+    }
+
+
+def test_brand_options_follow_the_category_and_reset_on_switch(catalog):
+    """spec：切换类别后品牌选项变为该类别下的品牌，之前选的品牌被清空。"""
+    from src import config
+    from src.ui.pages.analysis import _BRAND_KEY, _CATEGORY_KEY, _NO_BRAND
+
+    at = _run()
+    _go_to_page(at, "智能分析")
+
+    at.selectbox(_CATEGORY_KEY).set_value(config.CATEGORY_LABELS["laptop"]).run()
+    chosen = _brand_options(at)[1]
+    at.selectbox(_BRAND_KEY).set_value(chosen).run()
+    assert at.selectbox(_BRAND_KEY).value == chosen
+
+    at.selectbox(_CATEGORY_KEY).set_value(config.CATEGORY_LABELS["phone"]).run()
+    _assert_clean(at)
+
+    options = _brand_options(at)
+    assert set(options[1:]) == {
+        product.brand for product in catalog.by_category("phone") if product.brand
+    }
+    assert at.selectbox(_BRAND_KEY).value == _NO_BRAND, (
+        "换了类别之后，上一个类别的品牌必须被清空——留着它会让筛选结果为空"
+    )
+
+
+def test_ai_qa_respects_the_global_switch_being_off():
+    """spec：全局关闭时，问答页说明「AI 增强已在个人设置中关闭」。
+
+    与「未配置密钥」是两回事：前者去设置打开即可，后者要先配密钥。
+    两种情况的提示必须分得开，否则用户会去错地方。
+    """
+    from src import settings
+    from src.settings import UserPreferences
+
+    settings.save_preferences(DEFAULT_USER, UserPreferences(ai_enhanced=False))
+
+    at = _ask_ai_qa(_run(), "笔记本多重适合带出门")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "个人设置" in body and "关闭" in body
+    assert "需要配置模型密钥" not in body, "开关关掉不是「没配密钥」，别混为一谈"
+    assert "找到的资料" not in body
+
+
+def test_the_analysis_form_has_no_usage_or_priority_controls():
+    """spec：页面上不存在「主要用途」「比较看重」控件——它们在描述里写。"""
+    at = _run()
+    _go_to_page(at, "智能分析")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "主要用途" not in body
+    assert "比较看重" not in body
+    assert "商品类别" in body, "类别与预算仍在"
+    assert "预算（元）" in body
+
+
+def test_mode_label_covers_all_three_states(monkeypatch):
+    """spec：界面明确显示三种状态之一——本地演示模式 / 本地模式 / AI 增强模式。
+
+    三种状态的区别对用户是实在的：「没配密钥」要去配，「开关关了」去设置里
+    打开就行。混成一句「当前不在 AI 模式」，用户不知道该做什么。
+
+    断言用的是三种状态**各自的说明文案**，不是模式名——「本地模式」是
+    「本地演示模式」的子串，拿模式名断言会互相满足，等于没测。
+    走界面而不是直接调 `current_mode()`：那个函数读的是**当前登录用户**的
+    偏好，裸调时没有会话，取到的是默认值。
+    """
+    from src import config, settings
+    from src.settings import UserPreferences
+
+    monkeypatch.delenv(config.LLM_API_KEY_ENV, raising=False)
+    assert "未配置模型密钥" in _all_text(_run())
+
+    monkeypatch.setenv(config.LLM_API_KEY_ENV, "sk-test-not-real")
+    settings.save_preferences(DEFAULT_USER, UserPreferences(ai_enhanced=False))
+    assert "AI 增强已在个人设置中关闭" in _all_text(_run())
+
+    settings.save_preferences(DEFAULT_USER, UserPreferences(ai_enhanced=True))
+    assert "已接入模型" in _all_text(_run())

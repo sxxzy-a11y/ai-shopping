@@ -25,7 +25,8 @@ from src.errors import (
 #: 缺失值的统一占位文案。
 MISSING_TEXT = "信息缺失"
 
-#: 各类别核心参数的展示顺序。
+#: 各类别核心参数的展示顺序。**只列商品库覆盖的四个类别**；
+#: 表外的类别由调用方落到「按商品自身有的参数排」的兜底分支。
 _PARAM_ORDER: dict[str, list[str]] = {
     "laptop": [
         "cpu", "cpu_tier", "ram_gb", "storage_gb",
@@ -35,38 +36,17 @@ _PARAM_ORDER: dict[str, list[str]] = {
         "chip", "chip_tier", "ram_gb", "storage_gb",
         "screen_size", "weight_g", "battery_mah", "camera_tier",
     ],
-    "headphone": [
-        "driver_mm", "connection", "battery_h", "weight_g",
-        "noise_cancelling", "audio_tier",
-    ],
-    "keyboard": [
-        "layout", "switch_type", "connection", "weight_g",
-        "wireless", "hot_swappable", "noise_level",
-    ],
-    "appliance": [
-        "capacity_l", "energy_grade", "power_w", "noise_db",
-        "warranty_years", "durability_tier",
-    ],
-    "apparel": [
-        "material", "comfort_tier", "breathability_tier",
-        "durability_tier", "weight_g",
-    ],
-    "furniture": [
-        "material", "width_cm", "load_kg", "weight_kg",
-        "durability_tier", "warranty_years", "assembly_required",
-    ],
-    "sports": [
-        "material", "weight_g", "cushion_tier",
-        "durability_tier", "waterproof",
-    ],
-    "personal_care": [
-        "power_w", "battery_h", "noise_db", "suit_for", "durability_tier",
-    ],
-    "baby": [
-        "material", "age_min_months", "weight_kg",
-        "safety_cert", "foldable", "durability_tier",
-    ],
 }
+
+def param_keys(category: str) -> tuple[str, ...]:
+    """该类别既有的参数键。
+
+    **商品维护页的参数白名单就是它。** 与比较表的参数行、界面上的参数
+    下拉候选用的是同一个集合——各写一份必然漂移。实测确认这份集合与
+    数据集里各类别实际出现的参数键完全一致（笔记本 8 个、手机 8 个）。
+    """
+    return tuple(_PARAM_ORDER.get(category, ()))
+
 
 #: 参数的中文标签来自 config.SPEC_LABELS（单一来源），避免与评分理由、
 #: 商品卡片各写一份而对不上。
@@ -80,26 +60,11 @@ _PARAM_UNITS: dict[str, str] = {
     "battery_h": "小时",
     "weight_g": "g",
     "battery_mah": "mAh",
-    "driver_mm": "mm",
-    "capacity_l": "L",
-    "power_w": "W",
-    "noise_db": "dB",
-    "warranty_years": "年",
-    "width_cm": "cm",
-    "load_kg": "kg",
-    "age_min_months": "个月",
 }
 
 #: 布尔型参数的中文呈现。
 _PARAM_BOOL: dict[str, tuple[str, str]] = {
     "has_dedicated_gpu": ("有", "无"),
-    "noise_cancelling": ("支持", "不支持"),
-    "wireless": ("支持", "不支持"),
-    "hot_swappable": ("支持", "不支持"),
-    "assembly_required": ("需自行组装", "免组装"),
-    "waterproof": ("支持", "不支持"),
-    "safety_cert": ("已认证", "未认证"),
-    "foldable": ("可折叠", "不可折叠"),
 }
 
 #: 档位型参数，标注满分便于理解量纲。
@@ -107,13 +72,6 @@ _PARAM_TIER: dict[str, int] = {
     "cpu_tier": 5,
     "chip_tier": 5,
     "camera_tier": 5,
-    "audio_tier": 5,
-    "noise_level": 5,
-    "energy_grade": 5,
-    "durability_tier": 5,
-    "comfort_tier": 5,
-    "breathability_tier": 5,
-    "cushion_tier": 5,
 }
 
 

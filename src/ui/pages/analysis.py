@@ -8,8 +8,6 @@ from src import ai_enhance, ai_service, config, database, report_service, settin
 from src.agent.runner import run_agent
 from src.data_loader import Catalog
 from src.demand_parser import (
-    AVAILABLE_CORE_NEEDS,
-    AVAILABLE_USE_CASES,
     Demand,
     detect_unsupported_category,
     follow_up_questions,
@@ -31,15 +29,15 @@ EXAMPLE_DEMAND = (
 )
 
 _NO_CATEGORY = "（不指定，在全部类别中检索）"
+_NO_BRAND = "不限品牌"
+_BRAND_KEY = "zg_input_brand"
 
 #: 输入控件绑定的 session_state 键。重置与预填都走这里，
 #: 避免在两个地方各写一份键名、改一处漏一处。
 _INPUT_KEYS = (
     "zg_input_text",
     "zg_input_budget",
-    "zg_input_use_cases",
-    "zg_input_core_needs",
-    "zg_input_brands",
+    _BRAND_KEY,
 )
 _CATEGORY_KEY = "zg_input_category"
 
@@ -47,9 +45,7 @@ _CATEGORY_KEY = "zg_input_category"
 _INPUT_DEFAULTS: dict[str, object] = {
     "zg_input_text": "",
     "zg_input_budget": "",
-    "zg_input_use_cases": [],
-    "zg_input_core_needs": [],
-    "zg_input_brands": [],
+    _BRAND_KEY: _NO_BRAND,
     _CATEGORY_KEY: _NO_CATEGORY,
 }
 
@@ -128,9 +124,7 @@ def _input_signature() -> str:
             st.session_state.get("zg_input_text", "").strip(),
             st.session_state.get(_CATEGORY_KEY, _NO_CATEGORY),
             st.session_state.get("zg_input_budget", "").strip(),
-            tuple(st.session_state.get("zg_input_use_cases", [])),
-            tuple(st.session_state.get("zg_input_core_needs", [])),
-            tuple(st.session_state.get("zg_input_brands", [])),
+            st.session_state.get(_BRAND_KEY, _NO_BRAND),
         )
     )
 
@@ -141,43 +135,43 @@ def _input_signature() -> str:
 
 
 def _render_ai_controls() -> None:
-    """AI 增强开关。
+    """AI 增强的常驻状态说明。
 
-    spec 要求「调用外部 AI API 前，界面 SHALL 说明将要发送的数据范围，
-    并由用户确认」。所以这里默认**关闭**，打开时才展示数据共享说明，
-    且每次分析都会把说明再列一遍。
+    开关已移到「个人设置」（全局总开关，默认开启），这里只负责**知情**：
+    AI 在起作用时说明会把哪些数据发出去；没在起作用时说明为什么、怎么配。
+    spec 要求「调用外部 AI API 前，界面 SHALL 说明将要发送的数据范围」——
+    开关即长期确认，这条说明就是知情渠道。
     """
-    service = ai_service.get_service()
-    if not service.configured:
+    if not state.ai_enhanced_active():
+        service = ai_service.get_service()
+        if not service.configured:
+            hint = (
+                f"当前为本地演示模式：未配置模型密钥，全部由本地规则完成，不联网。"
+                f"配置 {config.LLM_API_KEY_ENV} 后可使用 AI 增强。"
+            )
+        else:
+            hint = "AI 增强已在「个人设置」中关闭，本次分析由本地规则完成。"
         st.markdown(
-            f'<div class="zg-caption" style="margin-bottom:10px">'
-            f"当前为本地演示模式：未配置模型密钥，全部由本地规则完成，不联网。"
-            f"配置 {config.LLM_API_KEY_ENV} 后可使用 AI 增强。</div>",
+            f'<div class="zg-caption" style="margin-bottom:10px">{hint}</div>',
             unsafe_allow_html=True,
         )
         return
 
-    st.toggle(
-        "启用 AI 增强（会把你输入的内容与候选商品数据发送给模型服务）",
-        key="zg_ai_enabled",
-        help="关闭时全部由本地规则完成，不发起任何网络请求。",
+    service = ai_service.get_service()
+    st.markdown(
+        f'<div class="zg-caption">当前模型：{service.model}　·　'
+        f"端点：{service.describe()['base_url']}</div>",
+        unsafe_allow_html=True,
     )
-
-    if st.session_state.get("zg_ai_enabled"):
-        st.markdown(
-            f'<div class="zg-caption">当前模型：{service.model}　·　'
-            f"端点：{service.describe()['base_url']}</div>",
-            unsafe_allow_html=True,
-        )
-        notice = ai_enhance.data_sharing_notice(
-            state.get(state.KEY_DEMAND) or Demand(),
-            0,
-        )
-        st.markdown(
-            f'<div class="zg-notice zg-notice-warn">'
-            f'<span>{esc_multi(notice)}</span></div>',
-            unsafe_allow_html=True,
-        )
+    notice = ai_enhance.data_sharing_notice(
+        state.get(state.KEY_DEMAND) or Demand(),
+        0,
+    )
+    st.markdown(
+        f'<div class="zg-notice zg-notice-warn">'
+        f'<span>{esc_multi(notice)}</span></div>',
+        unsafe_allow_html=True,
+    )
     st.write("")
 
 
@@ -213,33 +207,22 @@ def _render_inputs(catalog: Catalog) -> None:
             help="只接受数字。留空表示不限预算，结果会标注「未设定预算」。",
         )
 
-    col3, col4 = st.columns(2)
-    with col3:
-        st.multiselect(
-            "主要用途",
-            options=list(AVAILABLE_USE_CASES),
-            key="zg_input_use_cases",
-            placeholder="可多选，留空表示不限定",
-            help="选中的用途会与商品数据里的适用场景做匹配。",
+    # 品牌**只在选定类别后出现**，且选项随类别级联——
+    # 不然会选出「类别里不存在的品牌」，筛选结果必然是空集。
+    chosen = st.session_state.get(_CATEGORY_KEY, _NO_CATEGORY)
+    category_key = _category_options(catalog).get(chosen, "")
+    if category_key:
+        brands_in_category = sorted(
+            {product.brand for product in catalog.by_category(category_key) if product.brand}
         )
-    with col4:
-        st.multiselect(
-            "比较看重",
-            options=list(AVAILABLE_CORE_NEEDS),
-            key="zg_input_core_needs",
-            placeholder="可多选，留空表示不限定",
-            help="这些会作为「核心需求」参与匹配度评分。",
-        )
-
-    brands = catalog.brands()
-    if brands:
-        st.multiselect(
-            "品牌偏好（可留空）",
-            options=brands,
-            key="zg_input_brands",
-            placeholder="不限品牌",
-            help="选了品牌就只在该品牌内筛选；没有命中的话会给出放宽建议。",
-        )
+        if brands_in_category:
+            st.selectbox(
+                "品牌（可选）",
+                options=[_NO_BRAND, *brands_in_category],
+                key=_BRAND_KEY,
+                help="选了品牌就只在该品牌内筛选；没有命中的话会给出放宽建议。"
+                "不选表示不限品牌。",
+            )
 
 
 # --------------------------------------------------------------------------
@@ -256,17 +239,14 @@ def _run_analysis(catalog: Catalog) -> None:
         st.session_state.get(_CATEGORY_KEY, _NO_CATEGORY), ""
     )
     budget_raw = st.session_state.get("zg_input_budget", "")
-    use_cases = list(st.session_state.get("zg_input_use_cases", []))
-    core_needs = list(st.session_state.get("zg_input_core_needs", []))
-    brands = list(st.session_state.get("zg_input_brands", []))
+    chosen_brand = st.session_state.get(_BRAND_KEY, _NO_BRAND)
+    brands = [chosen_brand] if chosen_brand != _NO_BRAND else []
 
     # 文字和结构化控件都没填 → 直接拒绝，连解析都不必
     if (
         not raw_text.strip()
         and not category
         and not str(budget_raw).strip()
-        and not use_cases
-        and not core_needs
     ):
         state.put(state.KEY_ERROR, to_user_message(EmptyDemand()))
         return
@@ -279,7 +259,7 @@ def _run_analysis(catalog: Catalog) -> None:
         return
 
     ai_notes: list[str] = []
-    ai_enabled = bool(st.session_state.get("zg_ai_enabled")) and ai_service.get_service().configured
+    ai_enabled = state.ai_enhanced_active()
 
     try:
         if raw_text.strip():
@@ -289,8 +269,6 @@ def _run_analysis(catalog: Catalog) -> None:
         structured = Demand(
             category=category,
             budget=parse_budget_value(budget_raw),
-            use_cases=use_cases,
-            core_needs=core_needs,
             brand_preferences=brands,
         )
         demand = merge_demand(structured, parsed) if raw_text.strip() else structured
@@ -306,7 +284,7 @@ def _run_analysis(catalog: Catalog) -> None:
         return
 
     # 个人设置里的偏好作为默认值并入（不覆盖本次手填的内容）
-    prefs = settings.load_preferences()
+    prefs = settings.load_preferences(state.current_user())
     applied = settings.apply_preferences(prefs, demand)
 
     # 提示只在偏好**确实改变了什么**的时候给。
@@ -314,7 +292,6 @@ def _run_analysis(catalog: Catalog) -> None:
     # 「已自动带上偏好」，哪怕他一项都没设过，等于在说假话。
     contributed = bool(
         set(applied.core_needs) - set(demand.core_needs)
-        or (not demand.brand_preferences and applied.brand_preferences)
         or (prefs.auto_apply and not prefs.show_over_budget)
     )
 
@@ -398,8 +375,11 @@ def _persist(report, signature: str) -> None:
     if st.session_state.get(state.KEY_SAVED_SIGNATURE) == signature:
         return
 
+    user = state.current_user()
     try:
-        database.save_analysis(report)
+        # 带上归属账号：**不带的话这条记录谁也读不到**（它成了「无归属」，
+        # 只对管理员可见），用户做完分析却在历史里找不到自己那条。
+        database.save_analysis(report, user_id=user.username if user else None)
     except ZhigouError as exc:
         state.put("zg_save_error", to_user_message(exc))
         return
@@ -466,16 +446,25 @@ def _render_left_column(demand: Demand, result) -> None:
 
 
 def _favorite_actions(product) -> None:
-    """商品行展开区里的收藏按钮。"""
+    """商品行展开区里的收藏按钮。**收藏按用户隔离**，所以要带当前用户。"""
+    user = state.current_user()
+    if user is None:
+        # 未登录时不该出现收藏入口。入口短路已经拦了一层，这里是第二层：
+        # 万一有别的路径渲染到这一块，也不至于把收藏写到「无归属」上去。
+        return
+
     try:
-        favorited = database.is_favorite(product.id)
+        favorited = database.is_favorite(user.username, product.id)
     except ZhigouError:
         favorited = False
 
     label = "取消收藏" if favorited else "收藏这件商品"
     if st.button(label, key=f"fav_{product.id}", use_container_width=False):
         try:
-            database.remove_favorite(product.id) if favorited else database.add_favorite(product.id)
+            if favorited:
+                database.remove_favorite(user.username, product.id)
+            else:
+                database.add_favorite(user.username, product.id)
         except ZhigouError as exc:
             state.put("zg_fav_error", to_user_message(exc))
         else:
@@ -560,7 +549,7 @@ def _render_right_column(result) -> None:
 
 
 def _render_export(report) -> None:
-    """导出按钮。导出内容与界面一致，且保留演示数据来源标注。"""
+    """导出按钮。导出内容与界面一致，且保留数据来源与核验状态标注。"""
     col_md, col_csv, _spacer = st.columns([1, 1, 3])
     with col_md:
         st.download_button(
@@ -624,7 +613,7 @@ def _render_results() -> None:
     engine = state.get("zg_parse_engine")
     if engine == "ai":
         components.show_notice("本次需求由 AI 解析，推荐排序仍由本地规则计算。", "info")
-    elif engine == "rule" and st.session_state.get("zg_ai_enabled"):
+    elif engine == "rule" and state.ai_enhanced_active():
         components.show_notice("本次需求由本地规则解析。", "info")
 
     explanation = state.get("zg_ai_explanation")

@@ -42,8 +42,13 @@ logger = logging.getLogger("zhigou.consistency")
 TIER_MIN = 1
 TIER_MAX = 5
 
-#: 以 `_tier` 结尾的字段一律按档位处理。这两个不带该后缀，单独列出。
-TIER_EXTRA_KEYS: frozenset[str] = frozenset({"noise_level", "energy_grade"})
+#: 以 `_tier` 结尾的字段一律按档位处理。**不带这个后缀、但取值同样是 1–5 档位**
+#: 的字段单独列在这里——曾经住着 `noise_level`（键盘）与 `energy_grade`（家电），
+#: 随两个品类一起移除后为空。
+#: 保留这个空集合而不是删掉机制：它是「档位」这个概念与后缀命名的分离点，
+#: 下次出现一个不叫 `_tier` 的档位字段时，要改的就是这一行，
+#: 而不是去翻 `_is_tier_key` 的实现。
+TIER_EXTRA_KEYS: frozenset[str] = frozenset()
 
 #: 否定词。关键词前 `NEGATION_WINDOW` 个字符内出现任一字符，即视为否定式。
 #: 「没有」「不支持」「不含」都被其中的「没」「不」覆盖。
@@ -54,9 +59,12 @@ NEGATION_WINDOW = 3
 
 #: 「参数说没有、文字却说有」的布尔字段。
 #: 每项是 (字段名, 文本关键词, 展示名)。
+#:
+#: 只列**商品库真有的**布尔参数。`foldable`（母婴用品）与
+#: `noise_cancelling`（耳机的主动降噪）曾在这里，随各自品类移除——
+#: 留着的规则永远不会命中任何一条数据，看着像在守什么，实际上只是噪音。
 _BOOLEAN_CLAIMS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("has_dedicated_gpu", ("独显", "独立显卡"), "独立显卡"),
-    ("foldable", ("折叠",), "可折叠"),
 )
 
 
@@ -87,7 +95,7 @@ def mentions_positively(
     """文本里是否**肯定式**提到了任一关键词。
 
     关键词前 `window` 个字符内出现否定词时，该次出现不算数。
-    这是「无独显」「不可折叠」不被误判为矛盾的原因。
+    这是「无独显」不被误判为矛盾的原因。
     """
     if not text:
         return False

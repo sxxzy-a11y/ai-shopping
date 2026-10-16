@@ -13,25 +13,38 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from src import config
+from src.auth import ROLE_USER, User
+from src.ui import state
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 APP_FILE = str(PROJECT_ROOT / "app.py")
 
 FALLBACK_TEXT = "操作未能完成，请稍后重试"
 
+#: 端到端默认从一个**已登录**的会话起步：这里测的是整条决策链路，
+#: 登录本身有自己的用例。未登录时的行为另有一条专门用例。
+TEST_USERNAME = "acceptance-tester"
+DEFAULT_USER = User(username=TEST_USERNAME, role=ROLE_USER)
+
 #: 界面上**绝不允许**出现的东西
 FORBIDDEN = ("Traceback", "File \"", "line ", "streamlit.errors", "sqlite3.", "httpx.")
 
 
+#: 端到端用的需求句。**预算跟着真实价格上涨过**：需求简报里的原句是
+#: 「预算 3000 元」，而真实数据里最便宜的笔记本要 3519 元——照抄那个数字，
+#: 分析结果会一件都进不了预算内，「为你推荐」整块都渲染不出来，
+#: 下面一串断言会集体失败，而失败信息看着像页面坏了。
 EXAMPLE_TEXT = (
-    "我是一名大学生，预算 3000 元，想买一台主要用于 Python 编程、"
+    "我是一名大学生，预算 6000 元，想买一台主要用于 Python 编程、"
     "日常学习和偶尔玩游戏的笔记本电脑。我比较看重性能和性价比，"
     "不希望电脑太重。"
 )
 
 
-def _run() -> AppTest:
+def _run(user: User | None = DEFAULT_USER) -> AppTest:
     at = AppTest.from_file(APP_FILE, default_timeout=60)
+    if user is not None:
+        at.session_state[state.KEY_USER] = user
     at.run()
     return at
 
@@ -62,8 +75,10 @@ def _text(at: AppTest) -> str:
                  "info", "warning", "error", "success"):
         for element in getattr(at, attr, []):
             chunks.append(str(getattr(element, "value", "")))
+    # `expander` 也要收：折叠面板的标题是页面上可见的文本，漏掉它会让
+    # 「某某确实显示了」这类断言取不到东西（见 test_app._all_text 的说明）。
     for attr in ("selectbox", "multiselect", "text_input", "text_area", "toggle",
-                 "radio", "checkbox", "button"):
+                 "radio", "checkbox", "button", "number_input", "expander"):
         for element in getattr(at, attr, []):
             label = getattr(element, "label", "")
             if label:
@@ -228,7 +243,6 @@ def test_ai_failure_degrades_to_local_rules(monkeypatch):
 
     at = _run()
     _go(at, "智能分析")
-    at.toggle[0].set_value(True).run()
     at.text_area[0].set_value("预算 3000 买笔记本电脑，主要编程").run()
     _button(at, "开始分析").click().run()
 
@@ -252,7 +266,13 @@ def test_no_matching_products_explains_and_suggests():
 
     body = _text(at)
     assert "放宽条件的建议" in body
-    assert "2499" in body, "建议里应给出具体的最低参考价"
+
+    from src import data_loader
+
+    cheapest = min(
+        p.price for p in data_loader.load_catalog().by_category("laptop") if p.price
+    )
+    assert f"{cheapest:.0f}" in body, "建议里应给出具体的最低参考价"
 
     result = _state(at, "zg_result")
     assert result.relaxations
@@ -363,7 +383,9 @@ def test_full_decision_journey():
     markdown = report_service.to_markdown(report)
     for section in ("需求摘要", "推荐商品及排序", "最终决策建议", "数据说明"):
         assert section in markdown
-    assert "演示" in markdown
+    # 报告里必须带着数据边界说明。以前断言的是「含『演示』二字」，
+    # 现在是「说明数据未经逐条核验」——真实品牌的数据更容易被误读成已核实。
+    assert "未核验" in markdown, "导出报告必须写明数据未经核验"
 
     # 4. 历史里能重新打开，且结论与当初一致
     _go(at, "历史记录")
@@ -377,7 +399,9 @@ def test_full_decision_journey():
 
     from src import database
 
-    stored = database.get_analysis(at.session_state["zg_history_selected"])
+    stored = database.get_analysis(
+        at.session_state["zg_history_selected"], viewer=DEFAULT_USER
+    )
     assert stored is not None
     assert stored.created_at == report.created_at
     assert len(stored.recommendations) == len(report.recommendations)
@@ -392,7 +416,77 @@ def test_full_decision_journey():
 
 
 def test_catalog_meets_the_acceptance_bar(catalog):
-    """验收要求：商品覆盖全部已登记品类，且都标注为演示数据。"""
+    """验收要求：商品覆盖全部已登记品类，且每条都如实标注来源与核验状态。
+
+    断言从「必须含『演示』二字」改成了「不许自称已核验」——数据集换成
+    真实品牌后，前者已经不成立，而后者才是真正要守的那条线。
+    """
     assert len(catalog) >= 20
     assert set(catalog.present_categories()) == set(config.CATEGORY_LABELS)
-    assert all("演示" in p.data_source for p in catalog.products)
+    for product in catalog.products:
+        assert product.data_source, f"{product.id} 没有来源说明"
+        assert not product.is_verified, f"{product.id} 自称已核验，但没有核验记录"
+
+
+# --------------------------------------------------------------------------
+# 访问边界（端到端）
+# --------------------------------------------------------------------------
+
+
+def test_unauthenticated_visitor_is_stopped_at_the_login_page(monkeypatch):
+    """spec：未登录的访问者被拦在登录页，且**不触发任何数据查询**。
+
+    把取数据集的那一步换成「一调用就炸」：这样「查没查」是断言出来的，
+    而不是靠读代码推断的。端到端这一条比 `test_app` 里那条更值钱——
+    它跑的是真实的 `app.py` 入口。
+    """
+    from src.ui import state as state_module
+
+    def explode(*_args, **_kwargs):
+        raise AssertionError("未登录时不该去取数据集")
+
+    monkeypatch.setattr(state_module, "get_catalog", explode)
+    monkeypatch.setattr(state_module, "get_knowledge_index", explode)
+
+    at = _run(user=None)
+    _assert_no_leak(at, "未登录访问")
+
+    body = _text(at)
+    assert "登录" in body
+    assert "演示级鉴权" in body, "登录页要披露鉴权边界"
+    assert "开始分析" not in body, "未登录不该看到任何功能页"
+    assert _state(at, state.KEY_USER) is None
+
+
+def test_two_users_do_not_see_each_others_history():
+    """spec：两个用户各自分析，互相看不到对方的历史。
+
+    这是本变更的产品意义所在，所以用端到端的方式走一遍：两个不同的
+    登录会话各做一次分析，各自的历史列表里只该有自己的那条。
+    """
+    from src import database
+    from src.auth import ROLE_USER, User
+
+    alice = User(username="alice", role=ROLE_USER)
+    bob = User(username="bob", role=ROLE_USER)
+
+    def analyze(user) -> None:
+        at = _run(user=user)
+        _go(at, "首页")
+        _go(at, "首页")
+        at.text_area[0].set_value(EXAMPLE_TEXT).run()
+        _button(at, "开始分析").click().run()
+        _assert_no_leak(at, "分析")
+
+    analyze(alice)
+    analyze(bob)
+
+    assert database.count_analyses_of("alice") == 1
+    assert database.count_analyses_of("bob") == 1
+
+    at = _run(user=alice)
+    _go(at, "历史记录")
+    body = _text(at)
+    assert "笔记本电脑" in body, "alice 应当看到自己那条"
+    assert len(database.list_analyses_of("alice")) == 1
+    assert len(database.list_analyses_of("bob")) == 1

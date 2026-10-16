@@ -10,9 +10,61 @@ from __future__ import annotations
 import pytest
 
 from src import config
+from src.data_loader import Catalog, Product
 from src.demand_parser import Demand
 from src.scoring import score_all, score_product
 from src.recommender import recommend
+
+
+def _fake_laptop(product_id: str, price: float, **specs) -> Product:
+    """自造一件笔记本，用于**与数据集无关**的规则测试。
+
+    有些规则（排序、截断）要验的是逻辑本身，用真实数据来验就会变成
+    「这一版数据恰好满足」——数据集一换，断言跟着失效，而失败信息
+    看上去像逻辑坏了。这里把要测的条件直接摆出来。
+    """
+    return Product(
+        id=product_id,
+        name=f"测试机 {product_id}",
+        category="laptop",
+        price=price,
+        brand="测试品牌",
+        specs=specs,
+        use_cases=["办公"],
+        pros=["测试用"],
+        cons=["测试用"],
+        data_source="测试夹具 · 非真实数据",
+        updated_at="2026-10-15",
+    )
+
+
+def _fake_headphones(count: int, *, base_price: float = 800.0) -> Catalog:
+    """一批自造耳机，价格每件递增 100 元。
+
+    专供「超预算条数」那几条测试：截断只在候选数超过展示上限时才触发，
+    而真实数据集每个类别恰好 10 件、上限也正好是 10——拿真数据来测，
+    截断这一步永远走不到，测试会一直绿着却什么也没验证。
+    """
+    products = [
+        Product(
+            id=f"FH{index:03d}",
+            name=f"测试耳机 {index}",
+            category="headphone",
+            price=base_price + index * 100,
+            brand="测试品牌",
+            specs={
+                "driver_mm": 40, "connection": "蓝牙 5.3", "battery_h": 30,
+                "weight_g": 250, "noise_cancelling": True, "audio_tier": 3,
+            },
+            use_cases=["通勤"],
+            pros=["测试用"],
+            cons=["测试用"],
+            data_source="测试夹具 · 非真实数据",
+            updated_at="2026-10-15",
+        )
+        for index in range(count)
+    ]
+    return Catalog(products=products)
 
 
 # --------------------------------------------------------------------------
@@ -35,20 +87,36 @@ def test_every_weight_key_has_a_chinese_label(category):
 
 
 def test_categories_use_different_dimensions():
-    """spec 要求：不同商品类别使用不同评分维度。"""
+    """spec 要求：不同商品类别使用不同的评分权重。
+
+    两个品类都保留便携性（天天带着走 / 握在手里），
+    差异体现在其余维度的权重分配上。
+    """
     assert "portability" in config.SCORING_WEIGHTS["laptop"]
     assert "portability" in config.SCORING_WEIGHTS["phone"]
-    assert "portability" not in config.SCORING_WEIGHTS["keyboard"]
-    assert "portability" not in config.SCORING_WEIGHTS["headphone"]
+    assert config.SCORING_WEIGHTS["laptop"] != config.SCORING_WEIGHTS["phone"], (
+        "两个品类的权重表不能完全相同，否则「按品类自适应」名存实亡"
+    )
 
 
-def test_non_electronics_use_durability_instead_of_portability():
-    """非电子品类按品类调整维度：大件/耐用品用「耐用性」，不套用「便携性」。"""
-    for category in ("appliance", "furniture", "apparel", "sports", "baby"):
-        assert "durability" in config.SCORING_WEIGHTS[category], category
-        assert "portability" not in config.SCORING_WEIGHTS[category], category
-    # 个护美妆两样都不设
-    assert "durability" not in config.SCORING_WEIGHTS["personal_care"]
+def test_no_category_uses_the_durability_dimension():
+    """「耐用性」已随非电子品类一并消失。
+
+    它当年是为家电、家具、母婴这类耐用品设的维度，读的是 `durability_tier`。
+    四个电子品类都没有这个参数——留着权重只会让每份报告里多出一个
+    永远算不出分、只能标「数据缺失」的维度。
+    """
+    for category, weights in config.SCORING_WEIGHTS.items():
+        assert "durability" not in weights, category
+
+
+def test_weight_table_covers_exactly_the_catalog_categories():
+    """权重表与类别名表必须同集合，不能多也不能少。
+
+    这两张表分开维护。少配一类不会报错：那个类别的商品照样能进库、
+    照样被搜到，只是评分时找不到权重表——所以必须由测试来守。
+    """
+    assert set(config.SCORING_WEIGHTS) == set(config.CATEGORY_LABELS)
 
 
 @pytest.mark.parametrize("category", sorted(config.SCORING_WEIGHTS))
@@ -82,16 +150,9 @@ def test_laptop_scores_include_portability(catalog, student_laptop_demand):
     assert not any("便携性" in label for label, _ in result.excluded)
 
 
-def test_keyboard_scores_exclude_portability_with_reason(catalog):
-    from src.demand_parser import Demand
-
-    keyboard = catalog.get("KB002")
-    demand = Demand(category="keyboard", budget=500)
-    result = score_product(keyboard, demand, catalog.by_category("keyboard"))
-
-    keys = {d.key for d in result.dimensions}
-    assert "portability" not in keys
-    assert any("便携性" in label for label, _ in result.excluded)
+# （原 test_headphone_scores_exclude_portability_with_reason 已随耳机品类移除：
+#   「排除维度必须给出原因」由 test_missing_specs_exclude_dimensions_instead_of_defaulting
+#   用缺失参数的夹具继续守护；「按品类权重差异」由 test_categories_use_different_dimensions 守护。）
 
 
 def test_score_total_is_weighted_average_of_dimensions(catalog, student_laptop_demand):
@@ -209,7 +270,7 @@ def test_no_budget_labels_items_as_unset_not_within_budget(catalog):
     """spec：未设定预算时标注「未设定预算」，而不是「预算内」。"""
     from src.demand_parser import Demand
 
-    demand = Demand(category="headphone")
+    demand = Demand(category="phone")
     result = recommend(catalog, demand)
 
     assert result.within_budget
@@ -239,20 +300,27 @@ def test_sorting_is_not_by_price(catalog, wide_budget_laptop_demand):
     assert result.within_budget[0].product.id != cheapest.id
 
 
-def test_higher_need_match_outranks_cheaper_weak_item(catalog, wide_budget_laptop_demand):
-    """spec：价格更高但需求匹配更好的商品应排在前面。"""
-    # 限条数默认是 6，而笔记本有 7 件——这里必须放大上限，
-    # 否则排在最末的那件会被截断掉，测不到「最便宜但最弱」的位置。
-    result = recommend(catalog, wide_budget_laptop_demand, limit=len(catalog))
-    totals = {item.product.id: item.score.total for item in result.within_budget}
+def test_higher_need_match_outranks_cheaper_weak_item():
+    """spec：价格更高但需求匹配更好的商品应排在前面。
+
+    用自造的两件商品，不借数据集：这条验的是排序规则，而规则不该依赖
+    「这一版数据里最便宜的那件恰好最弱」——那种依赖会变成一条看似在测
+    排序、实则在测数据的断言。
+    """
+    weak = _fake_laptop(
+        "WEAK", 3500, cpu_tier=1, ram_gb=8, storage_gb=256,
+        weight_kg=1.9, battery_h=5, has_dedicated_gpu=False,
+    )
+    strong = _fake_laptop(
+        "STRONG", 6000, cpu_tier=5, ram_gb=32, storage_gb=1024,
+        weight_kg=1.4, battery_h=10, has_dedicated_gpu=True,
+    )
+    demand = Demand(category="laptop", budget=8000, use_cases=["办公"], core_needs=["性能"])
+
+    result = recommend(Catalog(products=[weak, strong]), demand, limit=10)
+
     order = [item.product.id for item in result.within_budget]
-
-    weak_id = "LP004"  # 启程 15：这批里最便宜，但处理器与内存档位都最低
-    assert weak_id in totals
-
-    assert order[0] != weak_id
-    assert order.index(weak_id) > 0
-    assert totals[order[0]] > totals[weak_id]
+    assert order == ["STRONG", "WEAK"], "性能需求下，更强但更贵的那件应当排前面"
 
 
 def test_changing_core_needs_changes_the_order(catalog):
@@ -277,13 +345,15 @@ def test_changing_core_needs_changes_the_order(catalog):
 
 def test_changing_budget_recomputes_candidates(catalog):
     """spec：调整预算后重新计算，不沿用上次结果。"""
-    from src.demand_parser import Demand
+    prices = sorted(p.price for p in catalog.by_category("laptop") if p.price)
+    # 紧的一侧只够最便宜那件；松的一侧比最贵的还高，超预算一侧应当为空
+    tight_budget = prices[0]
+    loose_budget = prices[-1] + 1
 
     # 同样要放大限条数，否则两边的截断会掩盖真实的候选差异
     limit = len(catalog)
-    tight = recommend(catalog, Demand(category="laptop", budget=3000), limit=limit)
-    # 预算给到 9000：比类别里最贵的那件还高，超预算一侧就应当是空的
-    loose = recommend(catalog, Demand(category="laptop", budget=9000), limit=limit)
+    tight = recommend(catalog, Demand(category="laptop", budget=tight_budget), limit=limit)
+    loose = recommend(catalog, Demand(category="laptop", budget=loose_budget), limit=limit)
 
     tight_ids = {i.product.id for i in tight.within_budget}
     loose_ids = {i.product.id for i in loose.within_budget}
@@ -338,15 +408,18 @@ def test_unknown_brand_gives_brand_relaxation(catalog):
 def test_unsatisfiable_hard_constraint_gives_relaxation(catalog):
     from src.demand_parser import Demand
 
-    # 笔记本类别里没有任何商品的 specs 带 noise_level
+    # 手机的参数里没有「独立显卡」这一项，所以这条硬性要求一件都满足不了。
+    # 预算给得足够高，确保候选被筛空的原因**只有约束**，
+    # 而不是「同时也超了预算」——否则这条测试会因为预算而通过，测错了东西。
+    prices = [p.price for p in catalog.by_category("phone") if p.price]
     result = recommend(
         catalog,
-        Demand(category="laptop", budget=8000, hard_constraints=["静音"]),
+        Demand(category="phone", budget=max(prices) + 1, hard_constraints=["独显"]),
     )
 
     assert result.candidate_count == 0
     assert result.within_budget == []
-    assert any("限制" in text or "静音" in text for text in result.relaxations)
+    assert any("独显" in text or "限制" in text for text in result.relaxations)
 
 
 def test_category_absent_from_dataset_gives_usable_alternatives(catalog):
@@ -377,9 +450,24 @@ def test_no_results_never_returns_a_bare_empty_list(catalog):
 # --------------------------------------------------------------------------
 
 
-def test_weaker_within_budget_pick_triggers_a_budget_tension_note(catalog, student_laptop_demand):
-    """预算内首选明显不如某件超预算商品时，必须主动说出来。"""
-    result = recommend(catalog, student_laptop_demand)
+def test_weaker_within_budget_pick_triggers_a_budget_tension_note():
+    """预算内首选明显不如某件超预算商品时，必须主动说出来。
+
+    用自造的两件商品，前提直接摆在明面上：便宜的弱、贵的好。
+    拿真实数据来测的话，这条能不能过取决于这一版数据的价格与参数分布，
+    失败信息只会说「62.5 > 77.8 不成立」，看不出其实是数据变了。
+    """
+    weak = _fake_laptop(
+        "WEAK", 3500, cpu_tier=1, ram_gb=8, storage_gb=256,
+        weight_kg=1.9, battery_h=5, has_dedicated_gpu=False,
+    )
+    strong = _fake_laptop(
+        "STRONG", 6000, cpu_tier=5, ram_gb=32, storage_gb=1024,
+        weight_kg=1.4, battery_h=10, has_dedicated_gpu=True,
+    )
+    demand = Demand(category="laptop", budget=4000, use_cases=["办公"], core_needs=["性能"])
+
+    result = recommend(Catalog(products=[weak, strong]), demand, limit=10)
 
     best_within = result.within_budget[0]
     best_over = result.over_budget[0]
@@ -422,14 +510,14 @@ def _demand():
 # --------------------------------------------------------------------------
 
 
-def test_over_budget_total_is_the_real_count(catalog):
+def test_over_budget_total_is_the_real_count():
     """超预算条数是**真实总数**，不是截断后的列表长度。
 
     原问题：10 件超预算只显示 6 件，界面还把 6 说成总数。账面对不上——
     6 + 6 = 12 ≠ 16 件候选。
     """
-    demand = Demand(category="headphone", budget=500)
-    result = recommend(catalog, demand)
+    catalog = _fake_headphones(config.MAX_OVER_BUDGET_SHOWN + 5)
+    result = recommend(catalog, Demand(category="headphone", budget=500))
 
     assert result.over_budget_total > 0
     assert (
@@ -437,19 +525,20 @@ def test_over_budget_total_is_the_real_count(catalog):
     ), "预算内 + 超预算真实总数应当等于候选总数"
 
 
-def test_within_budget_limit_does_not_truncate_over_budget(catalog):
+def test_within_budget_limit_does_not_truncate_over_budget():
     """预算内推荐条数上限**不作用于**超预算列表——两者是各自独立的上限。
 
     这条针对的是根因：曾经两处共用同一个 `limit`，而它的文档写的是
     「预算内推荐条数上限」。钉死这个耦合，免得以后有人图省事又合回去。
     """
-    demand = Demand(category="headphone", budget=500)
+    catalog = _fake_headphones(15)
+    demand = Demand(category="headphone", budget=1500)  # 价格 800–2200，两侧都有
 
     small = recommend(catalog, demand, limit=2)
     large = recommend(catalog, demand, limit=8)
 
     # limit 只管预算内：调大它，预算内条数变多（预算内只有 6 件，所以 8 也只得 6）
-    assert len(small.within_budget) == 2
+    assert len(small.within_budget) == 2, "受 limit 约束的是预算内这一侧"
     assert len(large.within_budget) > len(small.within_budget)
 
     # 而超预算列表完全不受影响
@@ -457,24 +546,31 @@ def test_within_budget_limit_does_not_truncate_over_budget(catalog):
     assert small.over_budget_total == large.over_budget_total
 
 
-def test_over_budget_list_respects_its_own_cap(catalog):
+def test_over_budget_list_respects_its_own_cap():
     """超预算列表有自己的上限，且真实总数不受它影响。"""
+    catalog = _fake_headphones(config.MAX_OVER_BUDGET_SHOWN + 5)
     result = recommend(catalog, Demand(category="headphone", budget=1))
 
     assert len(result.over_budget) <= config.MAX_OVER_BUDGET_SHOWN
     assert result.over_budget_total == result.candidate_count
-    assert result.over_budget_total > len(result.over_budget)
+    assert result.over_budget_total > len(result.over_budget), "夹具没有产生截断"
 
 
-def test_over_budget_hidden_counts_the_gap(catalog):
-    result = recommend(catalog, Demand(category="headphone", budget=500))
+def test_over_budget_hidden_counts_the_gap():
+    catalog = _fake_headphones(config.MAX_OVER_BUDGET_SHOWN + 5)
+    result = recommend(catalog, Demand(category="headphone", budget=1))
+
     assert result.over_budget_hidden == (
         result.over_budget_total - len(result.over_budget)
     )
+    assert result.over_budget_hidden > 0
 
 
 def test_over_budget_hidden_is_zero_when_everything_shown(catalog):
-    result = recommend(catalog, Demand(category="headphone", budget=500))
+    """候选数没超过上限时，不该出现「还有 N 件未显示」这种无中生有的提示。"""
+    result = recommend(catalog, Demand(category="headphone", budget=1))
+
+    assert result.over_budget_total <= config.MAX_OVER_BUDGET_SHOWN
     assert len(result.over_budget) == result.over_budget_total
     assert result.over_budget_hidden == 0
 
@@ -492,7 +588,8 @@ def test_within_budget_total_is_the_real_count(catalog):
     前一变更修了超预算条数的截断问题，漏了预算内：统计行「预算内 6 件」
     在 17 件都在预算内时同样误导读者。两者对称，测试也成对。
     """
-    result = recommend(catalog, Demand(category="laptop", budget=10000))
+    budget = max(p.price for p in catalog.by_category("laptop")) + 1
+    result = recommend(catalog, Demand(category="laptop", budget=budget))
 
     assert result.within_budget_total == result.candidate_count
     assert result.within_budget_total > len(result.within_budget), "夹具没有产生截断"

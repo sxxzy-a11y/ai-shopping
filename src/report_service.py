@@ -233,7 +233,7 @@ def _days_since(value: str) -> int | None:
 def collect_verification_items(result: RecommendationResult, catalog: Catalog) -> list[str]:
     """列出**具体**需要核实的事项。
 
-    只写真实存在的缺口：商品缺哪些字段、数据集多久没更新、演示数据本身
+    只写真实存在的缺口：商品缺哪些字段、数据集多久没更新、数据集本身
     不包含哪些维度。不写「投资有风险」这类放之四海皆准的空话。
     """
     items: list[str] = []
@@ -267,7 +267,7 @@ def collect_verification_items(result: RecommendationResult, catalog: Catalog) -
             f"参考价格可能已经变化，下单前请以实际售价为准。"
         )
 
-    # 4) 演示数据本身没有的维度——这是数据边界，不是免责套话
+    # 4) 数据集本身没有的维度——这是数据边界，不是免责套话
     items.append(
         "本次分析依据的数据不包含销量、真实用户评价、售后政策与保修信息。"
         "这些因素可能影响你的决定，建议另行核实。"
@@ -431,7 +431,7 @@ def _item_block(item: ReportItem, *, show_rank: bool = True) -> list[str]:
 
 
 def to_markdown(report: DecisionReport) -> str:
-    """导出为 Markdown。内容与界面一致，且保留演示数据来源标注。"""
+    """导出为 Markdown。内容与界面一致，且保留数据来源与核验状态标注。"""
     lines: list[str] = [
         "# 智购参谋 · 消费决策报告",
         "",

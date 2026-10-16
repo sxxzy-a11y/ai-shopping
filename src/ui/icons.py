@@ -115,7 +115,10 @@ def category_icon(category: str, **kwargs) -> str:
     return icon(category if category in _CATEGORY_NAMES else "tag", **kwargs)
 
 
-_CATEGORY_NAMES = {"laptop", "phone", "headphone", "keyboard"}
+#: 有专属图标的商品类别。比 `_PATHS` 小——那里还住着 sparkles、shield 这类
+#: 通用图标。键盘与耳机的图标仍留在 `_PATHS` 里（图标库不必和品类同步），
+#: 但它们已不是商品类别，所以从这个集合里拿掉了。
+_CATEGORY_NAMES = {"laptop", "phone"}
 
 
 def available_icons() -> list[str]:

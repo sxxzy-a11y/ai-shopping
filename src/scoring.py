@@ -15,7 +15,6 @@
 - `performance_fit` 该类别下与性能/功能相关的参数档位
 - `value`        同类别内「性能排位」与「价格排位」之差
 - `portability`  该类别下与便携相关的重量/体积指标
-- `durability`   该类别下的耐用档位（家具、家电、母婴等品类常用）
 """
 
 from __future__ import annotations
@@ -47,65 +46,21 @@ _SPEC_RANGES: dict[str, dict[str, tuple[float, float]]] = {
         "battery_mah": (4000, 6000),
         "weight_g": (230, 160),
     },
-    "headphone": {
-        "audio_tier": (1, 5),
-        "battery_h": (5, 50),
-        "weight_g": (300, 4),
-    },
-    "keyboard": {
-        "weight_g": (900, 500),
-        "noise_level": (5, 1),  # 越安静分越高
-    },
-    "appliance": {
-        "capacity_l": (3, 500),
-        "energy_grade": (1, 5),
-        "noise_db": (70, 30),  # 越安静分越高
-        "warranty_years": (1, 8),
-        "durability_tier": (1, 5),
-    },
-    "apparel": {
-        "comfort_tier": (1, 5),
-        "breathability_tier": (1, 5),
-        "durability_tier": (1, 5),
-        "weight_g": (1200, 100),
-    },
-    "furniture": {
-        "load_kg": (30, 250),
-        "durability_tier": (1, 5),
-        "warranty_years": (1, 8),
-    },
-    "sports": {
-        "cushion_tier": (1, 5),
-        "durability_tier": (1, 5),
-        "weight_g": (8000, 300),
-    },
-    "personal_care": {
-        "power_w": (5, 1800),
-        "battery_h": (0, 40),
-        "noise_db": (75, 25),
-        "durability_tier": (1, 5),
-    },
-    "baby": {
-        # 起始月龄越小，覆盖的使用阶段越长，所以越小分越高
-        "age_min_months": (36, 0),
-        "durability_tier": (1, 5),
-        "weight_kg": (15.0, 0.5),
-    },
 }
+
+def spec_bounds(category: str, key: str) -> tuple[float, float] | None:
+    """该参数在评分里的取值区间（得 0 分 ↔ 得 100 分的两端）。
+
+    商品维护页用它校验取值——**与评分读的是同一份定义**。
+    另写一份「允许范围」出来，改评分时必然漏改其中一处。
+    """
+    return _SPEC_RANGES.get(category, {}).get(key)
+
 
 #: 该类别下「性能/功能」维度读取的参数（按重要性排序）。
 _PERFORMANCE_SPECS: dict[str, tuple[str, ...]] = {
     "laptop": ("cpu_tier", "ram_gb"),
     "phone": ("chip_tier", "camera_tier"),
-    "headphone": ("audio_tier",),
-    "keyboard": (),  # 键盘没有性能档位，改用功能项合成，见 _keyboard_feature_score
-    "appliance": ("energy_grade",),
-    "apparel": ("comfort_tier", "breathability_tier"),
-    "furniture": ("load_kg",),
-    "sports": ("cushion_tier",),
-    "personal_care": ("power_w",),
-    # 母婴：安全认证与折叠是主要功能项，布尔值按 _normalize_spec 折算
-    "baby": ("safety_cert", "foldable"),
 }
 
 #: 核心需求关键词 → 可量化的参数名。用于 need_fit 的可解释部分。
@@ -114,16 +69,7 @@ _NEED_SIGNALS: dict[str, tuple[str, ...]] = {
     "续航": ("battery_h", "battery_mah"),
     "便携": ("weight_kg", "weight_g"),
     "轻便": ("weight_kg", "weight_g"),
-    "音质": ("audio_tier",),
     "拍照": ("camera_tier",),
-    "降噪": ("noise_cancelling",),
-    "静音": ("noise_level", "noise_db"),
-    "省电": ("energy_grade",),
-    "耐用": ("durability_tier",),
-    "容量": ("capacity_l",),
-    "舒适": ("comfort_tier",),
-    "透气": ("breathability_tier",),
-    "安全": ("safety_cert",),
 }
 
 #: 同义场景词归一。用户说「写代码」「敲代码」都应落到「编程」。
@@ -362,37 +308,13 @@ def _score_need_fit(
     return total, reason
 
 
-def _keyboard_feature_score(product: Product) -> float | None:
-    """键盘没有性能档位，用功能项合成一个「功能适配」分。"""
-    specs = product.specs
-    if not specs:
-        return None
-    score = 0.0
-    if specs.get("hot_swappable"):
-        score += 40.0  # 可换轴，手感可调
-    if specs.get("wireless"):
-        score += 30.0  # 无线，桌面更清爽
-    switch_type = str(specs.get("switch_type", ""))
-    if "机械" in switch_type or "轴" in switch_type:
-        score += 30.0  # 机械结构，寿命与手感优于薄膜
-    return max(0.0, min(100.0, score))
-
-
 def _score_performance_fit(product: Product) -> tuple[float | None, str]:
-    """性能/功能适配：读取该类别的性能参数并归一化。"""
-    if product.category == "keyboard":
-        score = _keyboard_feature_score(product)
-        if score is None:
-            return None, "缺少可评估的功能参数"
-        features: list[str] = []
-        if product.specs.get("hot_swappable"):
-            features.append("热插拔")
-        if product.specs.get("wireless"):
-            features.append("无线")
-        if "轴" in str(product.specs.get("switch_type", "")):
-            features.append("机械轴")
-        return score, "功能项：" + ("、".join(features) if features else "仅基础功能")
+    """性能/功能适配：读取该类别的性能参数并归一化。
 
+    键盘曾走一条单独的支路（没有性能档位，改用热插拔/无线/轴体合成）。
+    品类移除时那条支路一并删掉了——留着的话，它读的参数在
+    `config.SPEC_LABELS` 里已不存在，谁也说不清它还算不算数。
+    """
     keys = _PERFORMANCE_SPECS.get(product.category, ())
     if not keys:
         return None, "该类别没有定义性能评估参数"
@@ -471,22 +393,6 @@ def _score_portability(product: Product) -> tuple[float | None, str]:
     return normalized, f"整机 {raw}{unit}"
 
 
-def _score_durability(product: Product) -> tuple[float | None, str]:
-    """耐用性：按类别的耐用档位归一化。
-
-    非电子品类多了一个「能不能用得住」的维度——家具、家电、母婴这类
-    大件或高频使用品，寿命往往比参数高低更重要。
-    """
-    if not product.has_spec("durability_tier"):
-        return None, "缺少耐用档位"
-    normalized = _normalize_spec(
-        product.category, "durability_tier", product.spec("durability_tier")
-    )
-    if normalized is None:
-        return None, "耐用档位无法解析"
-    return normalized, f"耐用档位 {product.spec('durability_tier')}/5"
-
-
 # --------------------------------------------------------------------------
 # 主入口
 # --------------------------------------------------------------------------
@@ -515,7 +421,6 @@ def score_product(
         ("performance_fit", lambda: _score_performance_fit(product)),
         ("value", lambda: _score_value(product, peer_list)),
         ("portability", lambda: _score_portability(product)),
-        ("durability", lambda: _score_durability(product)),
     ]
 
     dimensions: list[DimensionScore] = []

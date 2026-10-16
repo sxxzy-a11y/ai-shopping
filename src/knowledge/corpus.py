@@ -63,6 +63,8 @@ class Document:
     updated_at: str = ""
     product_id: str = ""
     category: str = ""
+    #: 商品级条目的品牌，用于「只问品牌」时的检索加权；手写文档为空。
+    brand: str = ""
 
     @property
     def searchable_text(self) -> str:
@@ -248,6 +250,7 @@ def synthesize_product_document(product: Product) -> Document:
         updated_at=product.updated_at,
         product_id=product.id,
         category=product.category,
+        brand=product.brand,
     )
 
 

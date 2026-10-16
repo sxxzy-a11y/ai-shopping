@@ -6,7 +6,7 @@ import streamlit as st
 
 from src import config
 from src.data_loader import Catalog
-from src.ui import components, state
+from src.ui import components, disclosure, state
 from src.ui.theme import bullet_list, facts
 
 
@@ -70,7 +70,7 @@ def render(catalog: Catalog) -> None:
             [
                 "评分由预算匹配、核心需求匹配、性能功能适配、性价比、便携性等维度加权得出",
                 f"「{config.SCORE_DISPLAY_NAME}」的权重按商品类别分别配置，"
-                "笔记本和手机计入便携性，耳机和键盘不计入",
+                "笔记本与手机各自一套（例如手机更看重核心需求匹配）",
                 "数据缺失的维度会被排除计算并在页面上注明，不会补一个默认分充数",
             ]
         ),
@@ -86,8 +86,10 @@ def render(catalog: Catalog) -> None:
             [
                 f"数据集共 {len(catalog)} 件商品，"
                 f"覆盖 {'、'.join(config.category_label(c) for c in catalog.present_categories())}",
-                "所有商品、价格、参数、优缺点均为演示用途而构造，不代表任何真实在售商品",
-                "参数中的档位值（如处理器档位、音质档位）是本项目为规则评分设定的分级，"
+                "商品、参数、适用场景与优缺点均依据公开资料整理，"
+                "不是厂商宣传、也不是真实用户评价；"
+                "全部记录未逐条核验，不代表任何真实在售商品的实时状态",
+                "参数中的档位值（如处理器档位、屏幕档位）是本项目为规则评分设定的分级，"
                 "不是厂商跑分或专业评测结果",
                 "本项目不接入任何电商平台，不提供实时价格、库存、销量或真实评价",
                 "因此本工具的输出只能用于了解「如何用数据支撑一次消费决策」，"
@@ -107,10 +109,26 @@ def render(catalog: Catalog) -> None:
                 "中文数字只识别按位书写（「三千」「两千五百」），"
                 "口语省略式（「两千五」表示 2500）识别不了，会退回「未识别到预算」",
                 "结构化预算输入框只接受阿拉伯数字，填「三千块」会提示格式错误",
-                "第一版不做账号体系与多用户隔离，数据保存在本机",
+                "账号体系是演示级鉴权（无会话过期、无登录限流、无找回密码），"
+                "刷新页面需重新登录；所有数据保存在本机，不上传",
             ]
         ),
         unsafe_allow_html=True,
+    )
+
+    # --- 账号体系 ---------------------------------------------------------
+    # 与登录页共用同一份文案（`src/ui/disclosure.py`）：这是**披露限制**的
+    # 内容，两处措辞一旦漂移，读者会以为自己看到的是一份完整清单。
+    components.section_title("账号体系")
+    st.markdown(
+        bullet_list(list(disclosure.boundary_lines())),
+        unsafe_allow_html=True,
+    )
+    st.write("")
+    components.show_notice(
+        "注册是开放的：任何能访问到这个地址的人都能创建账号，"
+        "新账号一律是普通用户。演示时请只绑定本机地址，不要暴露到公网。",
+        "warn",
     )
 
     # --- 运行环境 ---------------------------------------------------------

@@ -444,31 +444,69 @@ def test_explanation_with_a_wrong_price_is_dropped(catalog):
     assert "LP002" in result["dropped"]
 
 
-# LP001 轻羽 AirBook 14 的真实参数：weight_kg 1.28 / battery_h 10 /
-# ram_gb 16 / storage_gb 512 / screen_size 14。下面用它做数值断言的基准。
-@pytest.mark.parametrize(
-    "text, expected",
-    [
-        # 与数据一致 —— 放过
-        ("续航约 10 小时，通勤够用", []),
-        ("整机 1.28 千克，背一天不累", []),
-        ("16GB 内存够跑开发环境", []),
-        ("14 英寸屏幕，放包里刚好", []),
-        # 四舍五入不算编造（1.28 写成 1.3 是正常表达）
-        ("重量约 1.3 千克", []),
-        # 参数族里压根没有数据时不判定——缺数据不等于编造
-        ("电池 5000mAh", []),
-        # 编造 —— 抓住
-        ("续航长达 20 小时", ["20 小时"]),
-        ("重量只有 0.9 千克", ["0.9 千克"]),
-        ("32GB 内存加 1TB 固态", ["32GB", "1TB"]),
-        # 裸数字不该被当成参数断言（序号、评分、年份）
-        ("在候选里排第 1，得分 88 分，2026 年的数据", []),
-    ],
-)
-def test_find_unsupported_spec_claims(catalog, text, expected):
+# 数值断言的基准从数据里现取（见 `_real_specs`），不写死具体数字。
+
+
+def test_real_spec_values_are_accepted(catalog):
+    """与数据一致的数值必须放过——校验过严会把好解读一起杀掉。
+
+    这是当初价格校验踩过的坑，参数校验同样要防。
+    """
+    real = _real_specs(catalog)
     allowed = ai_enhance.spec_claim_values([catalog.get("LP001")])
-    assert ai_enhance.find_unsupported_spec_claims(text, allowed) == expected
+
+    for text in (
+        f"续航约 {real['battery']:.0f} 小时，通勤够用",
+        f"整机 {real['weight']} 千克，背一天不累",
+        f"{real['ram']:.0f}GB 内存够跑开发环境",
+        f"{real['screen']:.0f} 英寸屏幕，放包里刚好",
+        # 四舍五入不算编造——真实值本身就是「约」的表达
+        f"重量约 {real['weight']:.1f} 千克",
+        # 参数族里压根没有数据时不判定——缺数据不等于编造
+        "电池 5000mAh",
+        # 裸数字不该被当成参数断言（序号、评分、年份）
+        "在候选里排第 1，得分 88 分，2026 年的数据",
+    ):
+        assert ai_enhance.find_unsupported_spec_claims(text, allowed) == [], text
+
+
+def test_invented_spec_values_are_caught(catalog):
+    """数据里没有的数值必须抓住。
+
+    编造值由真实值推出来（翻倍、减半），这样无论数据集换成什么，
+    它们都**保证**不在允许集合里——写死一个「20 小时」，哪天数据里
+    真出现 20 小时续航的机器，这条测试就会开始放过真正的编造。
+    """
+    real = _real_specs(catalog)
+    allowed = ai_enhance.spec_claim_values([catalog.get("LP001")])
+
+    cases = [
+        (f"续航长达 {real['battery'] * 2:.0f} 小时", [f"{real['battery'] * 2:.0f} 小时"]),
+        (f"重量只有 {real['weight'] / 2:.1f} 千克", [f"{real['weight'] / 2:.1f} 千克"]),
+        (f"{real['ram'] * 2:.0f}GB 内存够用", [f"{real['ram'] * 2:.0f}GB"]),
+    ]
+    for text, expected in cases:
+        assert ai_enhance.find_unsupported_spec_claims(text, allowed) == expected, text
+
+
+def test_integer_claims_get_no_rounding_allowance(catalog):
+    """取整半径只给带小数的断言，整数断言一点不给。
+
+    这条钉住容差设计里刻意排除的那个方案：若按写法精度给整数断言取半径，
+    「1TB」就变成区间 [0.5, 1.5] TB，半径足以吞掉数据里的 512GB——
+    等于放过了量级级的高报，而高报恰恰是幻觉里最危险的一种。
+    """
+    product = catalog.get("LP001")
+    allowed = ai_enhance.spec_claim_values([product])
+    storage = float(product.spec("storage_gb"))
+
+    exact = f"{storage:.0f}GB"
+    assert ai_enhance.find_unsupported_spec_claims(f"{exact} 固态", allowed) == []
+
+    halved = f"{storage / 2:.0f}GB"
+    assert ai_enhance.find_unsupported_spec_claims(
+        f"{halved} 固态", allowed
+    ) == [halved], "容量砍半属于量级级差异，不该被取整半径放过"
 
 
 def test_explanation_with_an_unsupported_spec_value_is_dropped(catalog):
@@ -508,7 +546,15 @@ def test_explanations_using_only_real_values_survive(catalog):
     """正例：解读里的数值全部能在数据里找到时，一条都不能被丢。
 
     这条防的是「校验过严」——价格校验当初就在这上面踩过坑。
+    解读文本由**真实参数拼出来**，所以无论数据集怎么换都成立。
     """
+    first = _real_specs(catalog, "LP001")
+    second = _real_specs(catalog, "LP002")
+    first_why = (
+        f"{first['ram']:.0f}GB 内存配 {first['storage']:.0f}GB 固态，"
+        f"{first['price']:.0f} 元"
+    )
+    second_why = f"续航约 {second['battery']:.0f} 小时，适合长时间使用"
 
     def handler(request):
         return httpx.Response(
@@ -518,14 +564,8 @@ def test_explanations_using_only_real_values_survive(catalog):
                     {
                         "overview": "两件都在预算内",
                         "per_product": [
-                            {
-                                "product_id": "LP001",
-                                "why": "16GB 内存配 512GB 固态，3299 元",
-                            },
-                            {
-                                "product_id": "LP002",
-                                "why": "带独立显卡，适合游戏",
-                            },
+                            {"product_id": "LP001", "why": first_why},
+                            {"product_id": "LP002", "why": second_why},
                         ],
                     },
                     ensure_ascii=False,
@@ -789,7 +829,7 @@ def test_claim_about_a_clean_attribute_survives():
     "field, expected_has_keyword",
     [
         ("has_dedicated_gpu", True),   # 有 SPEC_LABELS
-        ("foldable", True),
+        ("camera_tier", True),        # 标签「拍照档位」剥后缀 → 「拍照」
         ("cpu_tier", True),            # 标签「处理器档位」剥后缀 → 「处理器」
         ("price", True),               # 手工补的关键词
         ("pros", False),               # 无可靠文字特征，交提示词约束
@@ -802,7 +842,7 @@ def test_issue_keyword_derivation(field, expected_has_keyword):
 
 def test_single_character_keywords_are_rejected():
     """单字关键词误杀风险太高，必须被过滤掉。"""
-    assert all(len(kw) >= 2 for kw in ai_enhance._issue_keywords("foldable"))
+    assert all(len(kw) >= 2 for kw in ai_enhance._issue_keywords("camera_tier"))
 
 
 # --------------------------------------------------------------------------
@@ -1038,11 +1078,11 @@ def test_plain_answer_still_has_no_tool_calls():
 # --------------------------------------------------------------------------
 
 
-def _passage(excerpt: str, *, title: str = "耳机选购指南") -> "Passage":
+def _passage(excerpt: str, *, title: str = "手机选购指南") -> "Passage":
     from src.knowledge.search import Passage
 
     return Passage(
-        doc_id="category:headphone",
+        doc_id="category:phone",
         title=title,
         excerpt=excerpt,
         doc_type="category",
@@ -1070,7 +1110,7 @@ def test_answer_built_from_fragments_is_kept():
     answer = "通勤路上主要是低频噪音，主动降噪对它有效。"
     assert (
         ai_enhance.answer_from_knowledge(
-            "通勤耳机怎么选", passages, service=_answer_service(answer)
+            "手机拍照怎么选", passages, service=_answer_service(answer)
         )
         == answer
     )
@@ -1190,20 +1230,22 @@ def test_overview_with_an_invented_price_is_dropped(catalog):
 
 
 def test_clean_explanations_survive(catalog):
+    """没有编造内容的解读要原样留下，不能被丢掉或改写。"""
+    weight = _real_specs(catalog)["weight"]
+    why = f"重量 {weight}kg，适合每天通勤携带"
+
     def handler(request):
         return json_response(
             {
                 "overview": "这三件都落在你的预算内。",
-                "per_product": [
-                    {"product_id": "LP001", "why": "重量 1.28kg，适合每天通勤携带"},
-                ],
+                "per_product": [{"product_id": "LP001", "why": why}],
             }
         )
 
     result = ai_enhance.explain_recommendations(
         Demand(category="laptop"), [_item(catalog.get("LP001"))], service=make_service(handler)
     )
-    assert result["per_product"]["LP001"].startswith("重量 1.28kg")
+    assert result["per_product"]["LP001"] == why
     assert result["overview"]
 
 
@@ -1248,6 +1290,25 @@ def json_response(payload: dict) -> httpx.Response:
         200,
         json=ok_body(content=json.dumps(payload, ensure_ascii=False)),
     )
+
+
+def _real_specs(catalog, product_id: str = "LP001") -> dict:
+    """取一件笔记本**真实**的参数与价格，供数值断言当基准。
+
+    基准从数据里现取，不写死。以前这里散落着一堆「LP001 重 1.28 千克、
+    16GB 内存、3299 元」之类的字面量——数据集换成真实品牌之后它们全变了，
+    而失败信息看起来像是幻觉检测失灵，其实是基准过期了。
+    """
+    product = catalog.get(product_id)
+    assert product is not None, f"数据集里应当有 {product_id}"
+    return {
+        "weight": float(product.spec("weight_kg")),
+        "battery": float(product.spec("battery_h")),
+        "ram": float(product.spec("ram_gb")),
+        "storage": float(product.spec("storage_gb")),
+        "screen": float(product.spec("screen_size")),
+        "price": float(product.price),
+    }
 
 
 def _item(product: Product):

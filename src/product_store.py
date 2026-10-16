@@ -47,8 +47,12 @@ _PRODUCT_COLUMNS = (
     "cons",
     "data_source",
     "source_url",
+    "image_url",
     "data_status",
     "updated_at",
+    "is_active",
+    "entered_by",
+    "entered_at",
 )
 
 
@@ -65,6 +69,17 @@ class PriceRecord:
     @property
     def is_verified(self) -> bool:
         return bool(self.verified_at)
+
+
+def _connect(path: Path | None):
+    """打开**商品库**连接。
+
+    `database.connect()` 不带路径时落到历史库。本模块是商品仓储层，
+    处处都该指向 `products.db`——原先靠调用方每次都传路径来保证，
+    漏传一次就会把商品表建进历史库（实测踩到过：一条「历史库损坏不该
+    影响分析」的用例暴露了它）。
+    """
+    return connect(path if path is not None else config.products_db_path())
 
 
 def _ensure_for_read(path: Path | None) -> None:
@@ -133,8 +148,13 @@ def _row_to_record(row: sqlite3.Row, price: PriceRecord | None) -> dict[str, Any
         "cons": _load(row["cons"], default=[]),
         "data_source": row["data_source"],
         "source_url": row["source_url"] or "",
+        "image_url": row["image_url"] or "",
         "data_status": row["data_status"] or STATUS_UNVERIFIED,
         "updated_at": row["updated_at"],
+        # 老库补列时默认 1，所以这里对 NULL 也按「在售」处理。
+        "is_active": bool(row["is_active"]) if row["is_active"] is not None else True,
+        "entered_by": row["entered_by"] or "",
+        "entered_at": row["entered_at"] or "",
         # 价格**派生自价格记录**：没有记录就是 None，交给「缺数据」那条路径处理。
         "price": price.price if price else None,
         "price_currency": price.currency if price else "",
@@ -161,7 +181,7 @@ def load_product_records(path: Path | None = None) -> list[dict[str, Any]]:
     """
     _ensure_for_read(path)
     try:
-        with connect(path) as connection:
+        with _connect(path) as connection:
             rows = connection.execute(
                 "SELECT * FROM products ORDER BY product_id"
             ).fetchall()
@@ -190,7 +210,7 @@ def load_dataset_meta(path: Path | None = None) -> dict[str, str]:
     """读数据集级元信息（免责声明、档位说明等）。"""
     _ensure_for_read(path)
     try:
-        with connect(path) as connection:
+        with _connect(path) as connection:
             rows = connection.execute("SELECT key, value FROM dataset_meta").fetchall()
     except sqlite3.Error as exc:
         raise ProductStoreReadError(detail=f"{type(exc).__name__}: {exc}") from exc
@@ -204,7 +224,7 @@ def save_dataset_meta(meta: Mapping[str, Any], *, path: Path | None = None) -> N
         return
     _ensure_for_write(path)
     try:
-        with connect(path) as connection:
+        with _connect(path) as connection:
             connection.executemany(
                 "INSERT OR REPLACE INTO dataset_meta (key, value) VALUES (?, ?)", rows
             )
@@ -217,7 +237,7 @@ def count_products(path: Path | None = None) -> int:
     """库里有多少条商品。种子导入判断「库空不空」用它。"""
     _ensure_for_read(path)
     try:
-        with connect(path) as connection:
+        with _connect(path) as connection:
             row = connection.execute("SELECT COUNT(*) AS n FROM products").fetchone()
     except sqlite3.Error as exc:
         raise ProductStoreReadError(detail=f"{type(exc).__name__}: {exc}") from exc
@@ -228,7 +248,7 @@ def current_price(product_id: str, path: Path | None = None) -> PriceRecord | No
     """取某商品的当前价格记录。没有记录返回 None。"""
     _ensure_for_read(path)
     try:
-        with connect(path) as connection:
+        with _connect(path) as connection:
             row = connection.execute(
                 "SELECT * FROM product_prices WHERE product_id = ? AND is_current = 1",
                 (product_id,),
@@ -254,6 +274,9 @@ def current_price(product_id: str, path: Path | None = None) -> PriceRecord | No
 
 def _product_values(record: Mapping[str, Any], *, stamp: str) -> tuple[Any, ...]:
     specs = record.get("specs")
+    # `is_active` 缺省为**在售**：命令行导入与种子数据都没有这个概念，
+    # 不能因为字段没写就把商品判成下架。
+    is_active = record.get("is_active")
     return (
         str(record.get("id") or ""),
         str(record.get("name") or ""),
@@ -266,8 +289,12 @@ def _product_values(record: Mapping[str, Any], *, stamp: str) -> tuple[Any, ...]
         _dump(record.get("cons"), default="[]"),
         str(record.get("data_source") or ""),
         str(record.get("source_url") or "") or None,
+        str(record.get("image_url") or "") or None,
         str(record.get("data_status") or STATUS_UNVERIFIED),
         str(record.get("updated_at") or stamp),
+        1 if (is_active is None or is_active) else 0,
+        str(record.get("entered_by") or "") or None,
+        str(record.get("entered_at") or "") or None,
     )
 
 
@@ -387,7 +414,7 @@ def save_products(
 
     _ensure_for_write(path)
     try:
-        with connect(path) as connection:
+        with _connect(path) as connection:
             connection.executemany(upsert, rows)
             ids = [str(r.get("id") or "") for r in records if r.get("id")]
             current = _current_price_rows(connection, ids)
@@ -420,7 +447,7 @@ def replace_all(
     """清空后写入。价格记录随外键级联删除。用于 `--mode replace`。"""
     _ensure_for_write(path)
     try:
-        with connect(path) as connection:
+        with _connect(path) as connection:
             connection.execute("DELETE FROM products")
             connection.execute("DELETE FROM product_prices")
             connection.commit()
@@ -429,11 +456,32 @@ def replace_all(
     return save_products(records, path=path, stamp=stamp)
 
 
+def set_product_active(
+    product_id: str, is_active: bool, *, path: Path | None = None
+) -> bool:
+    """上下架一件商品。返回是否真的改到了（商品不存在则为 False）。
+
+    上下架只是把 `is_active` 翻过来，**不碰价格记录**——
+    下架不是删除，重新上架时价格历史还得在。
+    """
+    _ensure_for_write(path)
+    try:
+        with _connect(path) as connection:
+            cursor = connection.execute(
+                "UPDATE products SET is_active = ? WHERE product_id = ?",
+                (1 if is_active else 0, product_id),
+            )
+            connection.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as exc:
+        raise ProductStoreWriteError(detail=f"{type(exc).__name__}: {exc}") from exc
+
+
 def clear_products(path: Path | None = None) -> None:
     """清空商品、价格与元信息。测试与迁移脚本用。"""
     _ensure_for_write(path)
     try:
-        with connect(path) as connection:
+        with _connect(path) as connection:
             connection.execute("DELETE FROM products")
             connection.execute("DELETE FROM product_prices")
             connection.execute("DELETE FROM dataset_meta")

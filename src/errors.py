@@ -130,35 +130,89 @@ class ExportError(ZhigouError):
     default_message = "导出失败，请检查目标位置是否可写后重试。"
 
 
+# --- 账号与鉴权 -------------------------------------------------------------
+
+
+class InvalidUsername(ZhigouError):
+    """用户名不合规。具体长度要求由 `src/auth.py` 的常量拼进文案，
+    避免「规则改了一处、提示还写着旧数字」。"""
+
+    default_message = "用户名不合规，请换一个。"
+
+
+class WeakPassword(ZhigouError):
+    default_message = "密码强度不足，请换一个更长的密码。"
+
+
+class UsernameTaken(ZhigouError):
+    default_message = "该用户名已被占用，请换一个。"
+
+
+class InvalidCredentials(ZhigouError):
+    """用户名不存在或密码错误。
+
+    **刻意不区分这两种情况**：文案只有一句，调用方也无法把原因透出去。
+    能分开说，就等于提供了一个枚举「哪些用户名存在」的地方。
+    """
+
+    default_message = "用户名或密码不正确。"
+
+
+class AccountDisabled(InvalidCredentials):
+    """账号已停用。
+
+    文案**故意与 `InvalidCredentials` 完全相同**（继承而非复制，两者永远同步）：
+    「这个账号存在但被停用了」同样是不该告诉访问者的信息。
+    真实原因写进 `detail`，那只进日志。
+    """
+
+
+class PermissionDenied(ZhigouError):
+    """越权。**这不是界面层的提示文案，是守卫抛出的异常**——
+    普通用户直接调用管理员操作时必须拿到它（design D3）。"""
+
+    default_message = "当前账号没有执行该操作的权限。"
+
+
+class InvalidImageUrl(ZhigouError):
+    """图片地址不合规。空值是允许的——「没有图片」是一种如实的状态。"""
+
+    default_message = "图片地址必须以 http:// 或 https:// 开头。"
+
+
+class InvalidSpec(ZhigouError):
+    """商品参数不合规：键不属于该分类，或取值超出既有档位/区间。"""
+
+    default_message = "商品参数不合规，请检查参数名与取值。"
+
+
+class ProductValidationFailed(ZhigouError):
+    """写入前的整体校验没通过。`detail` 里带着逐条问题，界面会列出来。"""
+
+    default_message = "商品数据校验未通过，本次修改没有写入。"
+
+
+class LastAdminProtected(ZhigouError):
+    """会动到「最后一个可用管理员」的操作被拒绝。
+
+    与 `PermissionDenied` 分开：那是「你没有权限」，这是「谁来做都不行」。
+    两者对用户是两句不同的话，混用会让人以为自己权限不够。
+    """
+
+    default_message = "系统必须至少保留一个可用的管理员账号，该操作已被拒绝。"
+
+
 # --------------------------------------------------------------------------
 # 文案映射
 # --------------------------------------------------------------------------
 
-#: 兜底文案，用于未登记的异常类型。
+#: 兜底文案，用于**非领域异常**（意料之外的 TypeError 之类）。
+#:
+#: 这里原本还有一张 `_MESSAGE_BY_TYPE`（异常类 → 文案）的映射表，但全项目
+#: 没有一处读它——`to_user_message()` 取的是实例上的 `user_message`，
+#: 那才是能带上本次上下文的那一份。留着它是**陷阱**：新增异常类的人会去
+#: 那张表里登记一行，以为起了作用，实际什么也没发生。已删除。
 FALLBACK_MESSAGE = "操作未能完成，请稍后重试。若问题持续，请查看调试日志。"
-
-_MESSAGE_BY_TYPE: dict[type[ZhigouError], str] = {
-    cls: cls.default_message for cls in (
-        DataFileMissing,
-        DataFileInvalid,
-        EmptyCatalog,
-        FieldValidationError,
-        EmptyDemand,
-        InvalidBudget,
-        DemandParseError,
-        TooFewForComparison,
-        TooManyForComparison,
-        MixedCategoryComparison,
-        AINotConfigured,
-        UpstreamTimeout,
-        UpstreamAuthError,
-        UpstreamUnavailable,
-        UpstreamResponseError,
-        HistoryReadError,
-        HistoryWriteError,
-        ExportError,
-    )
-}
 
 
 def to_user_message(error: BaseException) -> str:

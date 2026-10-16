@@ -62,10 +62,18 @@ class Product(BaseModel):
     #: 型号。**可空**——服装、家具这类品类本来就没有型号概念，
     #: 给一件 T 恤编个型号是造数据。空值如实表达「这个信息不存在」。
     model: str = ""
-    #: 逐条的原始资料链接。自造数据没有真实来源，因此为空。
+    #: 逐条的原始资料链接。
     source_url: str = ""
+    #: 商品图片地址。**外链**——随时可能失效，界面必须能回落到类别图标。
+    image_url: str = ""
     #: 核验状态：verified / unverified。默认未核验——没核实过就不该说是已核实。
     data_status: str = "unverified"
+    #: 是否在售。下架商品不参与搜索与推荐，但历史记录里的引用仍可读。
+    is_active: bool = True
+    #: 界面录入者与录入时间。命令行导入与种子数据留空——
+    #: 「录入者」这个概念只对界面录入的那些商品成立。
+    entered_by: str = ""
+    entered_at: str = ""
     #: 价格的来源与采集时间（来自价格记录）。价格是单独记录的，这几项随之而来。
     price_source: str = ""
     price_collected_at: str = ""
@@ -124,6 +132,11 @@ class Product(BaseModel):
     @property
     def has_source_url(self) -> bool:
         return bool(self.source_url.strip())
+
+    @property
+    def has_image(self) -> bool:
+        """是否有商品图片。为假时界面展示类别图标。"""
+        return bool(self.image_url.strip())
 
     @property
     def has_data_issues(self) -> bool:
@@ -273,9 +286,15 @@ def _build_product(record: Any) -> Product | None:
         # 空值一律落到空串——「没填」与「填了空」在展示上是一回事。
         model=_coerce_text(record.get("model")),
         source_url=_coerce_text(record.get("source_url")),
+        image_url=_coerce_text(record.get("image_url")),
         data_status=_coerce_text(record.get("data_status")) or config.STATUS_UNVERIFIED,
         price_source=_coerce_text(record.get("price_source")),
         price_collected_at=_coerce_text(record.get("price_collected_at")),
+        # 在售与否。**缺字段按在售处理**——命令行导入与种子数据里根本没有
+        # 这个概念，把「没写」当成「下架」会让整批数据凭空消失。
+        is_active=record.get("is_active") is not False,
+        entered_by=_coerce_text(record.get("entered_by")),
+        entered_at=_coerce_text(record.get("entered_at")),
     )
 
 

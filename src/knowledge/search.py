@@ -28,7 +28,11 @@ logger = logging.getLogger("zhigou.knowledge")
 _PARAGRAPH_SPLIT = re.compile(r"\n\s*\n")
 
 #: 片段的最大字数。整篇资料上千字，直接铺满屏没人看。
-EXCERPT_MAX_CHARS = 420
+#:
+#: 600 而不是更小：片段如今**不再直接展示**，它只是 AI 作答的依据——
+#: 依据给得太少，模型只能回答「资料没覆盖」（实测问「笔记本多重适合带出门」时，
+#: 只给到「性能与重量的矛盾」那一段，重量分档数字被切掉了）。
+EXCERPT_MAX_CHARS = 600
 
 #: 返回片段时最多带上几段。第一段是命中的，后面的是上下文补充。
 EXCERPT_MAX_PARAGRAPHS = 3
@@ -101,13 +105,11 @@ def extract_excerpt(body: str, query: str, *, max_chars: int = EXCERPT_MAX_CHARS
         ),
     )
 
-    chosen = [ranked[0][0]]
-    for position, _ in ranked[1:]:
-        if len(chosen) >= EXCERPT_MAX_PARAGRAPHS:
-            break
-        # 只带上紧邻的段落当作上下文，跳着拼会让读者摸不着头脑
-        if abs(position - chosen[0]) <= 1:
-            chosen.append(position)
+    # 按与查询的重合度取前几段，**不再要求与命中段相邻**。
+    # 片段只作为 AI 作答的依据（不在界面展示），覆盖关键信息比行文连贯更重要：
+    # 实测只给「命中段 + 相邻段」时，问「笔记本多重适合带出门」拿不到重量分档数字，
+    # 模型只能回答「资料没覆盖」。同分时保持原文顺序（已在 ranked 的排序键里）。
+    chosen = [position for position, _ in ranked[:EXCERPT_MAX_PARAGRAPHS]]
 
     ordered = sorted(chosen)
     text = "\n\n".join(paragraphs[i] for i in ordered)
@@ -168,4 +170,16 @@ def search_knowledge(
         )
         return []
 
-    return [_to_passage(hit.document, hit.score, query) for hit in hits]
+    # 相对截断：只保留与第一名同一量级的命中。绝对阈值管「有没有」，
+    # 这一步管「准不准」——否则一串 1.x–2.x 的弱命中会一起被喂给模型。
+    cutoff = max(threshold, best * config.KNOWLEDGE_RELATIVE_CUT)
+    kept = [hit for hit in hits if hit.score >= cutoff]
+    if len(kept) < len(hits):
+        logger.info(
+            "查询「%s」相对截断丢弃 %d 条弱命中（阈值 %.2f）",
+            query,
+            len(hits) - len(kept),
+            cutoff,
+        )
+
+    return [_to_passage(hit.document, hit.score, query) for hit in kept]

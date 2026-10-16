@@ -61,6 +61,9 @@ class BM25Index:
             self._term_freq.append(Counter(tokens))
             self._lengths.append(len(tokens))
 
+        #: 语料中出现过的品牌（来自商品级条目）。检索时判断查询是否点名了品牌。
+        self._brands = {d.brand for d in self._documents if d.brand}
+
         self._avg_length = (
             sum(self._lengths) / len(self._lengths) if self._lengths else 0.0
         )
@@ -85,10 +88,21 @@ class BM25Index:
 
     # -- 检索 ------------------------------------------------------------
 
-    def _weight_for(self, document: Document, mentioned: set[str]) -> float:
+    def _weight_for(
+        self, document: Document, mentioned: set[str], mentioned_brands: set[str]
+    ) -> float:
         weight = self._type_weights.get(document.doc_type, 1.0)
         if document.category and document.category in mentioned:
             weight *= config.KNOWLEDGE_CATEGORY_BOOST
+        # 查询点名了文档的品牌，且（没点名品类，或品类也对得上）——
+        # 「华为怎么样」「华为笔记本怎么样」都该把华为的商品条目往前排，
+        # 但「华为笔记本」不该把华为的手机也顶上来。
+        if (
+            document.brand
+            and document.brand.lower() in mentioned_brands
+            and (not mentioned or document.category in mentioned)
+        ):
+            weight *= config.KNOWLEDGE_BRAND_BOOST
         return weight
 
     def _score(self, position: int, query_terms: Sequence[str]) -> float:
@@ -121,6 +135,10 @@ class BM25Index:
 
         # 用户点名的品类——那个品类的资料往前排。
         mentioned = set(detect_category_terms(query))
+        # 用户点名的品牌——该品牌的商品条目也往前排（品牌词短，
+        # BM25 天然分低，「华为怎么样」不加权会被阈值挡在门外）。
+        lowered = query.lower()
+        mentioned_brands = {b for b in self._brands if b.lower() in lowered}
 
         scored: list[ScoredDocument] = []
         for position, document in enumerate(self._documents):
@@ -130,7 +148,8 @@ class BM25Index:
             scored.append(
                 ScoredDocument(
                     document=document,
-                    score=raw * self._weight_for(document, mentioned),
+                    score=raw
+                    * self._weight_for(document, mentioned, mentioned_brands),
                 )
             )
 

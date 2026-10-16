@@ -105,9 +105,13 @@ def test_reasons_trace_back_to_product_data(sample_report):
 
 
 def test_every_item_carries_its_data_source(sample_report):
-    """spec：导出时不得丢失演示数据来源标注。"""
+    """spec：导出时不得丢失数据来源标注。
+
+    以前断言的是「来源里含『演示』二字」；数据集换成真实品牌后，
+    该守的是**每条都要有来源**——来源缺失比来源写得不好严重得多。
+    """
     for item in [*sample_report.recommendations, *sample_report.over_budget]:
-        assert "演示" in item.data_source
+        assert item.data_source.strip(), f"{item.product_id} 导出时丢了来源说明"
         assert item.updated_at
 
 
@@ -260,10 +264,11 @@ def test_from_dict_tolerates_missing_fields():
 # --------------------------------------------------------------------------
 
 
-def test_markdown_keeps_the_demo_data_disclaimer(sample_report):
+def test_markdown_keeps_the_data_disclaimer(sample_report):
+    """导出报告必须带着数据边界说明，不能只有结论。"""
     markdown = to_markdown(sample_report)
-    assert "演示" in markdown
     assert "数据说明" in markdown
+    assert "未核验" in markdown, "要写明数据未经逐条核验"
     assert config.SCORE_DISPLAY_NAME in markdown
 
 
@@ -297,7 +302,8 @@ def test_csv_includes_price_score_and_budget_status(sample_report):
 
 def test_csv_keeps_the_data_source(sample_report):
     rows = list(csv.DictReader(io.StringIO(to_csv(sample_report))))
-    assert all("演示" in row["数据来源"] for row in rows)
+    assert rows
+    assert all(row["数据来源"].strip() for row in rows), "CSV 里不能丢掉来源列"
 
 
 def test_csv_bytes_start_with_a_bom(sample_report):
@@ -322,7 +328,7 @@ def test_suggested_filename_is_safe_and_timestamped(sample_report):
 
 
 def test_markdown_bytes_are_utf8(sample_report):
-    assert "演示".encode("utf-8") in markdown_bytes(sample_report)
+    assert "数据说明".encode("utf-8") in markdown_bytes(sample_report)
 
 
 # --------------------------------------------------------------------------
@@ -566,8 +572,33 @@ def test_report_item_carries_no_ai_note_field(catalog, laptop_demand):
 
 
 @pytest.fixture
-def truncated_report(catalog):
-    """预算压到很低，超预算候选多到被截断。"""
+def truncated_report():
+    """预算压到很低，超预算候选多到被截断。
+
+    候选集**自造**：截断只在候选数超过展示上限时才发生，而真实数据集
+    每个类别恰好 10 件、上限也正好是 10——拿真数据当夹具，这条截断
+    永远造不出来，下面几条测试会全部在 setup 阶段就报错。
+    """
+    products = [
+        Product(
+            id=f"FH{index:03d}",
+            name=f"测试耳机 {index}",
+            category="headphone",
+            price=800.0 + index * 100,
+            brand="测试品牌",
+            specs={
+                "driver_mm": 40, "connection": "蓝牙 5.3", "battery_h": 30,
+                "weight_g": 250, "noise_cancelling": True, "audio_tier": 3,
+            },
+            use_cases=["通勤"],
+            pros=["测试用"],
+            cons=["测试用"],
+            data_source="测试夹具 · 非真实数据",
+            updated_at="2026-10-15",
+        )
+        for index in range(config.MAX_OVER_BUDGET_SHOWN + 5)
+    ]
+    catalog = Catalog(products=products)
     demand = Demand(category="headphone", budget=100)
     result = recommend(catalog, demand)
     assert result.over_budget_hidden > 0, "夹具没有产生截断"

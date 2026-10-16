@@ -52,75 +52,46 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "cons": ("cons", "disadvantages", "drawbacks", "缺点", "不足"),
     "data_source": ("data_source", "source", "数据来源"),
     "updated_at": ("updated_at", "fetched_at", "更新时间", "抓取时间"),
+    # 溯源字段。缺了它们，接入进来的商品会丢掉来源与图片，
+    # 而那种「字段悄悄没了」最难发现——数据看着都对，只是少了东西。
+    "model": ("model", "型号", "规格型号"),
+    "source_url": ("source_url", "url", "来源链接", "资料链接", "原始链接"),
+    "image_url": ("image_url", "image", "图片", "图片地址", "主图", "图片链接"),
+    "data_status": ("data_status", "核验状态", "状态"),
 }
 
 #: 平台类目名 → 内部类别键。键为小写，匹配时先精确后包含。
-#: 这只是**示例**：接入真实平台时，把该平台的一级/二级类目名补进来。
+#: 只登记商品库真正覆盖的四个类别；接入新类别时，先在 `config.CATEGORY_LABELS`
+#: 和 `config.SCORING_WEIGHTS` 里补上该类别的权重表，再到这里来加映射，
+#: 否则导进来的商品会落进一个没有权重、也没有中文名的类别里。
 DEFAULT_CATEGORY_MAP: dict[str, str] = {
     "笔记本电脑": "laptop",
     "笔记本": "laptop",
     "手机": "phone",
-    "耳机": "headphone",
-    "键盘": "keyboard",
-    "家用电器": "appliance",
-    "冰箱": "appliance",
-    "洗衣机": "appliance",
-    "空调": "appliance",
-    "服饰": "apparel",
-    "男装": "apparel",
-    "女装": "apparel",
-    "鞋靴": "apparel",
-    "箱包": "apparel",
-    "家具": "furniture",
-    "家装": "furniture",
-    "运动户外": "sports",
-    "运动": "sports",
-    "个护美妆": "personal_care",
-    "美妆": "personal_care",
-    "母婴": "baby",
-    "母婴用品": "baby",
 }
 
-#: 平台参数名 → 内部 specs 键。与 config.SPEC_LABELS 对应。
+#: 平台参数名 → 内部 specs 键。
+#:
+#: 中文那半**从 `config.SPEC_LABELS` 反查生成**，不手抄。平台导出的参数名就是
+#: 这些中文标签（「处理器」「续航」「驱动单元」），而标签本身又是界面上的显示名——
+#: 同一份东西抄两遍，就一定会出现「界面叫这个、导入时认不出这个」。
+#: 手写的那部分是各平台自己的叫法，与标签不同名，才需要单独登记。
+#:
 #: 未登记的键会**原样保留**（比较表能显示，只是没有中文标签），
 #: 所以宁可先少映射几个，也不要乱映射。
 SPEC_ALIASES: dict[str, str] = {
-    "处理器档位": "cpu_tier",
-    "内存": "ram_gb",
-    "存储": "storage_gb",
-    "屏幕尺寸": "screen_size",
-    "整机重量": "weight_kg",
-    "续航": "battery_h",
-    "芯片档位": "chip_tier",
-    "拍照档位": "camera_tier",
-    "音质档位": "audio_tier",
-    "噪音等级": "noise_level",
-    "容量": "capacity_l",
-    "能效等级": "energy_grade",
-    "功率": "power_w",
-    "噪音": "noise_db",
-    "质保年限": "warranty_years",
-    "材质": "material",
-    "舒适档位": "comfort_tier",
-    "透气档位": "breathability_tier",
-    "宽度": "width_cm",
-    "承重": "load_kg",
-    "缓冲档位": "cushion_tier",
-    "防水": "waterproof",
-    "适用对象": "suit_for",
-    "适用起始月龄": "age_min_months",
-    "安全认证": "safety_cert",
-    "折叠": "foldable",
-    "耐用档位": "durability_tier",
+    **{label: key for key, label in config.SPEC_LABELS.items()},
+    "内存容量": "ram_gb",
+    "硬盘容量": "storage_gb",
+    "处理器型号": "cpu",
+    "芯片型号": "chip",
 }
 
 #: 1–5 档位型的 specs 键。这些键的取值必须是 1–5 的整数（5 最高）。
+#: 从 `config.SPEC_LABELS` 推导：凡是以 `_tier` 结尾的都是档位。
+#: 不手写清单——手写的那份一定会和标签表漂移。
 TIER_KEYS: frozenset[str] = frozenset(
-    {
-        "cpu_tier", "chip_tier", "camera_tier", "audio_tier", "noise_level",
-        "energy_grade", "durability_tier", "comfort_tier",
-        "breathability_tier", "cushion_tier",
-    }
+    key for key in config.SPEC_LABELS if key.endswith("_tier")
 )
 
 #: 中文数字 → 数值，用于「一级能效」这类表述。
@@ -403,6 +374,11 @@ def normalize_record(
         "cons": _to_list(_first(raw, "cons")),
         "data_source": f"{source_label} · 抓取于 {moment.isoformat()}",
         "updated_at": moment.isoformat(),
+        # 溯源字段原样透传。data_status 缺省为未核验——**没标过就是没核验**，
+        # 不该因为「接入方没说」就默认成已核验。
+        "source_url": str(_first(raw, "source_url") or "").strip(),
+        "image_url": str(_first(raw, "image_url") or "").strip(),
+        "data_status": str(_first(raw, "data_status") or "").strip() or "unverified",
     }
     # 补上能从名称派生的型号——入口一（外部数据接入）
     fill_derived_fields(record)
@@ -523,9 +499,9 @@ def build_document(
         "updated_at": date.today().isoformat(),
         "source": source_label,
         "spec_tier_note": (
-            "specs 中的档位字段（*_tier、energy_grade、noise_level 等）"
-            "为本项目为规则评分设定的 1–5 分级（5 最高），"
-            "由接入脚本按映射规则折算，不是厂商跑分或专业评测结果。"
+            "specs 中以 *_tier 结尾的档位字段为本项目为规则评分设定的 "
+            "1–5 分级（5 最高），由接入脚本按映射规则折算，"
+            "不是厂商跑分或专业评测结果。"
         ),
         "products": [dict(item) for item in products],
     }

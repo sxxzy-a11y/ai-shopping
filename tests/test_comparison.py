@@ -22,12 +22,20 @@ from src.errors import (
 
 @pytest.fixture
 def three_laptops(catalog):
-    return [catalog.get(pid) for pid in ("LP001", "LP002", "LP003")]
+    """三件**同类不同款**的笔记本，按价格从低到高取，便于阅读结果。"""
+    return sorted(catalog.by_category("laptop"), key=lambda p: p.price or 0)[:3]
 
 
 @pytest.fixture
-def laptop_demand() -> Demand:
-    return Demand(category="laptop", budget=3000)
+def laptop_demand(catalog) -> Demand:
+    """预算取在「第三便宜」和「第四便宜」之间。
+
+    刻意不写死金额：写死一个数，数据集一换就可能变成「全部超预算」或
+    「全部在预算内」，而「预算内 / 超预算」这两条分支里总有一条空着——
+    测试仍然是绿的，只是有一半没测到。
+    """
+    prices = sorted(p.price for p in catalog.by_category("laptop") if p.price)
+    return Demand(category="laptop", budget=(prices[2] + prices[3]) / 2)
 
 
 def _row(table, label):
@@ -74,13 +82,23 @@ def test_rows_carry_units(three_laptops, laptop_demand):
     assert "kg" in _row(table, "整机重量").values[0]
 
 
-def test_boolean_parameters_are_rendered_in_chinese(three_laptops, laptop_demand):
-    table = compare(three_laptops, laptop_demand)
+def test_boolean_parameters_are_rendered_in_chinese(catalog, laptop_demand):
+    """布尔参数要显示成中文，而不是 True / False。
+
+    两种取值都从数据里现取——数据集中独显本的占比会变，
+    写死「前三件里一定有一件带独显」在换数据集后必然失败。
+    """
+    laptops = catalog.by_category("laptop")
+    with_gpu = [p for p in laptops if p.spec("has_dedicated_gpu")]
+    without_gpu = [p for p in laptops if not p.spec("has_dedicated_gpu")]
+    assert with_gpu and without_gpu, "数据集里应当同时存在独显本与核显本"
+
+    table = compare([with_gpu[0], without_gpu[0]], laptop_demand)
     values = _row(table, "独立显卡").values
 
     assert set(values) <= {"有", "无"}
-    assert "无" in values  # LP001 是核显本
-    assert "有" in values  # LP002 带独显
+    assert values[0] == "有"
+    assert values[1] == "无"
 
 
 # --------------------------------------------------------------------------
@@ -138,7 +156,7 @@ def test_mixed_categories_are_rejected_with_a_clear_message(catalog, laptop_dema
 
 def test_mixed_categories_rejected_even_without_demand(catalog):
     """不传需求也一样拦——这是比较本身的规则，与本次需求无关。"""
-    items = [catalog.by_category("apparel")[0], catalog.by_category("baby")[0]]
+    items = [catalog.by_category("laptop")[0], catalog.by_category("phone")[0]]
     with pytest.raises(MixedCategoryComparison):
         compare(items)
 
@@ -220,17 +238,25 @@ def test_identical_values_are_not_flagged(three_laptops, laptop_demand):
 
 
 def test_budget_match_column_reflects_the_budget(catalog, laptop_demand):
-    """spec：预算内标记预算内，超预算标记超出多少。"""
-    cheap = catalog.get("LP004")   # 2499，预算内
-    pricey = catalog.get("LP002")  # 5999，超预算
-    mid = catalog.get("LP001")     # 3299，超预算
+    """spec：预算内标记预算内，超预算标记超出多少。
 
-    table = compare([cheap, pricey, mid], laptop_demand)
+    商品与超出金额都从数据里算，不写死——写死的数字在数据集一换之后
+    会变成「断言里的金额和它自己的预算对不上」，而失败信息看起来像是
+    比较表算错了。
+    """
+    laptops = sorted(catalog.by_category("laptop"), key=lambda p: p.price or 0)
+    budget = laptop_demand.budget
+    within = [p for p in laptops if p.price <= budget]
+    over = [p for p in laptops if p.price > budget]
+    assert within and over, "夹具选出的预算应当同时造出两种预算状态"
+
+    picks = [within[-1], over[0], over[1]]
+    table = compare(picks, laptop_demand)
     values = _row(table, "预算匹配").values
 
     assert values[0] == "预算内"
-    assert values[1] == "超出预算 2999 元"
-    assert values[2] == "超出预算 299 元"
+    assert values[1] == f"超出预算 {over[0].price - budget:.0f} 元"
+    assert values[2] == f"超出预算 {over[1].price - budget:.0f} 元"
 
 
 def test_unset_budget_is_labelled_unset_not_within_budget(three_laptops):
@@ -250,12 +276,17 @@ def test_unset_budget_is_labelled_unset_not_within_budget(three_laptops):
 # --------------------------------------------------------------------------
 
 
-def test_comparison_keeps_the_demo_data_source(catalog, laptop_demand):
-    """spec：演示数据标注不能因为是「比较结果」就丢掉。"""
-    table = compare([catalog.get(p) for p in ("LP001", "LP002", "LP003")], laptop_demand)
+def test_comparison_keeps_the_data_source(three_laptops, laptop_demand):
+    """spec：来源标注不能因为是「比较结果」就丢掉。
 
-    for value in _row(table, "数据来源").values:
-        assert "演示" in value
+    这条以前断言的是「来源里含『演示』二字」；数据集换成真实品牌之后，
+    该守的变成了**每条都要有来源说明**——来源缺失比来源写得不好更严重，
+    因为界面上一片空白看起来像「这条数据不需要出处」。
+    """
+    table = compare(three_laptops, laptop_demand)
+
+    values = _row(table, "数据来源").values
+    assert all(value.strip() for value in values), values
 
 
 # --------------------------------------------------------------------------

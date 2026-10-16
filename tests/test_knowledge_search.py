@@ -77,7 +77,7 @@ def test_single_paragraph_body_is_returned():
 
 
 def test_passage_citation_carries_source_and_time(index):
-    passages = search_knowledge("主动降噪和被动降噪有什么区别", index=index, limit=1)
+    passages = search_knowledge("处理器档位是什么意思", index=index, limit=1)
     assert passages
     citation = passages[0].citation
     assert passages[0].title in citation
@@ -85,7 +85,7 @@ def test_passage_citation_carries_source_and_time(index):
 
 
 def test_passage_type_labels_are_chinese(index):
-    passages = search_knowledge("主动降噪和被动降噪有什么区别", index=index, limit=2)
+    passages = search_knowledge("处理器档位是什么意思", index=index, limit=2)
     labels = {p.type_label for p in passages}
     assert labels <= {"品类级", "服务级", "商品级"}
 
@@ -115,8 +115,81 @@ def test_blank_query_returns_nothing(index):
 
 
 def test_limit_is_respected(index):
-    passages = search_knowledge("耳机怎么选 通勤 降噪 佩戴", index=index, limit=2)
+    passages = search_knowledge("笔记本 手机 拍照 续航 重量 内存 芯片", index=index, limit=2)
     assert len(passages) <= 2
+
+
+def test_result_count_never_exceeds_the_configured_cap(index):
+    """条数上限是硬约束——即使很多命中都过了阈值。"""
+    passages = search_knowledge(
+        "笔记本 手机 拍照 续航 重量 内存 芯片 处理器",
+        index=index,
+        min_score=0.0,  # 刻意放开绝对阈值，让上限来兜
+    )
+    assert 0 < len(passages) <= config.KNOWLEDGE_MAX_RESULTS
+
+
+def test_relative_cut_drops_hits_an_order_of_magnitude_below_the_top(index):
+    """与第一名不同量级的弱命中被丢弃——它们过了绝对阈值，但对作答只有稀释。"""
+    # 实测分布：19.20 / 1.26 / 1.09 —— 只有第一名在自己量级里
+    passages = search_knowledge("系统匹配评分是怎么算出来的", index=index, limit=5)
+    assert len(passages) == 1, f"应当只剩最高分那一条，实际 {[round(p.score, 2) for p in passages]}"
+
+
+def test_relative_cut_keeps_a_close_second_hit(index):
+    """并列相关的第二条要保住——截断不能把「同一量级」的资料误伤。"""
+    # 实测分布：8.57 / 4.13 / 2.41 —— 第二条在同量级，第三条不是
+    passages = search_knowledge("处理器档位是什么意思", index=index, limit=5)
+    assert len(passages) == 2, f"应当保留前两条，实际 {[round(p.score, 2) for p in passages]}"
+
+
+def test_excerpt_covers_the_key_numbers_of_the_matched_section(index):
+    """片段要覆盖命中小节的关键数字，而不是只给相邻段落。
+
+    实测踩过：问「笔记本多重适合带出门」时，只给「命中段 + 相邻段」会让
+    片段里没有 1.2–1.4kg 这行，模型只能回答「资料没有覆盖」。片段如今
+    不再直接展示，覆盖关键信息比行文连贯更重要。
+    """
+    passages = search_knowledge("笔记本多重适合带出门", index=index, limit=1)
+    assert passages
+    excerpt = passages[0].excerpt
+    assert "整机重量" in excerpt and "1.2–1.4kg" in excerpt, excerpt
+
+
+# --------------------------------------------------------------------------
+# 品牌加权（refine-ai-qa：宽问题也要能答）
+# --------------------------------------------------------------------------
+
+
+def test_brand_only_question_hits_brand_products(index):
+    """只问品牌（「华为怎么样」）也必须有结果——品牌词短、BM25 分低，
+    不加权就会被阈值挡成「检索不到」，而用户明明问到了点子上。"""
+    for query in ("华为怎么样", "红米怎么样"):
+        passages = search_knowledge(query, index=index, limit=3)
+        assert passages, f"「{query}」不该返回空"
+        assert all("华为" in p.title or "红米" in p.title for p in passages), (
+            f"「{query}」的结果应是该品牌的商品：{[p.title for p in passages]}"
+        )
+
+
+def test_brand_boost_respects_the_mentioned_category(index):
+    """「华为笔记本怎么样」不该把华为的手机顶上来。"""
+    passages = search_knowledge("华为笔记本怎么样", index=index, limit=3)
+    titles = [p.title for p in passages]
+    assert any("MateBook" in title for title in titles), titles
+    assert all("Mate 70" not in title for title in titles), (
+        "问的是笔记本，手机条目不该进入结果"
+    )
+
+
+def test_brand_boost_does_not_rescue_off_corpus_queries(index):
+    """品牌加权只对语料里的品牌生效，且结果只限该品牌的商品。"""
+    # 戴森不在商品库品牌里——怎么问都不该有结果
+    assert search_knowledge("戴森吸尘器怎么样", index=index) == []
+    # 小米是库里的品牌：问「小米加湿器」没有加湿器资料，
+    # 但返回的若有结果，也只能是小米的商品，而不是别的品牌
+    passages = search_knowledge("小米加湿器怎么样", index=index)
+    assert all("小米" in p.title for p in passages)
 
 
 # --------------------------------------------------------------------------
@@ -127,20 +200,17 @@ def test_limit_is_respected(index):
 #: 查的是「排第一的**应该是哪一类**」，不是精确标题——语料润色不该让基线失效。
 POSITIVE_CASES = [
     # 术语类 → 服务级或品类级。
-    # 耳机那题不限定标题：FAQ 与耳机指南都有一节讲这个，谁排第一都算对。
-    ("主动降噪和被动降噪有什么区别", None, {"服务级", "品类级"}),
-    ("能效等级是什么意思", None, {"服务级"}),
+    ("处理器档位是什么意思", None, {"服务级"}),
+    ("为什么没有销量和用户评价", None, {"服务级"}),
     ("系统匹配评分是怎么算出来的", None, {"服务级"}),
-    # 通用选购类 → 品类级
-    ("通勤戴的耳机怎么选", "耳机", {"品类级"}),
+    # 通用选购类 → 品类级。每个品类各来一题，缺哪类就说明那篇指南没起到作用。
     ("笔记本多重适合带出门", "笔记本电脑", {"品类级"}),
-    ("机械键盘选什么轴", "键盘", {"品类级"}),
-    ("婴儿车怎么挑", "母婴", {"品类级"}),
-    ("沙发买什么材质", "家具", {"品类级"}),
+    ("手机拍照怎么选", "手机", {"品类级"}),
     ("编程用什么电脑", "笔记本电脑", {"品类级"}),
-    # 具体商品类 → 商品级
-    ("静谷 ANC Pro 怎么样", "静谷", {"商品级"}),
-    ("云梯 可折叠婴儿车", "云梯", {"商品级"}),
+    ("手机电池容量大续航就好吗", "手机", {"品类级"}),
+    # 具体商品类 → 商品级。商品名取自数据集，改数据时这条要跟着改。
+    ("苹果 iPhone 16 怎么样", "iPhone 16", {"商品级"}),
+    ("华为 MateBook X Pro 怎么样", "MateBook X Pro", {"商品级"}),
 ]
 
 #: 反例：语料里没有对应资料，必须判定为检索不到。
@@ -181,13 +251,14 @@ def test_negative_cases_return_nothing(index, query: str):
 
 
 def test_design_document_queries_still_hold(index):
-    """复现 design.md「已实测验证」表里的四个查询。
+    """复现 design.md「已实测验证」表里的查询性质。
 
-    这四条是当初选 bigram + BM25 方案的依据，必须持续成立——
+    这批查询是当初选 bigram + BM25 方案的依据，必须持续成立——
     它们同时也是这个方案为什么可行的证据。
+    （品类聚焦后语料移除了耳机与 ANC 术语，术语题换成「处理器档位」。）
     """
     # 术语问题命中、且第一名分数高于第二名
-    hits = search_knowledge("主动降噪和被动降噪有什么区别", index=index, limit=2)
+    hits = search_knowledge("处理器档位是什么意思", index=index, limit=2)
     assert len(hits) >= 2
     assert hits[0].score > hits[1].score
 
@@ -240,7 +311,10 @@ def test_absolute_scores_depend_on_corpus_size(index):
     small_score = alone.search("折叠屏手机转轴寿命")[0].score
 
     assert small_score < config.KNOWLEDGE_MIN_SCORE
-    assert index.size > 100, "真实语料规模变了，阈值需要重新校准"
+    # 不写死条数：语料规模随商品数与指南数变化，钉一个数只会让删文档的人
+    # 顺手把阈值改小。这条要守的是「真实语料确实是个成规模的语料」——
+    # 否则上面那句「小样本得分低」就失去了参照，阈值也没有校准依据。
+    assert index.size > alone.size * 10, "真实语料规模变了，阈值需要重新校准"
 
 
 def test_empty_corpus_yields_no_results():

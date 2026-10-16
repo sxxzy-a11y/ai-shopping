@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from src.demand_parser import (
+    AVAILABLE_CATEGORIES,
     Demand,
     detect_unsupported_category,
     follow_up_questions,
@@ -75,7 +76,7 @@ def test_budget_is_none_when_text_mentions_budget_but_no_number():
 def test_chinese_numeral_budget_is_understood():
     assert parse_demand("预算三千元买笔记本").budget == 3000
     assert parse_demand("预算 5 千左右买手机").budget == 5000
-    assert parse_demand("预算两千五百的耳机").budget == 2500
+    assert parse_demand("预算两千五百的手机").budget == 2500
 
 
 def test_budget_range_takes_the_upper_bound():
@@ -88,9 +89,9 @@ def test_budget_range_takes_the_upper_bound():
 
 
 def test_missing_fields_stay_empty_instead_of_being_guessed():
-    demand = parse_demand("想买个耳机")
+    demand = parse_demand("想买台笔记本")
 
-    assert demand.category == "headphone"
+    assert demand.category == "laptop"
     assert demand.budget is None
     assert demand.use_cases == []
     assert demand.core_needs == []
@@ -202,12 +203,12 @@ def test_structured_field_rejects_chinese_numerals_but_text_field_accepts_them()
     with pytest.raises(InvalidBudget):
         parse_budget_value("三千块")
 
-    assert parse_demand("预算三千块买耳机").budget == 3000
+    assert parse_demand("预算三千块买手机").budget == 3000
 
 
 @pytest.mark.parametrize(
     "text",
-    ["预算 -100 买手机", "预算-100买手机", "笔记本预算负3000", "最多 -500 的耳机"],
+    ["预算 -100 买手机", "预算-100买手机", "笔记本预算负3000", "最多 -500 的手机"],
 )
 def test_negative_budget_in_free_text_is_rejected(text):
     """自由文本里的负数预算同样要报错，不能被正则把负号吃掉当成正数。"""
@@ -225,13 +226,56 @@ def test_unsupported_category_message_lists_what_is_supported():
     message = unsupported_category_message("平板")
 
     assert "平板" in message
-    for label in ("笔记本电脑", "手机", "耳机", "键盘"):
+    for label in ("笔记本电脑", "手机"):
         assert label in message
 
 
 def test_unsupported_category_does_not_leak_into_a_supported_one():
     """「台式电脑」不该被当成笔记本——台式机不在支持范围内。"""
     assert detect_unsupported_category("想买台式电脑") == "台式"
+
+
+@pytest.mark.parametrize(
+    "text, term",
+    [
+        ("想买个冰箱", "冰箱"),
+        ("买个工学椅", "工学椅"),
+        ("要一件羽绒服", "羽绒服"),
+        ("想买跑步机", "跑步机"),
+        ("买个电动牙刷", "电动牙刷"),
+        ("想买婴儿车", "婴儿车"),
+        ("想买个耳机", "耳机"),
+        ("通勤戴的蓝牙耳机", "蓝牙耳机"),
+    ],
+)
+def test_shrunk_categories_are_reported_as_unsupported(text, term):
+    """随品类收缩退出商品库的品类，要说「暂不支持」，不能说「没找到商品」。
+
+    以前它们各自映射到一个类别键，那些类别现在没有商品了。
+    如果解析还把它们认成类别，用户会收到一个空列表——那句话让他以为
+    是自己条件写得太窄，而实际原因是系统根本不卖这个品类。
+    """
+    assert detect_unsupported_category(text) == term
+
+
+def test_supported_categories_are_not_swallowed_by_unsupported_terms():
+    """收缩不能误伤：主语是仍被支持的电子品类时，不能报「暂不支持」。"""
+    assert detect_unsupported_category("预算 3000 的笔记本电脑") is None
+    assert detect_unsupported_category("想买台手机，拍照好一点的") is None
+    assert detect_unsupported_category("笔记本，办公用") is None
+
+
+def test_parser_and_catalog_agree_on_categories():
+    """解析器认识的类别，必须与类别名表、权重表完全一致。
+
+    三处各写一份清单，就一定会漂移。漂移的后果是静默的：
+    解析器认得出某个类别，商品库里却没有它，于是推荐返回空列表，
+    而日志里一条错误都没有。
+    """
+    from src import config
+
+    assert set(AVAILABLE_CATEGORIES) == set(config.CATEGORY_LABELS)
+    assert set(AVAILABLE_CATEGORIES) == set(config.SCORING_WEIGHTS)
 
 
 def test_empty_structured_budget_is_treated_as_not_provided():
@@ -256,8 +300,14 @@ def test_valid_structured_budget_is_accepted():
 
 
 def test_brand_preference_is_matched_against_catalog_brands(catalog):
-    demand = parse_demand("预算 3000，想要轻羽的笔记本", known_brands=catalog.brands())
-    assert demand.brand_preferences == ["轻羽"]
+    """品牌识别不靠硬编码清单，而是拿数据集里真实存在的品牌去匹配。
+
+    品牌名从数据集现取：写死一个「轻羽」那样的编造品牌，数据集换成
+    真实品牌之后这条就会失败，而它本来要验的是「能认出数据里的品牌」。
+    """
+    brand = catalog.brands_of("laptop")[0]
+    demand = parse_demand(f"预算 5000，想要{brand}的笔记本", known_brands=catalog.brands())
+    assert demand.brand_preferences == [brand]
 
 
 def test_unknown_brand_is_not_invented(catalog):
@@ -266,11 +316,11 @@ def test_unknown_brand_is_not_invented(catalog):
 
 
 def test_hard_constraint_is_detected_only_with_a_requirement_marker():
-    must = parse_demand("买耳机，必须有降噪")
-    assert "降噪" in must.hard_constraints
+    must = parse_demand("买笔记本，必须有独显")
+    assert "独显" in must.hard_constraints
 
-    mere_preference = parse_demand("买耳机，我不介意没有降噪")
-    assert "降噪" not in mere_preference.hard_constraints
+    mere_preference = parse_demand("买笔记本，我不介意没有独显")
+    assert "独显" not in mere_preference.hard_constraints
 
 
 def test_compromise_is_recorded():
@@ -315,10 +365,10 @@ def test_parsing_makes_no_network_calls(monkeypatch, catalog):
     [
         # 单位在数字之后——中文数字因此能认出来（此前完全认不出）
         ("三千元以内的手机", 3000.0),
-        ("三千块以内的耳机", 3000.0),
+        ("三千块以内的手机", 3000.0),
         ("两千元的键盘", 2000.0),
         # 小额预算（此前兜底要求至少三位数字）
-        ("50 元以内的耳机", 50.0),
+        ("50 元以内的手机", 50.0),
         ("10 元以内的手机", 10.0),
         ("5 元的商品", 5.0),
         # 既有写法不受影响
@@ -336,7 +386,7 @@ def test_budget_with_unit_after_the_number(text, expected):
     "text",
     [
         "14 寸的笔记本电脑",       # 尺寸不是预算
-        "5.3 蓝牙的耳机",          # 参数不是预算
+        "5.3 蓝牙的手机",          # 参数不是预算
         "重量 1.28kg 的笔记本",    # 参数不是预算
     ],
 )
@@ -345,7 +395,7 @@ def test_numbers_without_currency_unit_are_not_budget(text):
     assert parse_demand(text).budget is None
 
 
-@pytest.mark.parametrize("text", ["预算两千五的耳机", "一百五元的商品", "预算一万二的本子"])
+@pytest.mark.parametrize("text", ["预算两千五的手机", "一百五元的商品", "预算一万二的本子"])
 def test_omitted_place_notation_is_not_guessed(text):
     """省位写法判为**未识别**，由界面追问。
 
@@ -359,8 +409,8 @@ def test_omitted_place_notation_is_not_guessed(text):
 @pytest.mark.parametrize(
     "text, expected",
     [
-        ("预算两千零五的耳机", 2005.0),   # 带零标记，意图明确
-        ("预算两千五百的耳机", 2500.0),   # 单位完整
+        ("预算两千零五的手机", 2005.0),   # 带零标记，意图明确
+        ("预算两千五百的手机", 2500.0),   # 单位完整
         ("预算十五元的商品", 15.0),       # 十后面的数字不算歧义
         ("预算一百五十元的商品", 150.0),
     ],

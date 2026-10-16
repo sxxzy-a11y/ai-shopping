@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from src import config
+from src import catalog_meta, config
 from src.data_loader import Catalog, Product
 from src.demand_parser import Demand
 from src.scoring import ScoreResult, score_all
@@ -24,14 +24,14 @@ from src.scoring import ScoreResult, score_all
 
 #: 可识别的硬性限制关键词 → 判定函数。
 #: 判定函数返回 True 表示该商品满足这条限制。
+#:
+#: 只有**哪个品类都读得到**的参数才配当硬性限制。静音（noise_level）、
+#: 无线（wireless）、热插拔（hot_swappable）曾在这里，它们只对键盘有意义；
+#: 键盘品类移除后，这三个参数在数据里不再存在，留着会让每一条
+#: 「必须静音」的需求都把全部候选判成不满足——一个都选不出来。
 _HARD_CONSTRAINT_CHECKS: dict[str, tuple[str, ...]] = {
-    "静音": ("noise_level",),
-    "安静": ("noise_level",),
     "独立显卡": ("has_dedicated_gpu",),
     "独显": ("has_dedicated_gpu",),
-    "降噪": ("noise_cancelling",),
-    "无线": ("wireless",),
-    "热插拔": ("hot_swappable",),
 }
 
 
@@ -56,11 +56,7 @@ def _check_hard_constraint(product: Product, constraint: str) -> tuple[bool | No
     if not product.has_spec(key):
         return False, f"数据中没有「{key}」参数，无法确认是否满足限制「{text}」"
 
-    value = product.spec(key)
-    if key == "noise_level":
-        ok = isinstance(value, (int, float)) and not isinstance(value, bool) and value <= 2
-    else:
-        ok = bool(value)
+    ok = bool(product.spec(key))
     return ok, f"限制「{text}」{'满足' if ok else '不满足'}"
 
 
@@ -298,7 +294,12 @@ def recommend(
         demand: 用户需求。类别与预算缺失时仍会执行，但结果会更宽泛。
         limit: 预算内推荐条数上限。
     """
-    candidates, notes = _filter_candidates(catalog, demand)
+    # **可见性过滤的唯一入口。** 下架商品、停用的分类与停用的品牌都在这里
+    # 被摘掉——它们不该出现在推荐里，但历史记录里的引用仍然可读。
+    # 放在这个入口而不是 `Catalog` 内部：`Catalog` 要如实反映数据里有什么
+    # （`present_categories()` 上压着断言），过滤只影响「谁参与推荐」。
+    visible = catalog_meta.visible_catalog(catalog)
+    candidates, notes = _filter_candidates(visible, demand)
 
     # 数据质量提示：信息不完整的商品仍然参与，但要让用户知道
     incomplete = [p for p in candidates if not p.is_complete]

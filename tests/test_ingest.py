@@ -63,10 +63,8 @@ def test_to_tier_supports_chinese_and_other_scales():
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("家用电器", "appliance"),
-        ("冰箱", "appliance"),
         ("笔记本电脑", "laptop"),
-        ("母婴用品", "baby"),
+        ("手机", "phone"),
         ("某个没见过的类目", None),
         (None, None),
     ],
@@ -75,9 +73,62 @@ def test_normalize_category(raw, expected):
     assert ingest.normalize_category(raw) == expected
 
 
+@pytest.mark.parametrize("raw", ["家用电器", "冰箱", "母婴用品", "家具", "键盘", "耳机"])
+def test_category_map_drops_names_the_catalog_no_longer_covers(raw):
+    """随品类收缩退出的类目名不再有映射。
+
+    留着它们不是「多留一手」：那批商品会带着一个没有权重表、没有中文名的
+    类别键进库，评分时静默缺维度、界面上显示英文键名——一路不报错。
+    """
+    assert ingest.normalize_category(raw) is None
+
+
+def test_category_map_targets_are_the_catalog_categories():
+    """类目映射的**目标**必须与商品库类别完全一致。"""
+    from src import config
+
+    assert set(ingest.DEFAULT_CATEGORY_MAP.values()) == set(config.CATEGORY_LABELS)
+
+
+def test_spec_aliases_target_known_specs():
+    """参数别名的**目标键**必须都能在 `config.SPEC_LABELS` 里找到中文名。
+
+    别名指向一个没有标签的键，导入时不报错，只是那项参数在界面上
+    永远显示原始键名——所以要在这里拦下。
+    """
+    from src import config
+
+    unknown = set(ingest.SPEC_ALIASES.values()) - set(config.SPEC_LABELS)
+    assert unknown == set(), f"这些别名指向了没有中文标签的参数：{sorted(unknown)}"
+
+
+def test_tier_keys_cover_every_tier_shaped_spec():
+    """凡是以 `_tier` 结尾的参数都必须是档位键。
+
+    漏一个的后果是静默的：那个参数不再走 1–5 校验，平台的「九星」
+    或者 `True` 会直接进库，评分时被当成一个大数值参与计算。
+    """
+    from src import config
+
+    tier_shaped = {key for key in config.SPEC_LABELS if key.endswith("_tier")}
+    assert tier_shaped <= set(ingest.TIER_KEYS)
+
+
+def test_spec_aliases_accept_every_chinese_spec_label():
+    """每个中文标签都要能被导入时认出来。
+
+    平台导出的是中文参数名，认不出就原样入库——参数在比较表里显示成
+    「驱动单元」而另一个商品显示成「driver_mm」，两列对不上，看着像数据缺失。
+    """
+    from src import config
+
+    for key, label in config.SPEC_LABELS.items():
+        assert ingest.SPEC_ALIASES.get(label) == key, label
+
+
 def test_normalize_category_accepts_custom_mapping():
-    mapping = {"Beverages": "appliance"}
-    assert ingest.normalize_category("beverages", mapping) == "appliance"
+    mapping = {"Ergonomic Keyboards": "keyboard"}
+    assert ingest.normalize_category("ergonomic keyboards", mapping) == "keyboard"
 
 
 # --------------------------------------------------------------------------
@@ -88,14 +139,14 @@ def test_normalize_category_accepts_custom_mapping():
 def test_normalize_record_maps_platform_fields_and_stamps_source():
     raw = {
         "商品ID": "P-1001",
-        "标题": "某品牌 冰箱",
-        "商品类目": "家用电器",
+        "标题": "某品牌 轻薄笔记本 14",
+        "商品类目": "笔记本电脑",
         "价格": "￥2,999.00",
         "店铺": "某店铺",
-        "参数": '{"容量": 318, "能效等级": "一级", "耐用档位": 5, "未知参数": "x"}',
-        "适用场景": "家庭、厨房",
-        "优点": "省电、安静",
-        "缺点": "占地大",
+        "参数": '{"处理器档位": "四星", "内存": 16, "存储": 512, "未知参数": "x"}',
+        "适用场景": "办公、学习",
+        "优点": "轻便、续航久",
+        "缺点": "接口少",
     }
 
     record, issues = ingest.normalize_record(
@@ -105,29 +156,29 @@ def test_normalize_record_maps_platform_fields_and_stamps_source():
     assert issues == []
     assert record is not None
     assert record["id"] == "P-1001"
-    assert record["category"] == "appliance"
+    assert record["category"] == "laptop"
     assert record["price"] == 2999.0
     assert record["brand"] == "某店铺"
-    assert record["specs"]["capacity_l"] == 318
-    assert record["specs"]["energy_grade"] == 5, "一级能效应折算成 5"
-    assert record["specs"]["durability_tier"] == 5
+    assert record["specs"]["cpu_tier"] == 4, "「四星」应折算成档位 4"
+    assert record["specs"]["ram_gb"] == 16
+    assert record["specs"]["storage_gb"] == 512
     assert "未知参数" in record["specs"], "未登记的键原样保留"
-    assert record["use_cases"] == ["家庭", "厨房"]
-    assert record["pros"] == ["省电", "安静"]
+    assert record["use_cases"] == ["办公", "学习"]
+    assert record["pros"] == ["轻便", "续航久"]
     assert record["data_source"] == "来自测试平台 · 抓取于 2026-10-14"
     assert record["updated_at"] == "2026-10-14"
 
 
 def test_normalize_record_accepts_semicolon_specs_text():
-    raw = {"id": "P1", "name": "x", "category": "家电", "price": 100,
-           "参数": "容量: 65; 能效等级: 三级; 噪音: 52"}
+    raw = {"id": "P1", "name": "x", "category": "手机", "price": 2000,
+           "参数": "拍照档位: 三星; 电池容量: 5000; 未知键: 52"}
 
     record, _ = ingest.normalize_record(raw, source_label="测试")
 
     assert record is not None
-    assert record["specs"]["capacity_l"] == "65"
-    assert record["specs"]["energy_grade"] == 3
-    assert record["specs"]["noise_db"] == "52"
+    assert record["specs"]["camera_tier"] == 3, "「三星」应折算成档位 3"
+    assert record["specs"]["battery_mah"] == "5000", "非档位项原样存文本"
+    assert record["specs"]["未知键"] == "52", "未登记的键原样保留"
 
 
 def test_normalize_record_without_id_is_skipped():
@@ -154,12 +205,12 @@ def _valid_product(**overrides) -> dict:
     product = {
         "id": "OK1",
         "name": "正常商品",
-        "category": "appliance",
+        "category": "laptop",
         "price": 999.0,
         "brand": "品牌",
-        "specs": {"energy_grade": 4},
-        "use_cases": ["家庭"],
-        "pros": ["省电"],
+        "specs": {"cpu_tier": 4},
+        "use_cases": ["办公"],
+        "pros": ["轻便"],
         "cons": ["略重"],
         "data_source": "来自测试 · 抓取于 2026-10-14",
         "updated_at": "2026-10-14",
@@ -180,8 +231,8 @@ def test_validate_products_accepts_valid_record():
         ({"category": "unknown_key"}, "未在 config"),
         ({"price": None}, "价格"),
         ({"price": -1}, "价格"),
-        ({"specs": {"energy_grade": 9}}, "档位"),
-        ({"specs": {"energy_grade": True}}, "档位"),
+        ({"specs": {"cpu_tier": 9}}, "档位"),
+        ({"specs": {"cpu_tier": True}}, "档位"),
         ({"pros": "不是列表"}, "pros"),
         ({"data_source": ""}, "来源"),
     ],
@@ -258,8 +309,10 @@ def test_csv_pipeline_end_to_end(tmp_path: Path):
     assert len(records) == 1
     product = records[0]
     assert product["id"] == "EX0001"
-    assert product["category"] == "appliance"
-    assert product["specs"]["energy_grade"] == 5
+    assert product["category"] == "laptop"
+    assert product["specs"]["cpu_tier"] == 3
+    assert product["specs"]["ram_gb"] == 16
+    assert product["image_url"].endswith("EX0001.jpg"), "模板里的图片列要一路带到库里"
     # 数据集级说明落在 dataset_meta 表里，与商品记录分开存
     assert product_store.load_dataset_meta(out_path)["source"] == "来自测试平台"
 
