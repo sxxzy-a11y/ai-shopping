@@ -160,3 +160,8 @@ class BM25Index:
     def size(self) -> int:
         """索引里的文档数，界面用来判断「有没有语料可用」。"""
         return len(self._documents)
+
+    @property
+    def documents(self) -> tuple[Document, ...]:
+        """索引里的原始文档。切片与向量生成需要它，避免重新扫盘。"""
+        return tuple(self._documents)

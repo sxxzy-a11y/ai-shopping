@@ -65,6 +65,9 @@ class Document:
     category: str = ""
     #: 商品级条目的品牌，用于「只问品牌」时的检索加权；手写文档为空。
     brand: str = ""
+    #: 来源文件路径（手写文档才有）。删除资料需要它定位文件；
+    #: 商品级条目由商品字段合成，没有独立文件，此字段为空。
+    source_path: str = ""
 
     @property
     def searchable_text(self) -> str:
@@ -189,7 +192,10 @@ def load_documents(knowledge_dir: Path) -> list[Document]:
             continue
         document = document_from_text(text, fallback_id=str(path))
         if document is not None:
-            documents.append(document)
+            # 记录来源文件：管理页删除资料时按它定位
+            from dataclasses import replace
+
+            documents.append(replace(document, source_path=str(path)))
     return documents
 
 

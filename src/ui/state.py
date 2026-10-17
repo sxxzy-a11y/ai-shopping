@@ -192,8 +192,28 @@ def get_knowledge_index() -> BM25Index:
     return _load_index_cached(
         str(directory),
         _knowledge_stamp(directory),
-        _file_stamp(config.products_path()),
+        # 商品已迁入 SQLite：缓存键必须盯商品库文件，而不是种子 JSON——
+        # 否则在界面改完商品参数/亮点/不足，知识检索仍是旧内容。
+        _file_stamp(config.products_db_path()),
     )
+
+
+def retrieve_knowledge(query: str, *, limit: int | None = None):
+    """统一检索入口：语义优先，失败回退关键词。
+
+    返回 `RetrievalResult`（含 passages 与 mode）。页面与 Agent 工具都用它，
+    避免两处各自判断「该走向量还是关键词」。
+    """
+    from src.knowledge import retrieval
+
+    return retrieval.retrieve(query, index=get_knowledge_index(), limit=limit)
+
+
+def get_vector_store():
+    """取向量库（SQLite 表）。轻量对象，每次新建即可。"""
+    from src.knowledge.vector_store import VectorStore
+
+    return VectorStore()
 
 
 def ai_enhanced_active() -> bool:

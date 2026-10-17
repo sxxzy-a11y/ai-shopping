@@ -290,19 +290,26 @@ DEFAULT_LLM_TIMEOUT_S: Final[float] = 60.0
 DEFAULT_LLM_MAX_TOKENS: Final[int] = 2000
 
 
+def _override(key: str) -> str:
+    """本机覆盖配置（界面里改的值）。空字符串表示未覆盖。"""
+    from src import api_config
+
+    return api_config.get(key)
+
+
 def llm_api_key() -> str:
-    """读取大模型 API 密钥。未配置时返回空字符串。"""
-    return _env_str(LLM_API_KEY_ENV)
+    """读取大模型 API 密钥：本机配置 > 环境变量 > 空。"""
+    return _override("llm_api_key") or _env_str(LLM_API_KEY_ENV)
 
 
 def llm_base_url() -> str:
-    """读取大模型服务端点，默认指向 OpenAI 兼容地址。"""
-    return _env_str(LLM_BASE_URL_ENV, DEFAULT_LLM_BASE_URL)
+    """读取大模型服务端点：本机配置 > 环境变量 > 默认。"""
+    return _override("llm_base_url") or _env_str(LLM_BASE_URL_ENV, DEFAULT_LLM_BASE_URL)
 
 
 def llm_model() -> str:
     """读取模型名。"""
-    return _env_str(LLM_MODEL_ENV, DEFAULT_LLM_MODEL)
+    return _override("llm_model") or _env_str(LLM_MODEL_ENV, DEFAULT_LLM_MODEL)
 
 
 def llm_timeout_s() -> float:
@@ -328,6 +335,79 @@ def is_ai_configured() -> bool:
 
 
 # --------------------------------------------------------------------------
+# Embedding（向量化）配置
+# --------------------------------------------------------------------------
+#
+# 与对话模型**分开配置**：DeepSeek 没有 embeddings 接口，不能复用同一个密钥。
+# 示例默认指向阿里云百炼的 OpenAI 兼容端点（text-embedding-v4 / 1024 维），
+# 也可改为 SiliconFlow、OpenAI 等任意兼容服务。
+
+EMBEDDING_API_KEY_ENV: Final[str] = "ZHIGOU_EMBEDDING_API_KEY"
+EMBEDDING_BASE_URL_ENV: Final[str] = "ZHIGOU_EMBEDDING_BASE_URL"
+EMBEDDING_MODEL_ENV: Final[str] = "ZHIGOU_EMBEDDING_MODEL"
+EMBEDDING_DIM_ENV: Final[str] = "ZHIGOU_EMBEDDING_DIM"
+EMBEDDING_TIMEOUT_ENV: Final[str] = "ZHIGOU_EMBEDDING_TIMEOUT"
+
+DEFAULT_EMBEDDING_BASE_URL: Final[str] = (
+    "https://dashscope.aliyuncs.com/compatible-mode/v1"
+)
+DEFAULT_EMBEDDING_MODEL: Final[str] = "text-embedding-v4"
+DEFAULT_EMBEDDING_DIM: Final[int] = 1024
+DEFAULT_EMBEDDING_TIMEOUT_S: Final[float] = 30.0
+
+#: 语义检索的余弦相似度下限。低于它判定为「检索不到」。
+#:
+#: 与 BM25 的绝对阈值不同：余弦分数天然落在 0~1，且「问天气」这类
+#: 语料外问题的最高分通常在 0.2–0.35——0.45 是能挡住它们、又不误伤
+#: 「换种说法问同一件事」（通常 0.55+）的保守起点，可按实测调整。
+KNOWLEDGE_MIN_COSINE: Final[float] = 0.45
+
+
+def embedding_api_key() -> str:
+    """读取 Embedding 密钥：本机配置 > 环境变量 > 空。"""
+    return _override("embedding_api_key") or _env_str(EMBEDDING_API_KEY_ENV)
+
+
+def embedding_base_url() -> str:
+    return _override("embedding_base_url") or _env_str(
+        EMBEDDING_BASE_URL_ENV, DEFAULT_EMBEDDING_BASE_URL
+    )
+
+
+def embedding_model() -> str:
+    return _override("embedding_model") or _env_str(
+        EMBEDDING_MODEL_ENV, DEFAULT_EMBEDDING_MODEL
+    )
+
+
+def embedding_dim() -> int:
+    raw = _override("embedding_dim") or _env_str(EMBEDDING_DIM_ENV)
+    if not raw:
+        return DEFAULT_EMBEDDING_DIM
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_EMBEDDING_DIM
+    return value if value > 0 else DEFAULT_EMBEDDING_DIM
+
+
+def embedding_timeout_s() -> float:
+    raw = _env_str(EMBEDDING_TIMEOUT_ENV)
+    if not raw:
+        return DEFAULT_EMBEDDING_TIMEOUT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_EMBEDDING_TIMEOUT_S
+    return value if value > 0 else DEFAULT_EMBEDDING_TIMEOUT_S
+
+
+def is_embedding_configured() -> bool:
+    """是否配置了 Embedding 密钥。为假时检索回退关键词模式。"""
+    return bool(embedding_api_key())
+
+
+# --------------------------------------------------------------------------
 # 商品类别
 # --------------------------------------------------------------------------
 
@@ -342,8 +422,34 @@ CATEGORY_LABELS: Final[dict[str, str]] = {
 }
 
 
+#: 动态分类是否已从数据库并入内存表。只做一次，避免每次渲染查库。
+_DYNAMIC_LOADED = False
+
+
+def ensure_dynamic_categories() -> None:
+    """把数据库里新增的分类并入内存表。
+
+    界面允许新增分类后，分类不再只来自代码常量：数据库里的自定义分类要在
+    标签、下拉与导入校验里同样可见。**只加载一次**——新增分类后进程内
+    立即生效，重启后重新从数据库加载。
+    """
+    global _DYNAMIC_LOADED
+    if _DYNAMIC_LOADED:
+        return
+    _DYNAMIC_LOADED = True
+    try:
+        from src import catalog_meta
+
+        for key, label in catalog_meta.dynamic_categories():
+            if key and key not in CATEGORY_LABELS:
+                CATEGORY_LABELS[key] = label or key
+    except Exception:  # noqa: BLE001 —— 库不可用时退回代码内置分类
+        pass
+
+
 def category_label(category: str) -> str:
     """把类别英文键转成界面用的中文名，未知类别原样返回。"""
+    ensure_dynamic_categories()
     return CATEGORY_LABELS.get(category, category)
 
 
@@ -398,6 +504,15 @@ SCORING_WEIGHTS: Final[dict[str, dict[str, float]]] = {
         "value": 0.10,
         "portability": 0.10,
     },
+}
+
+#: 未单独配置权重的分类使用的默认权重。
+#: 允许在界面上新增分类后，评分不会因为缺权重而直接退化为 0 分。
+DEFAULT_CATEGORY_WEIGHTS: Final[dict[str, float]] = {
+    "budget_fit": 0.25,
+    "need_fit": 0.35,
+    "performance_fit": 0.20,
+    "value": 0.20,
 }
 
 #: 评分的用户可见名称。需求明确：不得暗示这是真实市场口碑。

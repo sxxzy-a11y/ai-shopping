@@ -34,6 +34,7 @@ _PENDING_KEY = "zg_knowledge_pending"
 #: 作答文本、失败说明与「未配置密钥」标记。都**只存内存**，不进历史报告。
 _ANSWER_KEY = "zg_knowledge_answer"
 _AI_NOTE_KEY = "zg_knowledge_notes"
+_MODE_KEY = "zg_knowledge_mode"
 _NEED_KEY_KEY = "zg_knowledge_need_key"
 _DISABLED_KEY = "zg_knowledge_disabled"
 
@@ -75,7 +76,15 @@ def _render_globally_disabled() -> None:
 
 
 def _clear_results() -> None:
-    for key in (_ANSWER_KEY, _AI_NOTE_KEY, _NEED_KEY_KEY, _DISABLED_KEY, _RESULT_KEY, _PRICE_KEY):
+    for key in (
+        _ANSWER_KEY,
+        _AI_NOTE_KEY,
+        _NEED_KEY_KEY,
+        _DISABLED_KEY,
+        _RESULT_KEY,
+        _PRICE_KEY,
+        _MODE_KEY,
+    ):
         st.session_state.pop(key, None)
 
 
@@ -98,8 +107,10 @@ def _run_query(query: str) -> None:
         st.session_state[_NEED_KEY_KEY] = True
         return
 
-    passages = search_knowledge(query, index=state.get_knowledge_index())
+    result = state.retrieve_knowledge(query)
+    passages = result.passages
     st.session_state[_RESULT_KEY] = passages
+    st.session_state[_MODE_KEY] = (result.mode_label, result.note)
     if not passages:
         return
 
@@ -182,7 +193,7 @@ def _render_examples() -> None:
     columns = st.columns(len(EXAMPLE_QUESTIONS))
     for column, question in zip(columns, EXAMPLE_QUESTIONS):
         with column:
-            if st.button(question, use_container_width=True):
+            if st.button(question, width="stretch"):
                 # 只记请求，不在本轮直接改输入框的键——它已经实例化了。
                 st.session_state[_PENDING_KEY] = question
                 st.rerun()
@@ -222,7 +233,7 @@ def render(catalog: Catalog) -> None:
 
         columns = st.columns([1, 3])
         with columns[0]:
-            asked = st.button("提问", type="primary", use_container_width=True)
+            asked = st.button("提问", type="primary", width="stretch")
         with columns[1]:
             st.markdown(
                 '<div class="zg-caption" style="padding-top:9px">'
@@ -266,6 +277,15 @@ def render(catalog: Catalog) -> None:
         _render_answer()
     else:
         _render_empty()
+
+    mode = st.session_state.get(_MODE_KEY)
+    if mode:
+        label, note = mode
+        if note:
+            components.show_notice(str(note), "warn")
+        components.caption(
+            f"本次使用：{label}（{'向量检索' if label == '语义检索' else 'BM25 关键词检索'}）。"
+        )
 
     st.write("")
     components.caption(

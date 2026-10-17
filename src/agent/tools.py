@@ -242,16 +242,17 @@ def _run_compare_products(params: CompareParams, context: ToolContext) -> ToolRe
 def _run_search_knowledge(
     params: SearchKnowledgeParams, context: ToolContext
 ) -> ToolResult:
-    if context.knowledge_index is None:
+    if context.knowledge_index is None and not config.is_embedding_configured():
         return ToolResult.rejected("知识库未加载，无法检索")
     if not params.query.strip():
         return ToolResult.rejected("query 不能为空")
 
-    from src.knowledge.search import search_knowledge
+    from src.knowledge import retrieval
 
-    passages = search_knowledge(
+    result = retrieval.retrieve(
         params.query, index=context.knowledge_index, limit=params.limit
     )
+    passages = result.passages
     if not passages:
         # 检索不到**不是错误**，如实说明即可——模型据此可以换个问法或直接说找不到。
         return ToolResult(
@@ -262,6 +263,7 @@ def _run_search_knowledge(
 
     payload = {
         "found": len(passages),
+        "retrieval": result.mode,
         "passages": [
             {
                 "title": passage.title,
