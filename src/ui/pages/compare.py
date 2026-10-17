@@ -136,7 +136,7 @@ def _render_picker(catalog: Catalog) -> list:
         st.write("")
         st.write("")
         if state.get(state.KEY_RESULT) is not None:
-            if st.button("用上次分析的推荐", use_container_width=True):
+            if st.button("用上次分析的推荐", width="stretch"):
                 _request_fill_from_analysis()
         else:
             st.markdown(
@@ -226,7 +226,7 @@ def render(catalog: Catalog) -> None:
     frame = pd.DataFrame(records).set_index("比较维度")
     st.dataframe(
         frame,
-        use_container_width=True,
+        width="stretch",
         height=min(800, 70 + 34 * len(records)),
     )
     if len(products) >= config.MAX_COMPARE_COUNT:

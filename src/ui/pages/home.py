@@ -74,7 +74,7 @@ def render(catalog: Catalog) -> None:
 
         col_action, col_hint = st.columns([1, 3])
         with col_action:
-            if st.button("开始分析", type="primary", use_container_width=True):
+            if st.button("开始分析", type="primary", width="stretch"):
                 text = st.session_state.get("zg_home_input", "").strip()
                 if text:
                     go_to_analysis(text)
@@ -98,59 +98,12 @@ def render(catalog: Catalog) -> None:
     st.write("")
     components.stat_row(
         [
-            ("tag", f"{len(catalog)}", "件演示商品"),
+            ("tag", f"{len(catalog)}", "件商品"),
             ("grid", f"{len(catalog.present_categories())}", "个商品类别"),
             ("bookmark", f"{len(catalog.brands())}", "个品牌"),
             ("scale", f"{len(config.DIMENSION_LABELS)}", "项评分维度"),
         ]
     )
-
-    # --- 边界说明 ---------------------------------------------------------
-    components.section_title("它不做什么")
-    left, right = st.columns(2, gap="large")
-    with left:
-        st.markdown(
-            bullet_list(
-                [
-                    "不接入真实电商平台，不提供实时价格、库存或销量",
-                    "不伪造用户评价、销量或市场口碑",
-                    "不做支付、下单、购物车等交易环节",
-                ],
-                tone="con",
-            ),
-            unsafe_allow_html=True,
-        )
-    with right:
-        st.markdown(
-            bullet_list(
-                [
-                    "商品数据来自公开资料整理（品牌与型号真实、参数经简化、"
-                    "全部未核验），价格不是实时价格，不能作为购买依据",
-                    "「系统匹配评分」衡量的是与你需求的匹配程度，"
-                    "不是用户评分、销量排名或市场口碑",
-                ],
-                tone="con",
-            ),
-            unsafe_allow_html=True,
-        )
-
-    # --- 数据集 -----------------------------------------------------------
-    components.section_title("当前商品数据集")
-    components.facts_block(
-        [
-            ("数据集", catalog.dataset_name or "未命名"),
-            ("商品数量", f"{len(catalog)} 件"),
-            (
-                "覆盖类别",
-                "、".join(config.category_label(c) for c in catalog.present_categories()),
-            ),
-            ("数据更新", catalog.dataset_updated_at or "未标注"),
-        ]
-    )
-
-    if catalog.disclaimer:
-        st.write("")
-        components.show_notice(catalog.disclaimer, "warn")
 
     if catalog.issues:
         with st.expander(f"数据加载过程中有 {len(catalog.issues)} 条说明"):

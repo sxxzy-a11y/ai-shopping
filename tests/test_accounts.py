@@ -17,6 +17,8 @@ import pytest
 from src import accounts, config, database
 from src.auth import ROLE_ADMIN, ROLE_USER, User
 from src.errors import (
+    CannotDeleteSelf,
+    HistoryWriteError,
     InvalidCredentials,
     InvalidUsername,
     LastAdminProtected,
@@ -272,7 +274,7 @@ def test_regular_user_cannot_perform_admin_writes():
     with pytest.raises(PermissionDenied):
         database.set_user_active("lisi", False, viewer=REGULAR)
     with pytest.raises(PermissionDenied):
-        accounts.create_account(REGULAR, "sneaky", PASSWORD, role=ROLE_ADMIN)
+        database.delete_user("lisi", viewer=REGULAR)
     with pytest.raises(PermissionDenied):
         database.set_user_role("lisi", ROLE_ADMIN, viewer=None)
 
@@ -298,6 +300,23 @@ def test_admin_can_perform_the_same_writes():
 
     database.set_user_active("lisi", False, viewer=ADMIN)
     assert database.get_user("lisi").is_active is False
+
+
+def test_admin_reset_also_enforces_the_minimum_password_length():
+    """重置密码也要守最短长度。
+
+    这条规则原先**只在注册路径上检查**，管理员重置那条路照单全收——
+    界面提示写着「至少 8 位」，数据层却会接受一个 1 位密码。
+    界面承诺的事必须在数据层兑现，否则规则只活在提示文案里。
+    """
+    accounts.register("lisi", PASSWORD)
+
+    with pytest.raises(WeakPassword):
+        database.set_user_password("lisi", "short", viewer=ADMIN)
+
+    assert accounts.authenticate("lisi", PASSWORD).username == "lisi", (
+        "被拒绝的重置不该动到旧密码"
+    )
 
 
 def test_last_admin_cannot_be_demoted():
@@ -348,3 +367,177 @@ def test_a_disabled_admin_does_not_count_as_available():
 
     with pytest.raises(LastAdminProtected):
         database.set_user_active("root", False, viewer=root)
+
+
+# --------------------------------------------------------------------------
+# 删除账号（级联）
+# --------------------------------------------------------------------------
+
+#: 用于「删别人」的另一个管理员身份。
+#: 不能复用 `ADMIN`（它的用户名就是 `root`），否则测「最后一个管理员」时
+#: 会先撞上「不能删自己」那条守卫，测的东西就偏了。
+OTHER_ADMIN = User(username="root2", role=ROLE_ADMIN)
+
+
+def _seed(
+    username: str, report, *, extra_history: int = 0, role: str = ROLE_USER
+) -> None:
+    """给某个账号造数据：**先建账号**，再造 1+extra 条历史、2 条收藏、一份偏好。
+
+    账号必须先存在——`delete_user()` 对不存在的账号是**拒绝**的（不报成功）。
+    夹具漏建账号会让一组用例以「找不到账号」失败，看起来像删除坏了。
+    """
+    from dataclasses import replace
+
+    database.create_user(username, PASSWORD, role=role)
+    database.save_analysis(report, user_id=username)
+    for index in range(extra_history):
+        database.save_analysis(
+            replace(report, signature=f"sig-{username}-{index}"), user_id=username
+        )
+    database.add_favorite(username, "LP001")
+    database.add_favorite(username, "HP004")
+    database.write_preferences_json(username, "{}")
+
+
+def test_deleting_a_user_removes_only_their_data(report):
+    """级联删除的范围**只及该账号**——另一个账号一条不少。"""
+    _seed("lisi", report, extra_history=2)
+    _seed("wangwu", report)
+
+    history, favorites = database.delete_user("lisi", viewer=ADMIN)
+
+    assert (history, favorites) == (3, 2)
+    assert database.get_user("lisi") is None
+    assert database.list_analyses_of("lisi") == []
+    assert database.list_favorites("lisi") == []
+    assert database.read_preferences_json("lisi") is None
+
+    assert database.get_user("wangwu") is not None, "别的账号不该被牵连"
+    assert len(database.list_analyses_of("wangwu")) == 1
+    assert len(database.list_favorites("wangwu")) == 2
+    assert database.read_preferences_json("wangwu") is not None
+
+
+def test_count_user_data_matches_what_the_delete_reports(report):
+    """确认文案里报的条数必须与实际删掉的一致——否则那句话是在骗人。"""
+    _seed("lisi", report, extra_history=1)
+
+    assert database.count_user_data("lisi") == (2, 2)
+    assert database.delete_user("lisi", viewer=ADMIN) == (2, 2)
+
+
+def test_an_admin_cannot_delete_themselves(report):
+    """删掉自己之后，会话里的用户对象还在内存里，而守卫只看这个对象。"""
+    _seed("root", report, role=ROLE_ADMIN)
+
+    with pytest.raises(CannotDeleteSelf):
+        database.delete_user("root", viewer=ADMIN)
+
+    assert database.get_user("root") is not None
+    assert len(database.list_analyses_of("root")) == 1, "被拒绝时不产生任何写入"
+
+
+def test_the_last_admin_cannot_be_deleted():
+    database.create_user("root", PASSWORD, role=ROLE_ADMIN)
+
+    with pytest.raises(LastAdminProtected):
+        database.delete_user("root", viewer=OTHER_ADMIN)
+
+    assert database.get_user("root") is not None
+
+
+def test_a_disabled_admin_does_not_protect_itself_from_deletion():
+    """停用的管理员不算「可用」——所以有两个管理员时，停用其一再删掉是允许的。
+
+    这里必须**先有第二个管理员**：只有一个管理员时，连「停用」本身都会被
+    最后管理员守卫拦下（那条守卫守的是「系统不能失去全部可用管理员」）。
+    """
+    database.create_user("root", PASSWORD, role=ROLE_ADMIN)
+    database.create_user("root2", PASSWORD, role=ROLE_ADMIN)
+
+    database.set_user_active("root", False, viewer=OTHER_ADMIN)
+    database.delete_user("root", viewer=OTHER_ADMIN)
+
+    assert database.get_user("root") is None
+    assert database.count_active_admins() == 1
+
+
+def test_deleting_one_of_two_admins_is_allowed():
+    database.create_user("root", PASSWORD, role=ROLE_ADMIN)
+    database.create_user("root2", PASSWORD, role=ROLE_ADMIN)
+
+    database.delete_user("root", viewer=OTHER_ADMIN)
+
+    assert database.get_user("root") is None
+    assert database.count_active_admins() == 1
+
+
+def test_a_regular_user_cannot_delete_accounts(report):
+    _seed("lisi", report)
+
+    with pytest.raises(PermissionDenied):
+        database.delete_user("lisi", viewer=REGULAR)
+
+    assert database.get_user("lisi") is not None
+    assert len(database.list_analyses_of("lisi")) == 1
+
+
+def test_a_failed_cascade_rolls_everything_back(report, monkeypatch):
+    """**中途失败要整体回滚**——不能留下「删了一半」的状态。
+
+    只断言「抛了异常」是不够的：那与一个真删掉一半的实现无法区分。
+    所以这里让删了一部分之后再抛错，然后逐张表核对数据还在。
+    """
+    import sqlite3
+
+    _seed("lisi", report, extra_history=1)
+    before = (len(database.list_analyses_of("lisi")), len(database.list_favorites("lisi")))
+
+    real = database._delete_user_rows
+
+    def half_then_explode(connection, username):
+        connection.execute(
+            "DELETE FROM analysis_history WHERE user_id = ?", (username,)
+        )
+        raise sqlite3.OperationalError("模拟级联中途失败")
+
+    monkeypatch.setattr(database, "_delete_user_rows", half_then_explode)
+
+    with pytest.raises(HistoryWriteError):
+        database.delete_user("lisi", viewer=ADMIN)
+
+    monkeypatch.setattr(database, "_delete_user_rows", real)
+
+    assert database.get_user("lisi") is not None, "账号不该被删掉"
+    assert database.read_preferences_json("lisi") is not None
+    assert (
+        len(database.list_analyses_of("lisi")),
+        len(database.list_favorites("lisi")),
+    ) == before, "删掉的那批历史必须回滚"
+
+
+def test_deleting_a_missing_account_is_not_reported_as_success():
+    """删一个不存在的账号**不能报成功**——界面会显示「已删除」而实际什么都没发生。"""
+    with pytest.raises(HistoryWriteError):
+        database.delete_user("nobody", viewer=ADMIN)
+
+
+# --------------------------------------------------------------------------
+# 会话校验
+# --------------------------------------------------------------------------
+
+
+def test_still_valid_reflects_the_database():
+    accounts.register("lisi", PASSWORD)
+    user = database.get_user("lisi")
+
+    assert accounts.still_valid(user) is True
+    assert accounts.still_valid(None) is False
+
+    database.set_user_active("lisi", False, viewer=ADMIN)
+    assert accounts.still_valid(user) is False, "停用的账号不再有效"
+
+    assert accounts.still_valid(User(username="ghost", role=ROLE_USER)) is False, (
+        "库里不存在的账号无效——这正是「被删掉的账号其会话要失效」依赖的那一步"
+    )

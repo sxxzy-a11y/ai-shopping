@@ -12,6 +12,50 @@ from src.ui.theme import bullet_list, chip, esc, facts, notice
 
 _SELECTED_KEY = "zg_history_selected"
 
+#: 待显示的提示。删除之后要 `st.rerun()` 刷新列表，而 `show_notice` 是
+#: **即时渲染**的——就地渲染的提示会被那次重跑丢掉，用户点完删除只看到列表变短，
+#: 没有任何反馈。（同一个坑在管理页踩过，那边的 `_flash` 是同一套做法。）
+_FLASH_KEY = "zg_history_flash"
+
+
+def _flash(message: str, tone: str) -> None:
+    st.session_state[_FLASH_KEY] = (message, tone)
+
+
+def _render_flash() -> None:
+    pending = st.session_state.pop(_FLASH_KEY, None)
+    if pending:
+        components.show_notice(pending[0], pending[1])
+
+
+def _delete_entry(entry_id: int, confirmed: bool) -> None:
+    """删除一条历史记录（硬删，不可恢复）。
+
+    **未勾选确认时只提示、不删**，而不是把按钮置灰：灰按钮看起来像坏了，
+    而「点了没反应、但告诉你为什么」至少把规则说清楚了。
+
+    归属校验在数据层（`delete_analysis` 只放行本人与管理员），这里不做判断——
+    界面上的判断都只是提示，不是权限。
+    """
+    if not confirmed:
+        _flash("请先勾选「确认」再删除。", "warn")
+        st.rerun()
+
+    try:
+        deleted = database.delete_analysis(entry_id, viewer=state.current_user())
+    except ZhigouError as exc:
+        _flash(to_user_message(exc), "stop")
+        st.rerun()
+
+    _flash(
+        "已删除这条历史记录。" if deleted else "这条记录不存在，可能已被删除。",
+        "ok" if deleted else "warn",
+    )
+    # 删掉的若正是右侧打开着的那条，把它关掉——否则右边会停在一份已不存在的报告上
+    if st.session_state.get(_SELECTED_KEY) == entry_id:
+        st.session_state.pop(_SELECTED_KEY, None)
+    st.rerun()
+
 
 def _render_entry_row(entry: database.HistoryEntry) -> None:
     """历史列表里的一行：摘要 + 时间 + 得分 + 查看详情。"""
@@ -22,7 +66,7 @@ def _render_entry_row(entry: database.HistoryEntry) -> None:
     )
 
     # 按钮列要给足宽度：中文四个字在窄列里会被竖着折成四行
-    col_main, col_score, col_open = st.columns([5, 1, 2])
+    col_main, col_score, col_open, col_delete = st.columns([5, 1, 2, 2])
 
     with col_main:
         st.markdown(
@@ -46,9 +90,15 @@ def _render_entry_row(entry: database.HistoryEntry) -> None:
             unsafe_allow_html=True,
         )
     with col_open:
-        if st.button("查看详情", key=f"open_{entry.id}", use_container_width=True):
+        if st.button("查看详情", key=f"open_{entry.id}", width="stretch"):
             st.session_state[_SELECTED_KEY] = entry.id
             st.rerun()
+    with col_delete:
+        confirmed = st.checkbox(
+            "确认删除", key=f"del_ok_{entry.id}", help="勾选后才能删除这条记录"
+        )
+        if st.button("删除", key=f"del_{entry.id}", width="stretch"):
+            _delete_entry(entry.id, confirmed)
 
 
 def _render_report_detail(entry_id: int) -> None:
@@ -76,7 +126,7 @@ def _render_report_detail(entry_id: int) -> None:
             file_name=report_service.suggested_filename(report, "md"),
             mime="text/markdown",
             key=f"hist_md_{entry_id}",
-            use_container_width=True,
+            width="stretch",
         )
     with col_csv:
         st.download_button(
@@ -85,11 +135,11 @@ def _render_report_detail(entry_id: int) -> None:
             file_name=report_service.suggested_filename(report, "csv"),
             mime="text/csv",
             key=f"hist_csv_{entry_id}",
-            use_container_width=True,
+            width="stretch",
         )
     with col_back:
         st.write("")
-        if st.button("关闭报告", use_container_width=False):
+        if st.button("关闭报告", width="content"):
             st.session_state.pop(_SELECTED_KEY, None)
             st.rerun()
 
@@ -174,7 +224,7 @@ def _render_favorites_tab(catalog: Catalog) -> None:
             )
         with col_action:
             st.write("")
-            if st.button("取消收藏", key=f"unfav_{product_id}", use_container_width=True):
+            if st.button("取消收藏", key=f"unfav_{product_id}", width="stretch"):
                 try:
                     database.remove_favorite(user.username, product_id)
                 except ZhigouError as exc:
@@ -196,6 +246,7 @@ def render(catalog: Catalog) -> None:
         "历史记录",
         "回顾过去的分析，重新打开当时的结论，管理收藏的商品。",
     )
+    _render_flash()
 
     healthy, message = database.check_health()
     if not healthy:
@@ -204,8 +255,7 @@ def render(catalog: Catalog) -> None:
             f'<div class="zg-card is-flat">{bullet_list([
                 "历史记录与收藏功能暂不可用，其余功能不受影响",
                 "你仍然可以在「智能分析」页完成新的分析",
-                f"数据库位置：{config.display_path(config.database_path())}",
-                "如需恢复，可以删除该文件后重新启动应用，会新建一个空库",
+                "如需恢复，可以联系管理员处理",
             ])}</div>',
             unsafe_allow_html=True,
         )

@@ -24,7 +24,6 @@ from src.auth import (
     ROLE_USER,
     User,
     hash_password,
-    require_admin,
     validate_password,
     validate_username,
     verify_password,
@@ -34,6 +33,7 @@ from src.errors import (
     InvalidCredentials,
     InvalidUsername,
     WeakPassword,
+    ZhigouError,
 )
 
 #: 没有配置 `ZHIGOU_ADMIN_USERNAME` 时用的账号名。
@@ -56,27 +56,6 @@ def register(username: str, password: str) -> User:
     name = validate_username(username)
     validate_password(password)
     return database.create_user(name, password, role=ROLE_USER)
-
-
-def create_account(
-    viewer: User | None,
-    username: str,
-    password: str,
-    role: str = ROLE_USER,
-) -> User:
-    """**管理员**在用户管理页新建账号。
-
-    与 `register()` 的区别只有一处：这条路可以指定角色，所以必须有守卫。
-    `database.create_user` 本身不判权限——自助注册那条路也要用它，
-    把它一刀切成管理员专用会逼着注册流程绕过存储层。
-
-    Raises:
-        PermissionDenied: 调用者不是管理员。
-    """
-    require_admin(viewer)
-    name = validate_username(username)
-    validate_password(password)
-    return database.create_user(name, password, role=role)
 
 
 def authenticate(username: str, password: str) -> User:
@@ -106,6 +85,29 @@ def authenticate(username: str, password: str) -> User:
         raise AccountDisabled(detail=f"账号 {name} 已停用")
 
     return user
+
+
+def still_valid(user: User | None) -> bool:
+    """这个账号现在还能用吗——**存在且启用**。
+
+    `app.py` 每轮渲染后调一次。为什么需要它：`require_admin(viewer)` 只看
+    **会话里那个对象的角色**，`current_user()` 只读会话，两者都不查库。于是
+    停用一个正在使用的账号之后，它的会话照样能进管理页，直到刷新才被拦；
+    删除账号会把同一个口子放大——被删掉的管理员，会话里的对象还在。
+
+    库读不出来时**按「仍然有效」处理**：那是「读不到」而不是「账号无效」，
+    把使用者踢出去只会让一个只读故障升级成用不了应用。这与本项目对渲染期
+    只读查询的一贯处理一致（`is_favorite` 读失败按「未收藏」处理）。
+    """
+    if user is None:
+        return False
+
+    try:
+        stored = database.get_user(user.username)
+    except ZhigouError:
+        return True
+
+    return stored is not None and stored.is_active
 
 
 def ensure_initial_admin() -> tuple[User, str] | None:

@@ -413,7 +413,11 @@ def score_product(
     最后按剩余维度的权重重新归一化。
     """
     peer_list = list(peers) if peers is not None else [product]
-    weights = config.SCORING_WEIGHTS.get(product.category, {})
+    # 界面上新增的分类没有单独配置权重：用默认表，而不是让所有维度被排除、
+    # 总分恒为 0（那会让新分类的推荐结果看起来像坏掉了）。
+    weights = config.SCORING_WEIGHTS.get(
+        product.category, config.DEFAULT_CATEGORY_WEIGHTS
+    )
 
     computed: list[tuple[str, Callable[[], tuple[float | None, str]]]] = [
         ("budget_fit", lambda: _score_budget_fit(product, demand)),

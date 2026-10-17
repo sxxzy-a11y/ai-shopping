@@ -48,6 +48,27 @@ EXAMPLE_TEXT = (
 )
 
 
+def _ensure_account(user: User) -> None:
+    """保证会话里那个账号在库里**真的存在且启用**。
+
+    以前不需要这一步——会话里的用户对象就是全部依据。现在 `app.py` 每轮会
+    查库校验（被停用/被删除的账号要让它的会话失效），所以夹具必须把账号真的
+    建出来，否则应用会把测试会话当成「幽灵账号」踢回登录页。
+
+    库坏了时**跳过**：那几条「损坏的库不该让应用停摆」的用例会先把库弄坏再启动，
+    夹具在这里抛错就变成「夹具把用例搞挂了」。应用侧对读库失败是 fail-open
+    （按仍然有效处理），所以跳过不会把会话踢掉。
+    """
+    from src import database
+    from src.errors import ZhigouError
+
+    try:
+        if database.get_user(user.username) is None:
+            database.create_user(user.username, "fixture-pass-1", role=user.role)
+    except ZhigouError:
+        return
+
+
 def _run(timeout: float = 60, user: User | None = DEFAULT_USER) -> AppTest:
     """跑一次应用。**默认已登录**（见 `DEFAULT_USER` 的说明）。
 
@@ -55,6 +76,7 @@ def _run(timeout: float = 60, user: User | None = DEFAULT_USER) -> AppTest:
     """
     at = AppTest.from_file(APP_FILE, default_timeout=timeout)
     if user is not None:
+        _ensure_account(user)
         at.session_state[state.KEY_USER] = user
     at.run()
     return at
@@ -138,7 +160,7 @@ def test_app_starts_without_exception():
 def test_app_uses_the_expected_page_layout():
     at = _run()
     labels = [b.label for b in at.button]
-    for expected in ("首页", "智能分析", "商品比较", "历史记录", "个人设置", "项目说明"):
+    for expected in ("首页", "智能分析", "商品比较", "历史记录", "个人设置", "关于"):
         assert expected in labels, f"侧栏缺少导航项「{expected}」"
 
 
@@ -157,7 +179,7 @@ def test_sidebar_is_dark():
 
 @pytest.mark.parametrize(
     "page",
-    ["首页", "智能分析", "商品比较", "AI 问答", "历史记录", "个人设置", "项目说明"],
+    ["首页", "智能分析", "商品比较", "AI 问答", "历史记录", "个人设置", "关于"],
 )
 def test_every_page_renders_without_exception(page):
     at = _run()
@@ -166,7 +188,11 @@ def test_every_page_renders_without_exception(page):
 
 
 def test_navigation_lists_every_page():
-    """导航项与规格里的页面清单必须一致——加页忘挂导航是很容易漏的。"""
+    """导航项与顺序：「项目说明」稳定排在最后。
+
+    它原先排在管理员三项**之前**，于是管理员看到的顺序里它被挤到中间——
+    同一项在不同角色下的位置不一样。放到最后对两种角色都是一致的。
+    """
     from app import NAV_ITEMS
 
     assert [item.name for item in NAV_ITEMS] == [
@@ -175,12 +201,16 @@ def test_navigation_lists_every_page():
         "商品比较",
         "AI 问答",
         "历史记录",
-        "个人设置",
-        "项目说明",
         "用户管理",
         "全站概览",
         "商品维护",
+        "知识库管理",
+        "个人设置",
+        "关于",
     ]
+    assert NAV_ITEMS[-2].name == "个人设置", "个人设置应紧挨项目说明"
+    assert NAV_ITEMS[-1].name == "关于"
+    assert NAV_ITEMS[-1].admin_only is False, "它对所有角色可见，只是排在最后"
 
 
 def test_admin_pages_are_marked_admin_only():
@@ -188,7 +218,175 @@ def test_admin_pages_are_marked_admin_only():
     from app import NAV_ITEMS
 
     admin_only = {item.name for item in NAV_ITEMS if item.admin_only}
-    assert admin_only == {"用户管理", "全站概览", "商品维护"}
+    assert admin_only == {"用户管理", "全站概览", "商品维护", "知识库管理"}
+
+
+def test_knowledge_admin_page_renders_without_embedding_config():
+    """知识库管理页：未配置向量服务时给出配置指引，而不是报错。"""
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "知识库管理")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "篇资料" in body
+    assert "个切片" in body
+    assert "ZHIGOU_EMBEDDING_API_KEY" in body, "要说明需要配置哪个环境变量"
+    assert "尚未配置向量化服务" in body
+
+
+def test_catalog_detail_tab_edits_product_fields():
+    """参数 / 适用场景 / 亮点 / 不足 在「商品维护 → 详情与参数」里维护。"""
+    from src import product_store
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "商品维护")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "选择商品" in body, "详情与参数标签页应可编辑商品详细字段"
+    assert "适用场景" in body
+
+    # 选择第一件商品，改四个字段后保存
+    picker = at.selectbox("zg_cat_detail_pick")
+    target = picker.options[0]
+    picker.set_value(target).run()
+    _assert_clean(at)
+
+    product_id = target.split(" · ")[1].split("（")[0]
+
+    at.text_area(f"zg_cat_detail_specs_{product_id}").set_value("cpu_tier: 4\nram_gb: 16")
+    at.text_area(f"zg_cat_detail_use_{product_id}").set_value("办公\n学习")
+    at.text_area(f"zg_cat_detail_pros_{product_id}").set_value("测试亮点")
+    at.text_area(f"zg_cat_detail_cons_{product_id}").set_value("测试不足")
+    _button(at, "保存详情").click().run()
+    _assert_clean(at)
+
+    saved = next(
+        record
+        for record in product_store.load_product_records()
+        if str(record.get("id")) == product_id
+    )
+    assert saved["specs"]["cpu_tier"] == 4
+    assert saved["use_cases"] == ["办公", "学习"]
+    assert saved["pros"] == ["测试亮点"]
+    assert saved["cons"] == ["测试不足"]
+    # 来源与核验状态不因内容编辑而变化
+    assert saved.get("data_status") != "verified"
+    assert "测试亮点" in str(saved.get("pros"))
+
+
+def test_catalog_edit_form_links_to_knowledge_content():
+    """商品维护的编辑区不再重复提供这四个字段，而是指向知识库管理。"""
+    at = _open_catalog_page(_run(user=ADMIN_USER))
+
+    body = _all_text(at)
+    assert "「详情与参数」中维护" in body
+
+    keys = [widget.key for widget in at.text_area]
+    assert not any(str(key).startswith("zg_cat_specs_") for key in keys), (
+        "参数编辑已移到知识库管理，商品维护不应再有这个输入框"
+    )
+
+
+def test_knowledge_admin_adds_and_deletes_a_document(tmp_path, monkeypatch):
+    """管理员可在知识库管理页新增与删除文件型资料。"""
+    from src.knowledge.corpus import load_documents
+
+    knowledge = tmp_path / "knowledge"
+    knowledge.mkdir()
+    monkeypatch.setenv("ZHIGOU_KNOWLEDGE_DIR", str(knowledge))
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "知识库管理")
+    _assert_clean(at)
+
+    # 新增
+    at.text_input("zg_kb_new_title").set_value("测试资料")
+    at.selectbox("zg_kb_new_type").set_value("service")
+    at.text_input("zg_kb_new_source").set_value("测试来源")
+    at.text_area("zg_kb_new_body").set_value("## 测试\n\n正文内容。")
+    _button(at, "新增资料").click().run()
+    _assert_clean(at)
+
+    docs = load_documents(knowledge)
+    created = next(d for d in docs if d.title == "测试资料")
+    assert created.body.startswith("## 测试")
+
+    # 删除
+    at.checkbox("zg_kb_delete_confirm").set_value(True).run()
+    _button(at, "删除资料").click().run()
+    _assert_clean(at)
+
+    assert all(d.title != "测试资料" for d in load_documents(knowledge))
+
+
+def test_knowledge_admin_requires_admin():
+    """界面隐藏之外，直接跳页也必须被挡住。"""
+    at = _run()
+    at.session_state[state.KEY_PAGE] = "知识库管理"
+    at.run()
+    _assert_clean(at)
+
+    assert "没有执行该操作的权限" in _all_text(at)
+
+
+# --------------------------------------------------------------------------
+# 项目说明页的 API 配置
+# --------------------------------------------------------------------------
+
+
+def test_api_config_is_editable_for_admins():
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "个人设置")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "API 配置" in body, "管理员应看到完整配置区"
+    labels = [item.label for item in at.text_input]
+    assert "对话模型名" in labels
+    assert "向量模型名" in labels
+    assert "向量维度" in [item.label for item in at.number_input]
+    assert "保存配置" in [b.label for b in at.button]
+
+
+def test_api_config_is_read_only_for_regular_users():
+    at = _run()
+    _go_to_page(at, "个人设置")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert "API 配置" not in body, "普通用户不应看到服务配置"
+    assert not any(item.label == "对话模型名" for item in at.text_input)
+
+
+def test_saving_api_config_takes_effect_without_restart():
+    from src import api_config, config
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "个人设置")
+    at.text_input(key="zg_api_llm_model").set_value("custom-model").run()
+
+    _button(at, "保存配置").click().run()
+    _assert_clean(at)
+
+    assert api_config.load().get("llm_model") == "custom-model"
+    assert config.llm_model() == "custom-model"
+
+
+def test_api_config_never_shows_the_full_key():
+    """保存过的密钥只能以脱敏形式出现——整串不得出现在页面里。"""
+    from src import api_config
+
+    secret = "sk-ws-H.PYILREX.Osb8.MEUCIQ-super-long-secret-value"
+    api_config.save({"llm_api_key": secret})
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "个人设置")
+    _assert_clean(at)
+
+    body = _all_text(at)
+    assert secret not in body
+    assert "****" in body
 
 
 # --------------------------------------------------------------------------
@@ -917,7 +1115,7 @@ def _assert_only_negated(body: str, terms: tuple[str, ...], where: str) -> None:
 def test_score_is_never_presented_as_market_reputation():
     """系统评分只能以「需求匹配度」的口径出现，不能冒充市场数据。"""
     at = _run()
-    for page in ("首页", "智能分析", "商品比较", "历史记录", "项目说明"):
+    for page in ("首页", "智能分析", "商品比较", "历史记录", "关于"):
         _go_to_page(at, page)
         _assert_clean(at)
         _assert_only_negated(_all_text(at), _MARKET_CLAIM_TERMS, page)
@@ -959,7 +1157,7 @@ def test_no_page_uses_an_undefined_icon(caplog):
 
     with caplog.at_level(logging.WARNING, logger="zhigou.icons"):
         at = _run()
-        for page in ("首页", "智能分析", "商品比较", "历史记录", "个人设置", "项目说明"):
+        for page in ("首页", "智能分析", "商品比较", "历史记录", "个人设置", "关于"):
             _go_to_page(at, page)
             _assert_clean(at)
 
@@ -1362,7 +1560,7 @@ def test_ai_toggle_appears_when_configured(enable_ai):
     at = _run()
     _go_to_page(at, "智能分析")
     _assert_clean(at)
-    assert "启用 AI 增强" in _all_text(at)
+    assert "AI 增强已开启" in _all_text(at)
 
 
 def test_enabling_ai_shows_the_data_sharing_notice(enable_ai):
@@ -1374,8 +1572,8 @@ def test_enabling_ai_shows_the_data_sharing_notice(enable_ai):
     _assert_clean(at)
 
     body = _all_text(at)
-    assert "需求原文" in body
-    assert "不会发送" in body
+    assert "需求描述" in body, "要说明发送的数据范围"
+    assert "发送给模型服务" in body
 
 
 def test_ai_parse_is_used_when_enabled(enable_ai):
@@ -1810,18 +2008,18 @@ def test_registration_refuses_a_short_password():
     assert database.get_user("newcomer") is None
 
 
-def test_the_login_page_discloses_the_auth_boundary():
-    """spec：登录页要有「演示级鉴权」说明，并列出不具备的能力。"""
+def test_the_login_page_stays_clean():
+    """界面保持简洁：登录页只保留必要信息与一行会话说明。
+
+    详细的能力边界移到 `docs/auth-boundary.md`，不在界面上铺开。
+    """
     at = _run(user=None)
     body = _all_text(at)
 
-    assert "演示级鉴权" in body
-    assert "没有会话过期" in body
-    assert "刷新浏览器页面后需要重新登录" in body
-    assert "只绑定本机" in body
-
-    for claim in ("安全的用户系统", "生产级鉴权"):
-        assert claim not in body, f"不得自称「{claim}」"
+    assert "登录" in body
+    assert "刷新页面需重新登录" in body, "spec 要求刷新需重新登录有界面说明"
+    for noise in ("演示级鉴权", "没有会话过期", "没有 CSRF 防护", "账号体系"):
+        assert noise not in body, f"登录页不应再铺开「{noise}」长文"
 
 
 def test_signing_out_returns_to_the_login_page_and_clears_the_session():
@@ -1870,6 +2068,7 @@ def test_regular_user_does_not_see_the_admin_entries():
     labels = [button.label for button in at.button]
     assert "用户管理" not in labels
     assert "全站概览" not in labels
+    assert "知识库管理" not in labels
 
 
 def test_admin_sees_the_admin_entries():
@@ -1879,6 +2078,7 @@ def test_admin_sees_the_admin_entries():
     labels = [button.label for button in at.button]
     assert "用户管理" in labels
     assert "全站概览" in labels
+    assert "知识库管理" in labels
 
 
 def test_jumping_straight_to_an_admin_page_is_refused():
@@ -1896,29 +2096,29 @@ def test_jumping_straight_to_an_admin_page_is_refused():
     assert "没有执行该操作的权限" in _all_text(at)
 
 
-def test_admin_can_create_an_account():
+def test_user_management_page_has_no_create_form():
+    """建号只在注册页——用户管理页**不再提供「新建账号」**。
+
+    这与 `user-auth`「管理员 SHALL 能够创建账号」那句相反，所以本变更的 delta
+    把那句话也去掉了。理由：注册本来就是开放的，管理员自己建号是个重复入口；
+    而要造一个管理员，让对方向注册、再回到这里改角色即可。
+    """
     at = _run(user=ADMIN_USER)
     _go_to_page(at, "用户管理")
     _assert_clean(at)
 
-    _text_input(at, "用户名").set_value("newbie")
-    _text_input(at, "初始密码").set_value("good-pass-1")
-    _button(at, "创建").click().run()
-    _assert_clean(at)
-
-    from src import database
-
-    created = database.get_user("newbie")
-    assert created is not None
-    assert created.role == "user"
-    assert "已创建账号" in _all_text(at)
+    body = _all_text(at)
+    assert "新建账号" not in body
+    assert not any("创建" in button.label for button in at.button)
+    assert "自助注册" in body, "要去掉入口，就得说清新账号从哪来"
 
 
-def test_admin_page_offers_no_way_to_delete_an_account():
-    """spec：不提供删除账号。
+def test_admin_page_offers_a_delete_entry_for_others_but_not_for_you():
+    """账号删除入口：别人有，自己那一行没有。
 
-    删除会让历史记录失去归属——要么级联删掉用户数据，要么留下一堆
-    指向空账号的记录，两种都更糟。
+    这条用例**替换**了原先的 `test_admin_page_offers_no_way_to_delete_an_account`
+    ——那条断言的是「页面上不得出现带『删除』字样的按钮」，
+    而变更 `add-record-and-user-deletion` 恰好推翻了它（级联删除 + 禁删自己）。
     """
     from src import database
 
@@ -1927,7 +2127,172 @@ def test_admin_page_offers_no_way_to_delete_an_account():
     _go_to_page(at, "用户管理")
     _assert_clean(at)
 
-    assert not any("删除" in button.label for button in at.button)
+    labels = [button.label for button in at.button]
+    assert labels.count("删除账号") == 1, (
+        "只有 lisi 那一行该有删除入口；管理员自己那一行不该有"
+    )
+    assert "不能删除自己" in _all_text(at), "不渲染入口的同时要说明原因"
+
+
+def test_the_delete_confirmation_states_how_much_data_goes(report):
+    """确认文案必须写出**具体条数**——破坏性要看得见，不能只说「确定吗」。"""
+    from src import database
+
+    database.create_user("lisi", "good-pass-1")
+    database.save_analysis(report, user_id="lisi")
+    database.add_favorite("lisi", "LP001")
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+    _assert_clean(at)
+
+    assert "连同 1 条历史与 1 条收藏" in _all_text(at)
+
+
+def test_admin_deletes_an_account_and_its_data(report):
+    from src import database
+
+    database.create_user("lisi", "good-pass-1")
+    database.save_analysis(report, user_id="lisi")
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+    at.checkbox("zg_admin_del_ok_lisi").set_value(True).run()
+    _button(at, "删除账号").click().run()
+    _assert_clean(at)
+
+    assert database.get_user("lisi") is None
+    assert database.list_analyses_of("lisi") == [], "数据要跟着账号一起没"
+    assert "已删除账号" in _all_text(at)
+
+
+def test_deleting_an_account_without_confirmation_is_refused():
+    from src import database
+
+    database.create_user("lisi", "good-pass-1")
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "用户管理")
+    _button(at, "删除账号").click().run()
+    _assert_clean(at)
+
+    assert database.get_user("lisi") is not None, "未勾选确认不该删掉"
+    assert "请先勾选确认" in _all_text(at)
+
+
+def test_deleting_the_other_admin_from_the_ui_is_allowed():
+    """删除路径上的「最后一个管理员」守卫，在界面上**不可达**。
+
+    原因：操作者本身必然是一个**活跃**的管理员（会话校验保证了会话里的对象
+    与库一致），所以目标账号不可能是「最后一个可用管理员」。
+    守卫仍然写在数据层——它防的是「会话里的对象与库不一致」那种情形
+    （伪造或过期的 viewer），那条路只能在数据层直调时走到，
+    用例在 `test_accounts.test_the_last_admin_cannot_be_deleted`。
+
+    这条用例把这个结论钉下来：以后有人以为界面上能测到那个守卫，会先看到这里。
+    """
+    from src import database
+
+    database.create_user(ADMIN_USERNAME, "fixture-pass-1", role="admin")
+    other = User(username="root2", role=ROLE_ADMIN)
+
+    at = _run(user=other)
+    _go_to_page(at, "用户管理")
+    at.checkbox(f"zg_admin_del_ok_{ADMIN_USERNAME}").set_value(True).run()
+    _button(at, "删除账号").click().run()
+    _assert_clean(at)
+
+    assert database.get_user(ADMIN_USERNAME) is None
+    assert database.count_active_admins() == 1
+
+
+# --------------------------------------------------------------------------
+# 记录删除与会话校验
+# --------------------------------------------------------------------------
+
+
+def test_deleting_a_history_record_from_the_ui(report):
+    from src import database
+
+    database.save_analysis(report, user_id=TEST_USERNAME)
+    entry_id = database.list_analyses_of(TEST_USERNAME)[0].id
+
+    at = _run()
+    _go_to_page(at, "历史记录")
+    _assert_clean(at)
+
+    at.checkbox(f"del_ok_{entry_id}").set_value(True).run()
+    _button(at, "删除").click().run()
+    _assert_clean(at)
+
+    assert database.list_analyses_of(TEST_USERNAME) == []
+    assert "已删除" in _all_text(at)
+
+
+def test_deleting_a_history_record_without_confirmation_is_refused(report):
+    """未勾选确认时点删除：**只提示、不删**。
+
+    没有把按钮置灰，因为灰按钮看起来像坏了；「点了没反应但告诉你为什么」
+    至少把规则说清楚了。
+    """
+    from src import database
+
+    database.save_analysis(report, user_id=TEST_USERNAME)
+
+    at = _run()
+    _go_to_page(at, "历史记录")
+    _button(at, "删除").click().run()
+    _assert_clean(at)
+
+    assert len(database.list_analyses_of(TEST_USERNAME)) == 1, "不该删掉"
+    assert "请先勾选" in _all_text(at)
+
+
+def test_admin_deletes_a_record_from_the_overview(report):
+    from src import database
+
+    database.save_analysis(report, user_id="someone")
+    entry_id = database.list_analyses_of("someone")[0].id
+
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "全站概览")
+    _assert_clean(at)
+
+    at.checkbox(f"ov_del_ok_{entry_id}").set_value(True).run()
+    at.button(f"ov_del_{entry_id}").click().run()
+    _assert_clean(at)
+
+    assert database.list_analyses_of("someone") == []
+
+
+def test_a_disabled_account_loses_its_session():
+    """spec：账号被停用后，其会话在**下一次交互**时失效。"""
+    from src import database
+
+    at = _run()
+    assert _state(at, state.KEY_USER) is not None
+
+    database.set_user_active(
+        TEST_USERNAME, False, viewer=User(username="root", role=ROLE_ADMIN)
+    )
+    at.run()  # 下一次交互
+
+    assert _state(at, state.KEY_USER) is None
+    assert "已被停用或删除" in _all_text(at)
+    assert "开始分析" not in _all_text(at), "不该还能进功能页"
+
+
+def test_a_deleted_account_loses_its_session():
+    from src import database
+
+    at = _run()
+    database.delete_user(
+        TEST_USERNAME, viewer=User(username="root", role=ROLE_ADMIN)
+    )
+    at.run()
+
+    assert _state(at, state.KEY_USER) is None
+    assert "已被停用或删除" in _all_text(at)
 
 
 def test_admin_can_change_a_role_and_reset_a_password():
@@ -2048,8 +2413,8 @@ def test_catalog_page_offers_three_blocks():
     at = _open_catalog_page(_run(user=ADMIN_USER))
     body = _all_text(at)
 
-    for label in ("商品", "分类", "品牌"):
-        assert label in body, f"缺少「{label}」这一块"
+    for label in ("分类", "品牌", "商品管理", "详情与参数"):
+        assert label in [tab.label for tab in at.tabs], f"缺少「{label}」标签页"
     assert "新增商品" in body
 
 
@@ -2128,7 +2493,7 @@ def test_admin_adds_a_product_with_an_unknown_spec_and_it_is_refused():
     assert "不属于该分类" in _all_text(at)
 
 
-def test_admin_can_delist_a_product_from_the_ui():
+def test_admin_can_disable_a_product_from_the_ui():
     at = _open_catalog_page(_run(user=ADMIN_USER))
     product_id = "LP001"
 
@@ -2138,7 +2503,7 @@ def test_admin_can_delist_a_product_from_the_ui():
     from src.data_loader import load_catalog
 
     assert load_catalog().get(product_id).is_active is False
-    assert "已下架" in _all_text(at)
+    assert "已停用" in _all_text(at)
 
 
 def test_admin_renames_a_category_and_product_records_are_untouched():
@@ -2170,14 +2535,42 @@ def test_admin_renames_a_category_and_product_records_are_untouched():
     assert before == after, "改展示名不该动商品记录"
 
 
-def test_catalog_page_says_new_categories_cannot_be_added():
-    """spec：界面不提供新增分类，并说明原因。"""
+def test_catalog_page_offers_adding_categories_and_brands():
+    """分类与品牌都可以在界面上新增。"""
     at = _open_catalog_page(_run(user=ADMIN_USER))
     body = _all_text(at)
 
-    assert "键集合不可增删" in body
+    assert "新增分类" in body
+    assert "新增品牌" in body
+    assert "默认权重" in body
     assert "停用不等于删除" in body
-    assert not any("新增分类" in button.label for button in at.button)
+
+
+def test_admin_adds_a_category_and_a_brand_through_the_ui():
+    from src import catalog_meta, config
+
+    # 新增分类会把键并入内存里的 CATEGORY_LABELS（进程级），
+    # 用例结束必须还原，否则后续「分类集合」断言全部被污染。
+    snapshot = dict(config.CATEGORY_LABELS)
+    try:
+        at = _open_catalog_page(_run(user=ADMIN_USER))
+
+        # 新增分类
+        at.text_input("zg_cat_newcat_key").set_value("tablet")
+        at.text_input("zg_cat_newcat_label").set_value("平板电脑")
+        _button(at, "新增分类").click().run()
+        _assert_clean(at)
+        assert "tablet" in [entry.key for entry in catalog_meta.category_entries()]
+
+        # 新增品牌（没有商品也能登记）
+        at.text_input("zg_cat_newbrand_name").set_value("测试品牌")
+        at.text_input("zg_cat_newbrand_display").set_value("测试品牌")
+        _button(at, "新增品牌").click().run()
+        _assert_clean(at)
+        assert "测试品牌" in [entry.brand_name for entry in catalog_meta.brand_entries()]
+    finally:
+        config.CATEGORY_LABELS.clear()
+        config.CATEGORY_LABELS.update(snapshot)
 
 
 def test_brand_block_explains_that_registering_a_brand_does_not_teach_the_parser():

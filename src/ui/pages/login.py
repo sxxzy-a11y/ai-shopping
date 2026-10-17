@@ -20,7 +20,7 @@ import streamlit as st
 
 from src import accounts
 from src.errors import ZhigouError, to_user_message
-from src.ui import components, disclosure, state
+from src.ui import components, state
 
 #: 当前处于「登录」还是「注册」。
 _KEY_MODE = "zg_auth_mode"
@@ -29,24 +29,26 @@ _MODE_REGISTER = "register"
 
 
 def render() -> None:
-    """渲染登录页。**不接受 catalog**——未登录时不该有任何数据可查。"""
-    components.page_header(
-        "智购参谋",
-        "登录后使用。没有账号可以直接注册一个，注册得到的都是普通用户。",
-    )
+    """渲染登录页。**不接受 catalog**——未登录时不该有任何数据可查。
 
-    left, right = st.columns([3, 2], gap="large")
+    布局：整页收窄并居中。登录页是一张「门」，不该铺满整屏——
+    视觉上把注意力收到表单上，也和应用内的宽布局区分开。
+    """
+    _, center, _ = st.columns([1, 1.9, 1], gap="large")
+    with center:
+        components.page_header(
+            "智购参谋",
+            "登录后使用。没有账号可以直接注册一个，注册得到的都是普通用户。",
+        )
 
-    with left:
         mode = st.session_state.get(_KEY_MODE, _MODE_LOGIN)
         if mode == _MODE_REGISTER:
             _render_register_form()
         else:
             _render_login_form()
         _render_mode_switch(mode)
-
-    with right:
-        _render_boundary_notice()
+        st.write("")
+        components.caption("账号凭据仅保存在当前会话；刷新页面需重新登录。")
 
 
 # --------------------------------------------------------------------------
@@ -63,11 +65,12 @@ def _sign_in(user) -> None:
 
 def _render_login_form() -> None:
     components.section_title("登录")
-
     with st.form("zg_login"):
         username = st.text_input("用户名", key="zg_login_username")
         password = st.text_input("密码", type="password", key="zg_login_password")
-        submitted = st.form_submit_button("登录", type="primary", use_container_width=True)
+        submitted = st.form_submit_button(
+            "登录", type="primary", width="stretch"
+        )
 
     if not submitted:
         return
@@ -94,14 +97,15 @@ def _render_register_form() -> None:
         "注册得到的账号一律是**普通用户**。管理员权限只能由现有管理员授予——"
         "不设「第一个注册的人自动成为管理员」这种规则。"
     )
-
     with st.form("zg_register"):
         username = st.text_input("用户名", key="zg_reg_username")
         password = st.text_input(
             "密码", type="password", key="zg_reg_password", help="至少 8 位"
         )
         confirm = st.text_input("确认密码", type="password", key="zg_reg_confirm")
-        submitted = st.form_submit_button("注册", type="primary", use_container_width=True)
+        submitted = st.form_submit_button(
+            "注册", type="primary", width="stretch"
+        )
 
     if not submitted:
         return
@@ -124,11 +128,11 @@ def _render_mode_switch(mode: str) -> None:
     """登录 ⇄ 注册。"""
     st.write("")
     if mode == _MODE_REGISTER:
-        if st.button("已有账号，去登录", use_container_width=False):
+        if st.button("已有账号，去登录", width="stretch"):
             st.session_state[_KEY_MODE] = _MODE_LOGIN
             st.rerun()
     else:
-        if st.button("没有账号？注册一个", use_container_width=False):
+        if st.button("没有账号？注册一个", width="stretch"):
             st.session_state[_KEY_MODE] = _MODE_REGISTER
             st.rerun()
 
@@ -138,18 +142,4 @@ def _render_mode_switch(mode: str) -> None:
 # --------------------------------------------------------------------------
 
 
-def _render_boundary_notice() -> None:
-    """把「演示级鉴权」的边界摆在登录口上。
 
-    放在这里而不是藏在「项目说明」深处：使用者一进来就先知道它**不是**
-    什么，比事后从文档里补一句更实在。
-    """
-    components.section_title("关于账号体系")
-    for line in disclosure.boundary_lines():
-        st.markdown(f"- {line}")
-    st.write("")
-    components.show_notice(
-        "演示环境请只绑定本机地址，不要把这个服务暴露到公网——"
-        "注册是开放的，任何能访问到地址的人都能建号进入。",
-        "warn",
-    )

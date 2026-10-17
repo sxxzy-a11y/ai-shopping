@@ -261,3 +261,38 @@ def set_active(
 def list_products(path: Path | None = None) -> list[dict[str, Any]]:
     """商品维护页要的商品清单（含在售状态与录入者）。"""
     return product_store.load_product_records(path)
+
+# --------------------------------------------------------------------------
+# 界面文本 ↔ 结构化字段（两个管理页共用）
+# --------------------------------------------------------------------------
+
+
+def specs_to_text(specs: Mapping[str, Any]) -> str:
+    """参数对象 → 「一行一个 键: 值」的文本。"""
+    return "\n".join(f"{key}: {value}" for key, value in (specs or {}).items())
+
+
+def text_to_specs(text: str) -> dict[str, Any]:
+    """「一行一个 键: 值」→ 参数字典；数字能转就转，转不动保留字符串。"""
+    specs: dict[str, Any] = {}
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key, value = key.strip(), value.strip()
+        if not key:
+            continue
+        try:
+            number = float(value)
+        except ValueError:
+            specs[key] = value
+        else:
+            specs[key] = int(number) if number.is_integer() else number
+    return specs
+
+
+def lines_to_list(text: str) -> list[str]:
+    """一行一条 → 字符串列表。"""
+    return [line.strip() for line in (text or "").splitlines() if line.strip()]
+

@@ -35,7 +35,12 @@ ADMIN_USER = User(username="root", role=ROLE_ADMIN)
 
 @pytest.fixture
 def second_report(catalog) -> DecisionReport:
-    demand = Demand(category="headphone", budget=1000, core_needs=["降噪"])
+    """与 `report` 需求不同的第二份报告。
+
+    品类原先写的是 `headphone`、核心需求写的是「降噪」——耳机品类早已移除，
+    那两处引用的是不存在的东西。换成手机 + 拍照，仍是真实品类与可量化的需求。
+    """
+    demand = Demand(category="phone", budget=4000, core_needs=["拍照"])
     return build_report(catalog, demand, recommend(catalog, demand))
 
 
@@ -256,6 +261,32 @@ def test_delete_analysis(db_path: Path, report: DecisionReport):
     assert database.delete_analysis(entry_id, db_path, viewer=ALICE_USER) is True
     assert database.get_analysis(entry_id, db_path, viewer=ALICE_USER) is None
     assert database.delete_analysis(entry_id, db_path, viewer=ALICE_USER) is False
+
+
+def test_admin_can_delete_an_unowned_legacy_record(db_path: Path, report: DecisionReport):
+    """无归属的遗留记录**只对管理员可见**，所以也只有管理员能处理它们。
+
+    禁止删除等于让这几条永久占位且无法清理——而它们恰恰是最没有价值的那些
+    （不知道是谁做的）。看得到又删不掉，是最差的一种组合。
+    """
+    entry_id = database.save_analysis(report, db_path)  # 不传 user_id = 无归属
+    assert database.count_unowned_analyses(db_path) == 1
+
+    assert database.delete_analysis(entry_id, db_path, viewer=ADMIN_USER) is True
+    assert database.count_unowned_analyses(db_path) == 0
+
+
+def test_deleting_keeps_the_counts_consistent(db_path: Path, report, second_report):
+    """删完一条，总数与按用户的计数要一起变——不能只动一处。"""
+    first = database.save_analysis(report, db_path, user_id=ALICE)
+    database.save_analysis(second_report, db_path, user_id=ALICE)
+    assert database.count_analyses_of(ALICE, path=db_path) == 2
+    assert database.count_analyses(db_path) == 2
+
+    database.delete_analysis(first, db_path, viewer=ALICE_USER)
+
+    assert database.count_analyses_of(ALICE, path=db_path) == 1
+    assert database.count_analyses(db_path) == 1
 
 
 # --------------------------------------------------------------------------

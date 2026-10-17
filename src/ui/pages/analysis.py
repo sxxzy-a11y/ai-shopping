@@ -157,22 +157,9 @@ def _render_ai_controls() -> None:
         )
         return
 
-    service = ai_service.get_service()
-    st.markdown(
-        f'<div class="zg-caption">当前模型：{service.model}　·　'
-        f"端点：{service.describe()['base_url']}</div>",
-        unsafe_allow_html=True,
+    components.caption(
+        "AI 增强已开启：本次会把你的需求描述、筛选条件与候选商品数据发送给模型服务。"
     )
-    notice = ai_enhance.data_sharing_notice(
-        state.get(state.KEY_DEMAND) or Demand(),
-        0,
-    )
-    st.markdown(
-        f'<div class="zg-notice zg-notice-warn">'
-        f'<span>{esc_multi(notice)}</span></div>',
-        unsafe_allow_html=True,
-    )
-    st.write("")
 
 
 def esc_multi(text: str) -> str:
@@ -459,7 +446,7 @@ def _favorite_actions(product) -> None:
         favorited = False
 
     label = "取消收藏" if favorited else "收藏这件商品"
-    if st.button(label, key=f"fav_{product.id}", use_container_width=False):
+    if st.button(label, key=f"fav_{product.id}", width="content"):
         try:
             if favorited:
                 database.remove_favorite(user.username, product.id)
@@ -558,7 +545,7 @@ def _render_export(report) -> None:
             file_name=report_service.suggested_filename(report, "md"),
             mime="text/markdown",
             key="zg_export_md",
-            use_container_width=True,
+            width="stretch",
         )
     with col_csv:
         st.download_button(
@@ -567,7 +554,7 @@ def _render_export(report) -> None:
             file_name=report_service.suggested_filename(report, "csv"),
             mime="text/csv",
             key="zg_export_csv",
-            use_container_width=True,
+            width="stretch",
         )
 
 
@@ -606,15 +593,10 @@ def _render_results() -> None:
     for note in state.get("zg_ai_notes") or []:
         components.show_notice(note, "warn")
 
-    # AI 执行轨迹：调了什么工具、依据什么得出结论。
-    # 与「分析过程说明」同栏，紧跟降级提示——它们是同一类信息（怎么算出来的）。
-    components.render_agent_trace(state.get("zg_agent_run"))
-
-    engine = state.get("zg_parse_engine")
-    if engine == "ai":
-        components.show_notice("本次需求由 AI 解析，推荐排序仍由本地规则计算。", "info")
-    elif engine == "rule" and state.ai_enhanced_active():
-        components.show_notice("本次需求由本地规则解析。", "info")
+    # AI 执行轨迹属于过程细节：收进折叠区，默认不打扰阅读。
+    if state.get("zg_agent_run"):
+        with st.expander("AI 执行过程", expanded=False):
+            components.render_agent_trace(state.get("zg_agent_run"))
 
     explanation = state.get("zg_ai_explanation")
     if explanation and explanation.get("overview"):
@@ -672,9 +654,9 @@ def render(catalog: Catalog) -> None:
     st.write("")
     left, mid, right = st.columns([1, 1, 4])
     with left:
-        clicked = st.button("开始分析", type="primary", use_container_width=True)
+        clicked = st.button("开始分析", type="primary", width="stretch")
     with mid:
-        if st.button("清空条件", use_container_width=True):
+        if st.button("清空条件", width="stretch"):
             # 只记请求——此刻输入控件都已创建，就地清空会抛异常
             st.session_state[state.KEY_RESET] = True
             state.clear_analysis()

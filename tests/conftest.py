@@ -35,11 +35,17 @@ def isolated_local_state(tmp_path, monkeypatch):
     # 商品库与历史库分开，测试也要把它隔离到临时目录，
     # 否则测试会往开发机的真实商品库里写。
     monkeypatch.setenv("ZHIGOU_PRODUCTS_DB_PATH", str(tmp_path / "products.db"))
+    # 界面里保存的 API 覆盖配置也要隔离：开发机上这份文件放着真实密钥，
+    # 不隔离的话测试会读到它并真的联网。
+    from src import api_config
+
+    monkeypatch.setenv(api_config.PATH_ENV, str(tmp_path / "api_config.json"))
 
     # 断掉密钥，保证测试**永远不会**真的调外部 API。
     # 开发机上 .env 里放着真密钥，这一步不做的话，跑测试就会消耗额度、
     # 而且测试结果会依赖网络——两头都不该发生。
     monkeypatch.delenv(config.LLM_API_KEY_ENV, raising=False)
+    monkeypatch.delenv(config.EMBEDDING_API_KEY_ENV, raising=False)
 
     # 管理员凭据同理：开发机上 .env 里可能配着它们，留着会让
     # 「初始管理员」那组用例的结果随开发机的配置而变。

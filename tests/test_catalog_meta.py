@@ -133,29 +133,27 @@ def test_present_categories_still_reflects_the_data(seeded_products):
     assert "laptop" not in visible.present_categories()
 
 
-def test_unknown_category_key_in_the_table_is_ignored(seeded_products):
-    """表里塞一个 config 不认识的键，分类列表仍是三类。
-
-    判据用的是「数据集里有没有」而不是「表里有没有」。
-    """
-    catalog_meta.category_entries()  # 建表
-    with connect(config.products_db_path()) as connection:
-        connection.execute(
-            "INSERT INTO category_meta (category_key, is_active) VALUES (?, 1)",
-            ("toaster",),
-        )
-        connection.commit()
+def test_database_only_category_key_is_listed(seeded_products):
+    """通过界面新增的分类会出现在列表里（标签回退为键名）。"""
+    catalog_meta.set_category_meta(ADMIN, "toaster", display_label="烤箱")
 
     entries = catalog_meta.category_entries()
-    assert [entry.key for entry in entries] == list(config.CATEGORY_LABELS)
+    keys = [entry.key for entry in entries]
+    assert "toaster" in keys
+    assert next(entry.label for entry in entries if entry.key == "toaster") == "烤箱"
 
 
-def test_adding_a_new_category_key_is_refused(seeded_products):
-    """界面不能新增分类——新增要配权重、档位与知识语料。"""
+def test_adding_a_new_category_key_requires_a_label(seeded_products):
+    """新增分类允许，但必须给展示名，键名也要合法。"""
     with pytest.raises(ProductStoreWriteError) as caught:
-        catalog_meta.set_category_meta(ADMIN, "toaster", display_label="烤箱")
+        catalog_meta.set_category_meta(ADMIN, "toaster")
+    assert "展示名" in caught.value.user_message
 
-    assert "新增分类" in caught.value.user_message
+    with pytest.raises(ProductStoreWriteError):
+        catalog_meta.set_category_meta(ADMIN, "Bad Key!", display_label="坏键")
+
+    catalog_meta.set_category_meta(ADMIN, "toaster", display_label="烤箱")
+    assert "toaster" in [entry.key for entry in catalog_meta.category_entries()]
 
 
 def test_regular_user_cannot_change_category_meta(seeded_products):

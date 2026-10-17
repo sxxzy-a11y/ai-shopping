@@ -125,7 +125,35 @@ def category_entries(path: Path | None = None) -> list[CategoryEntry]:
             )
         )
 
+    # 数据库里新增的分类（不在 config 中）也要出现在列表里
+    for key, row in rows.items():
+        if key in config.CATEGORY_LABELS:
+            continue
+        entries.append(
+            CategoryEntry(
+                key=key,
+                label=row["display_label"] or key,
+                sort_order=row["sort_order"] if row["sort_order"] is not None else 100,
+                is_active=bool(row["is_active"]),
+                custom_label=True,
+            )
+        )
+
     return sorted(entries, key=lambda entry: (entry.sort_order, entry.key))
+
+
+def dynamic_categories(path: Path | None = None) -> list[tuple[str, str]]:
+    """数据库里新增的分类（不在代码常量中的那些），供 config 合并。"""
+    _ensure(path)
+    with _connection(path) as connection:
+        rows = connection.execute(
+            "SELECT category_key, display_label FROM category_meta"
+        ).fetchall()
+    return [
+        (row["category_key"], row["display_label"] or row["category_key"])
+        for row in rows
+        if row["category_key"] not in config.CATEGORY_LABELS
+    ]
 
 
 def set_category_meta(
@@ -137,13 +165,25 @@ def set_category_meta(
     is_active: bool | None = None,
     path: Path | None = None,
 ) -> None:
-    """改一个分类的元数据。**改不了键集合**——`key` 必须是既有分类。"""
+    """改一个分类的元数据；`key` 不在既有分类里时视为**新增分类**。
+
+    新增分类至少要给展示名；评分使用 `config.DEFAULT_CATEGORY_WEIGHTS`，
+    知识指南与参数档位可以后续再补——不会因此拒绝创建。
+    """
     require_admin(viewer)
-    if key not in config.CATEGORY_LABELS:
-        raise ProductStoreWriteError(
-            f"分类「{key}」不在配置里。新增分类需要改代码与知识语料，界面上做不了。",
-            detail=f"key={key}",
-        )
+    is_new = key not in config.CATEGORY_LABELS
+    if is_new:
+        import re as _re
+
+        if not _re.fullmatch(r"[a-z][a-z0-9_]{1,23}", key or ""):
+            raise ProductStoreWriteError(
+                "分类键要用小写字母开头，只含小写字母、数字与下划线（2–24 位）。",
+                detail=f"key={key}",
+            )
+        if not (display_label or "").strip():
+            raise ProductStoreWriteError(
+                "新增分类必须填写展示名。", detail=f"key={key}"
+            )
 
     _ensure(path)
     current = next(
@@ -270,19 +310,43 @@ def set_brand_meta(
     is_active: bool | None = None,
     path: Path | None = None,
 ) -> None:
-    """改一个品牌的元数据。品牌必须已经在字典里（也就是商品里出现过）。"""
+    """改一个品牌的元数据；品牌不在字典里时视为**新增品牌**。"""
     require_admin(viewer)
     _ensure(path)
 
+    name = (brand_name or "").strip()
+    if not name:
+        raise ProductStoreWriteError("品牌名不能为空。", detail="brand_name")
+
     with _connection(path) as connection:
         row = connection.execute(
-            "SELECT * FROM brand_meta WHERE brand_name = ?", (brand_name,)
+            "SELECT * FROM brand_meta WHERE brand_name = ?", (name,)
         ).fetchone()
+
     if row is None:
-        raise ProductStoreWriteError(
-            f"字典里没有品牌「{brand_name}」。它必须先出现在某个商品上。",
-            detail=brand_name,
-        )
+        if not (display_name or "").strip():
+            raise ProductStoreWriteError(
+                "新增品牌必须填写展示名。", detail=name
+            )
+        try:
+            with _connection(path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO brand_meta
+                        (brand_name, display_name, sort_order, is_active)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        name,
+                        display_name.strip(),
+                        int(sort_order or 0),
+                        1 if (is_active is None or is_active) else 0,
+                    ),
+                )
+                connection.commit()
+        except sqlite3.Error as exc:
+            raise ProductStoreWriteError(detail=f"{type(exc).__name__}: {exc}") from exc
+        return
 
     label = display_name if display_name is not None else row["display_name"]
     order = sort_order if sort_order is not None else (row["sort_order"] or 0)
@@ -296,7 +360,7 @@ def set_brand_meta(
                    SET display_name = ?, sort_order = ?, is_active = ?
                  WHERE brand_name = ?
                 """,
-                (label, int(order), 1 if active else 0, brand_name),
+                (label, int(order), 1 if active else 0, name),
             )
             connection.commit()
     except sqlite3.Error as exc:

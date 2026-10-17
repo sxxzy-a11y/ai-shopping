@@ -35,8 +35,10 @@ from src.auth import (
     hash_password,
     is_admin,
     require_admin,
+    validate_password,
 )
 from src.errors import (
+    CannotDeleteSelf,
     HistoryReadError,
     HistoryWriteError,
     LastAdminProtected,
@@ -720,6 +722,105 @@ def _guard_last_admin(connection: sqlite3.Connection, username: str) -> None:
         )
 
 
+def _count_rows(connection: sqlite3.Connection, table: str, username: str) -> int:
+    row = connection.execute(
+        f"SELECT COUNT(*) AS n FROM {table} WHERE user_id = ?", (username,)
+    ).fetchone()
+    return int(row["n"])
+
+
+def count_user_data(username: str, path: Path | None = None) -> tuple[int, int]:
+    """该账号名下的 `(历史条数, 收藏条数)`。
+
+    删除账号前用它把破坏性写在确认处——只说「确定删除吗」等于没提醒，
+    把**具体多少条**摆出来，删的人才知道自己在删什么。
+
+    偏好不计入：它只有一行、且是一份设置，报出来只是噪声。
+    """
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            return (
+                _count_rows(connection, "analysis_history", username),
+                _count_rows(connection, "favorites", username),
+            )
+    except sqlite3.Error as exc:
+        raise HistoryReadError(
+            "账号数据统计失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def _delete_user_rows(connection: sqlite3.Connection, username: str) -> None:
+    """级联删掉该账号的全部数据。
+
+    **抽成一个函数是为了能被测试打桩**：「中途失败要整体回滚」那条用例
+    需要一个「删了一半」的位置来抛错，否则只能断言「函数抛了异常」——
+    那与一个真删掉一半的实现无法区分。
+    """
+    connection.execute("DELETE FROM analysis_history WHERE user_id = ?", (username,))
+    connection.execute("DELETE FROM favorites WHERE user_id = ?", (username,))
+    connection.execute("DELETE FROM user_preferences WHERE user_id = ?", (username,))
+    connection.execute("DELETE FROM users WHERE username = ?", (username,))
+
+
+def delete_user(
+    username: str, path: Path | None = None, *, viewer: User | None
+) -> tuple[int, int]:
+    """删除账号，并级联删除其历史、收藏与偏好。返回被删掉的 `(历史, 收藏)` 条数。
+
+    三条边界：
+
+    - **只有管理员能调**（`require_admin`）
+    - **不能删自己**：删掉自己之后那个会话对象还在内存里，而守卫只看这个对象，
+      会出现「已被删除的管理员仍能操作」的窗口
+    - **不能删掉最后一个可用管理员**：复用既有守卫，**停用的不算可用**
+
+    四张表的删除在一个事务里。`DELETE` 是 DML，Python 的 `sqlite3` 会在第一条 DML
+    之前隐式开事务，`with connection:` 负责提交或回滚——中途失败不会留下
+    「账号没了但数据还在」这种半删状态。
+
+    **注意这与库迁移那段不同**：那里是 DDL，DDL 不会自动开事务，必须显式 `BEGIN`。
+    两处的写法不一样不是疏忽，是 sqlite3 的行为不同。
+
+    Raises:
+        PermissionDenied: 调用者不是管理员。
+        CannotDeleteSelf: 试图删除自己。
+        LastAdminProtected: 该账号是最后一个可用管理员。
+        HistoryWriteError: 账号不存在或写入失败。
+    """
+    require_admin(viewer)
+    if viewer is not None and viewer.username == username:
+        raise CannotDeleteSelf(detail=f"{username} 试图删除自己")
+
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            with connection:
+                exists = connection.execute(
+                    "SELECT 1 FROM users WHERE username = ?", (username,)
+                ).fetchone()
+                if exists is None:
+                    # 不把「删了个不存在的账号」当成成功：那会让界面显示
+                    # 「已删除」，而实际什么也没发生。
+                    raise HistoryWriteError(
+                        f"找不到账号「{username}」，未做任何改动。", detail=username
+                    )
+
+                _guard_last_admin(connection, username)
+                counts = (
+                    _count_rows(connection, "analysis_history", username),
+                    _count_rows(connection, "favorites", username),
+                )
+                _delete_user_rows(connection, username)
+    except sqlite3.Error as exc:
+        raise HistoryWriteError(
+            "删除账号失败，账号与数据保持不变。",
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+    return counts
+
+
 def set_user_role(
     username: str, role: str, path: Path | None = None, *, viewer: User | None
 ) -> None:
@@ -747,8 +848,15 @@ def set_user_role(
 def set_user_password(
     username: str, password: str, path: Path | None = None, *, viewer: User | None
 ) -> None:
-    """重置密码。**只有管理员能调**，且只收明文、在这里派生。"""
+    """重置密码。**只有管理员能调**，且只收明文、在这里派生。
+
+    最短长度也在这条路上守一遍。原先只有注册路径检查它，而管理员重置那条路
+    照单全收——界面上写着「至少 8 位」，数据层却会接受一个 1 位密码。
+    界面承诺的事必须在数据层兑现，这是「界面隐藏不算权限」的同一条原则：
+    **别让规则只活在提示文案里。**
+    """
     require_admin(viewer)
+    validate_password(password)
     credential = hash_password(password)
     try:
         _ensure_ready(path)

@@ -39,3 +39,6 @@ htmlcov/
 _scratch*/
 _scratch_*.py
 _scratch_*
+
+# --- 本机 API 覆盖配置（含密钥） ---
+storage/api_config.json

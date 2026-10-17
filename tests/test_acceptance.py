@@ -41,9 +41,29 @@ EXAMPLE_TEXT = (
 )
 
 
+def _ensure_account(user: User) -> None:
+    """会话里那个账号必须在库里真的存在且启用。
+
+    应用每轮会查库校验会话账号（被停用/被删除的账号要让其会话失效），
+    所以夹具不能只往 `session_state` 里塞一个用户对象——那样会被当成
+    「幽灵账号」踢回登录页。
+    """
+    from src import database
+    from src.errors import ZhigouError
+
+    try:
+        if database.get_user(user.username) is None:
+            database.create_user(user.username, "fixture-pass-1", role=user.role)
+    except ZhigouError:
+        # 库坏了（那几条「损坏的库不该让应用停摆」的用例会先把库弄坏）——
+        # 跳过建号即可，应用侧对读库失败是 fail-open，不会因此踢掉会话。
+        return
+
+
 def _run(user: User | None = DEFAULT_USER) -> AppTest:
     at = AppTest.from_file(APP_FILE, default_timeout=60)
     if user is not None:
+        _ensure_account(user)
         at.session_state[state.KEY_USER] = user
     at.run()
     return at
@@ -453,7 +473,6 @@ def test_unauthenticated_visitor_is_stopped_at_the_login_page(monkeypatch):
 
     body = _text(at)
     assert "登录" in body
-    assert "演示级鉴权" in body, "登录页要披露鉴权边界"
     assert "开始分析" not in body, "未登录不该看到任何功能页"
     assert _state(at, state.KEY_USER) is None
 

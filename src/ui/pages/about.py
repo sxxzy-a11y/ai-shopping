@@ -6,14 +6,14 @@ import streamlit as st
 
 from src import config
 from src.data_loader import Catalog
-from src.ui import components, disclosure, state
+from src.ui import components, state
 from src.ui.theme import bullet_list, facts
 
 
 def render(catalog: Catalog) -> None:
     components.page_header(
-        "项目说明",
-        "这个工具是怎么想的、怎么搭的，以及它现在的能力边界在哪里。",
+        "关于智购参谋",
+        "我们如何帮你做一次有依据的购买决策，以及这份数据能信到什么程度。",
     )
 
     # --- 产品价值 ---------------------------------------------------------
@@ -34,27 +34,6 @@ def render(catalog: Catalog) -> None:
             ]
         ),
         unsafe_allow_html=True,
-    )
-
-    # --- 技术架构 ---------------------------------------------------------
-    components.section_title("技术架构")
-    st.markdown(
-        facts(
-            [
-                ("界面", "Streamlit 单页应用，五个页面"),
-                ("业务层", "Python，按职责分为配置、数据、解析、评分、推荐、比较等模块"),
-                ("数据存储", "本地 JSON（商品）+ SQLite（历史与收藏，阶段四接入）"),
-                ("模型能力", "可选。未配置密钥时完全由本地规则驱动，不联网"),
-                ("测试", "pytest，覆盖各能力规格中定义的场景"),
-            ]
-        ),
-        unsafe_allow_html=True,
-    )
-    st.write("")
-    components.caption(
-        "业务逻辑全部放在 src/ 下的模块里，界面只做编排。"
-        "因此评分、筛选、比较这些核心逻辑可以脱离界面单独做单元测试，"
-        "未来若要换成 FastAPI + 独立前端，业务模块可以原样搬走。"
     )
 
     # --- 评分口径 ---------------------------------------------------------
@@ -94,53 +73,6 @@ def render(catalog: Catalog) -> None:
                 "本项目不接入任何电商平台，不提供实时价格、库存、销量或真实评价",
                 "因此本工具的输出只能用于了解「如何用数据支撑一次消费决策」，"
                 "不能作为真实购买的依据",
-            ]
-        ),
-        unsafe_allow_html=True,
-    )
-
-    # --- 已知限制 ---------------------------------------------------------
-    components.section_title("已知限制")
-    st.markdown(
-        bullet_list(
-            [
-                "自然语言解析只覆盖预算、类别、用途、核心需求这类高置信字段；"
-                "拿不准的一律留空并追问，不做猜测",
-                "中文数字只识别按位书写（「三千」「两千五百」），"
-                "口语省略式（「两千五」表示 2500）识别不了，会退回「未识别到预算」",
-                "结构化预算输入框只接受阿拉伯数字，填「三千块」会提示格式错误",
-                "账号体系是演示级鉴权（无会话过期、无登录限流、无找回密码），"
-                "刷新页面需重新登录；所有数据保存在本机，不上传",
-            ]
-        ),
-        unsafe_allow_html=True,
-    )
-
-    # --- 账号体系 ---------------------------------------------------------
-    # 与登录页共用同一份文案（`src/ui/disclosure.py`）：这是**披露限制**的
-    # 内容，两处措辞一旦漂移，读者会以为自己看到的是一份完整清单。
-    components.section_title("账号体系")
-    st.markdown(
-        bullet_list(list(disclosure.boundary_lines())),
-        unsafe_allow_html=True,
-    )
-    st.write("")
-    components.show_notice(
-        "注册是开放的：任何能访问到这个地址的人都能创建账号，"
-        "新账号一律是普通用户。演示时请只绑定本机地址，不要暴露到公网。",
-        "warn",
-    )
-
-    # --- 运行环境 ---------------------------------------------------------
-    components.section_title("当前运行环境")
-    mode, detail = state.current_mode()
-    st.markdown(
-        facts(
-            [
-                ("运行模式", mode),
-                ("说明", detail),
-                ("分值名称", config.SCORE_DISPLAY_NAME),
-                ("商品数据库", config.display_path(config.products_db_path())),
             ]
         ),
         unsafe_allow_html=True,

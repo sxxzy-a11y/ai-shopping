@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import ai_service, config, settings
-from src.auth import User
+from src import ai_service, api_config, config, settings
+from src.auth import User, is_admin
+from src.knowledge import embeddings
 from src.data_loader import Catalog
 from src.errors import ZhigouError, to_user_message
 from src.ui import components, state
@@ -134,7 +135,7 @@ def render(catalog: Catalog) -> None:
         st.write("")
         col_save, col_reset = st.columns([1, 1])
         with col_save:
-            if st.button("保存设置", type="primary", use_container_width=True):
+            if st.button("保存设置", type="primary", width="stretch"):
                 try:
                     settings.save_preferences(user, _collect())
                 except ZhigouError as exc:
@@ -147,7 +148,7 @@ def render(catalog: Catalog) -> None:
                         "ok",
                     )
         with col_reset:
-            if st.button("恢复默认", use_container_width=True):
+            if st.button("恢复默认", width="stretch"):
                 # 只记请求——控件此刻已经创建，不能就地改它们的键
                 st.session_state[_KEY_RESET] = True
                 st.rerun()
@@ -167,56 +168,186 @@ def render(catalog: Catalog) -> None:
             unsafe_allow_html=True,
         )
 
-        components.section_title("存储位置")
-        st.markdown(
-            facts(
-                [
-                    ("偏好", f"数据库 · 归属账号「{user.username}」"),
-                    ("商品数据库", config.display_path(config.products_db_path())),
-                    ("历史数据库", config.display_path(config.database_path())),
-                ]
-            ),
-            unsafe_allow_html=True,
-        )
-        st.write("")
-        components.show_notice(
-            "偏好保存在本机数据库里，**按账号分开存**——你的设置不会影响别人的分析结果。"
-            "它只记录你的偏好，不包含任何个人信息。",
-            "info",
-        )
 
-        components.section_title("AI 设置")
-        mode, detail = state.current_mode()
-        service = ai_service.get_service()
-        st.markdown(
-            facts(
-                [
-                    ("当前模式", mode),
-                    ("说明", detail),
-                    ("模型", service.model if service.configured else "未配置"),
-                    ("密钥", service.describe()["key_hint"]),
-                ]
-            ),
-            unsafe_allow_html=True,
-        )
-        st.write("")
 
-        if service.configured:
-            if st.button("测试连接", use_container_width=False):
-                with st.spinner("正在向模型服务发一次最小请求…"):
-                    ok, message = ai_service.probe()
-                components.show_notice(
-                    ("连接正常：" if ok else "连接失败：") + message,
-                    "ok" if ok else "stop",
-                )
-            st.write("")
-            components.caption(
-                "密钥只从环境变量读取，不会写进代码、日志或导出文件。"
-                "本项目用 httpx 直连 OpenAI 兼容端点，换服务商只需改环境变量。"
+    # --- API 配置（仅管理员） ----------------------------------------------
+    if is_admin(state.current_user()):
+        _render_api_config()
+
+# --------------------------------------------------------------------------
+# API 配置（仅管理员）
+# --------------------------------------------------------------------------
+
+_FLASH_KEY = "zg_api_config_flash"
+
+_KEY_LLM_BASE = "zg_api_llm_base"
+_KEY_LLM_MODEL = "zg_api_llm_model"
+_KEY_LLM_SECRET = "zg_api_llm_secret"
+_KEY_EMB_BASE = "zg_api_emb_base"
+_KEY_EMB_MODEL = "zg_api_emb_model"
+_KEY_EMB_DIM = "zg_api_emb_dim"
+_KEY_EMB_SECRET = "zg_api_emb_secret"
+_INPUT_KEYS = (
+    _KEY_LLM_BASE,
+    _KEY_LLM_MODEL,
+    _KEY_LLM_SECRET,
+    _KEY_EMB_BASE,
+    _KEY_EMB_MODEL,
+    _KEY_EMB_DIM,
+    _KEY_EMB_SECRET,
+)
+
+
+def _flash(message: str, tone: str) -> None:
+    st.session_state[_FLASH_KEY] = (message, tone)
+
+
+def _render_flash() -> None:
+    pending = st.session_state.pop(_FLASH_KEY, None)
+    if pending:
+        components.show_notice(pending[0], pending[1])
+
+
+def _reset_inputs() -> None:
+    for key in _INPUT_KEYS:
+        st.session_state.pop(key, None)
+
+
+def _seed_inputs() -> None:
+    st.session_state.setdefault(_KEY_LLM_BASE, config.llm_base_url())
+    st.session_state.setdefault(_KEY_LLM_MODEL, config.llm_model())
+    st.session_state.setdefault(_KEY_EMB_BASE, config.embedding_base_url())
+    st.session_state.setdefault(_KEY_EMB_MODEL, config.embedding_model())
+    st.session_state.setdefault(_KEY_EMB_DIM, config.embedding_dim())
+    st.session_state.setdefault(_KEY_LLM_SECRET, "")
+    st.session_state.setdefault(_KEY_EMB_SECRET, "")
+
+
+def _save(values: dict[str, object]) -> None:
+    try:
+        api_config.save(values)
+    except ZhigouError as exc:
+        _flash(f"保存失败：{to_user_message(exc)}", "stop")
+        return
+    embeddings.reset_service()
+    _reset_inputs()
+    _flash("已保存。新配置从下一次请求开始生效。", "ok")
+
+
+def _clear() -> None:
+    try:
+        api_config.clear()
+    except ZhigouError as exc:
+        _flash(f"恢复失败：{to_user_message(exc)}", "stop")
+        return
+    embeddings.reset_service()
+    _reset_inputs()
+    _flash("已恢复为环境变量 / 默认配置。", "ok")
+
+
+def _test_llm() -> None:
+    ok, message = ai_service.probe()
+    _flash(("对话模型连接正常：" if ok else "对话模型连接失败：") + message,
+           "ok" if ok else "stop")
+
+
+def _test_embedding() -> None:
+    service = embeddings.get_service()
+    if not service.configured:
+        _flash("未配置向量化密钥，无法测试。", "warn")
+        return
+    try:
+        vectors = service.embed(["连接测试"])
+    except ZhigouError as exc:
+        _flash(f"向量化连接失败：{to_user_message(exc)}", "stop")
+        return
+    except Exception:  # noqa: BLE001
+        _flash("向量化连接失败：出现未预期错误。", "stop")
+        return
+    if not vectors or len(vectors[0]) != config.embedding_dim():
+        _flash("向量化连接失败：返回维度与配置不一致。", "stop")
+        return
+    _flash(f"向量化连接正常：{service.model} · {len(vectors[0])} 维。", "ok")
+
+
+def _render_api_config() -> None:
+    """API 配置（仅管理员调用）：两组服务横向并排，各自独立成卡。"""
+    _render_flash()
+    _seed_inputs()
+    components.section_title("API 配置")
+
+    col_llm, col_emb = st.columns(2, gap="large")
+
+    # --- 对话模型（DeepSeek） --------------------------------------------
+    with col_llm:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="zg-card-title">对话模型</div>',
+                unsafe_allow_html=True,
             )
-        else:
-            components.caption(
-                f"未配置 {config.LLM_API_KEY_ENV}，应用以本地演示模式运行，"
-                "不发起任何网络请求。配置密钥并打开上方的「AI 增强模式」后，"
-                "「智能分析」与「AI 问答」即由 AI 增强。"
+            st.markdown(
+                '<div class="zg-caption" style="margin-bottom:8px">'
+                f"服务商：DeepSeek（OpenAI 兼容）　·　当前密钥："
+                f"{api_config.mask(config.llm_api_key())}</div>",
+                unsafe_allow_html=True,
             )
+            st.text_input("对话端点", key=_KEY_LLM_BASE)
+            st.text_input("对话模型名", key=_KEY_LLM_MODEL)
+            st.text_input(
+                "对话密钥",
+                key=_KEY_LLM_SECRET,
+                type="password",
+                placeholder="留空表示不修改",
+            )
+            if st.button("测试对话连接", width="stretch"):
+                _test_llm()
+                st.rerun()
+
+    # --- 向量化（阿里云百炼） --------------------------------------------
+    with col_emb:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="zg-card-title">向量化</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                '<div class="zg-caption" style="margin-bottom:8px">'
+                f"服务商：阿里云百炼（OpenAI 兼容）　·　当前密钥："
+                f"{api_config.mask(config.embedding_api_key())}</div>",
+                unsafe_allow_html=True,
+            )
+            st.text_input("向量端点", key=_KEY_EMB_BASE)
+            st.text_input("向量模型名", key=_KEY_EMB_MODEL)
+            st.number_input(
+                "向量维度", key=_KEY_EMB_DIM, min_value=64, max_value=8192, step=1
+            )
+            st.text_input(
+                "向量密钥",
+                key=_KEY_EMB_SECRET,
+                type="password",
+                placeholder="留空表示不修改",
+            )
+            if st.button("测试向量连接", width="stretch"):
+                _test_embedding()
+                st.rerun()
+
+    st.write("")
+    save_col, reset_col = st.columns([1, 1])
+    with save_col:
+        if st.button("保存配置", type="primary", width="stretch"):
+            _save(
+                {
+                    "llm_base_url": st.session_state.get(_KEY_LLM_BASE, ""),
+                    "llm_model": st.session_state.get(_KEY_LLM_MODEL, ""),
+                    "llm_api_key": st.session_state.get(_KEY_LLM_SECRET, ""),
+                    "embedding_base_url": st.session_state.get(_KEY_EMB_BASE, ""),
+                    "embedding_model": st.session_state.get(_KEY_EMB_MODEL, ""),
+                    "embedding_dim": st.session_state.get(_KEY_EMB_DIM, 0),
+                    "embedding_api_key": st.session_state.get(_KEY_EMB_SECRET, ""),
+                }
+            )
+            st.rerun()
+    with reset_col:
+        if st.button("恢复为环境变量配置", width="stretch"):
+            _clear()
+            st.rerun()

@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import accounts, database
+from src import database
 from src.auth import ROLE_ADMIN, ROLE_LABELS, ROLE_USER, require_admin
 from src.errors import ZhigouError, to_user_message
 from src.ui import components, state
-from src.ui.theme import facts
+from src.ui.theme import esc, facts
 
 _ROLE_OPTIONS = (ROLE_USER, ROLE_ADMIN)
 
@@ -60,40 +60,19 @@ def render_users(catalog=None) -> None:
 
     components.page_header(
         "用户管理",
-        "新建账号、改角色、重置密码、停用账号。**不提供删除**——"
-        "删掉账号会让他的历史记录失去归属。",
+        "改角色、重置密码、停用或**删除**账号。"
+        "删除会**一并删掉**该账号的历史与收藏且不可恢复——"
+        "只想让它登不进来时，用「停用」更合适。",
     )
 
     _render_flash()
-    _render_create_account(viewer)
+    components.show_notice(
+        "**新账号从注册页自助注册**（注册得到的都是普通用户）。"
+        "需要管理员时，让对方注册后在这里把他的角色改成管理员。",
+        "info",
+    )
     st.divider()
     _render_user_list(viewer)
-
-
-def _render_create_account(viewer) -> None:
-    components.section_title("新建账号")
-
-    with st.form("zg_admin_new_user"):
-        username = st.text_input("用户名", key="zg_admin_new_username")
-        password = st.text_input("初始密码", type="password", key="zg_admin_new_password")
-        role = st.selectbox(
-            "角色",
-            options=list(_ROLE_OPTIONS),
-            format_func=lambda value: ROLE_LABELS.get(value, value),
-            key="zg_admin_new_role",
-        )
-        submitted = st.form_submit_button("创建", type="primary")
-
-    if not submitted:
-        return
-
-    try:
-        accounts.create_account(viewer, username, password, role=role)
-    except ZhigouError as exc:
-        components.show_notice(f"创建失败：{to_user_message(exc)}", "stop")
-        return
-
-    components.show_notice(f"已创建账号「{username}」。", "ok")
 
 
 def _render_user_list(viewer) -> None:
@@ -177,9 +156,47 @@ def _render_user_row(viewer, user) -> None:
                 f"已{'停用' if user.is_active else '启用'}「{user.username}」。",
             )
 
-        # 刻意的缺席：这里**没有**删除账号的按钮。删掉账号之后，他的历史记录
-        # 要么被级联删掉（丢用户数据），要么指向一个不存在的账号（更乱）。
-        components.caption("账号只能停用，不能删除——删除会让历史记录失去归属。")
+        # 自己那一行**不渲染删除入口**，而且不灰按钮：灰掉会被读成「权限不够」，
+        # 而这条规则对谁都一样——是「谁来做都不行」。
+        if viewer is not None and user.username == viewer.username:
+            components.caption(
+                "这是你自己的账号，不显示删除入口——**不能删除自己**。"
+                "如需注销，请让另一位管理员操作。"
+            )
+        else:
+            history_count, favorite_count = database.count_user_data(user.username)
+            components.caption(
+                "删除账号会**一并删掉**它名下的历史与收藏，**不可恢复**。"
+                "如果只是不想让它登进来，用上面的「停用账号」更合适。"
+            )
+            confirmed = st.checkbox(
+                f"我确认删除「{user.username}」"
+                f"（连同 {history_count} 条历史与 {favorite_count} 条收藏）",
+                key=f"zg_admin_del_ok_{user.username}",
+            )
+            if st.button("删除账号", key=f"zg_admin_del_{user.username}"):
+                _delete_account(
+                    viewer, user.username, history_count, favorite_count, confirmed
+                )
+
+
+def _delete_account(
+    viewer, username: str, history_count: int, favorite_count: int, confirmed: bool
+) -> None:
+    """删除账号及其数据。
+
+    确认文案里的条数是**删除前**查出来的，直接用在实际被删掉多少上——
+    两处必须同源，否则提示会跟事实对不上（有测试盯着这一条）。
+    """
+    if not confirmed:
+        _flash("请先勾选确认，再删除账号。", "warn")
+        st.rerun()
+
+    _apply(
+        lambda: database.delete_user(username, viewer=viewer),
+        f"已删除账号「{username}」，一并删掉 {history_count} 条历史与 "
+        f"{favorite_count} 条收藏。",
+    )
 
 
 def _apply(action, success_message: str) -> None:
@@ -259,26 +276,55 @@ def _render_counts(total: int, by_owner: dict[str, int], unowned: int) -> None:
         )
 
 
-def _cell(value: object) -> str:
-    """Markdown 表格里的一个单元格。
+def _delete_entry(entry_id: int, confirmed: bool) -> None:
+    """删掉一条记录（管理员视角：可以删任何人的，含无归属的遗留记录）。
 
-    需求摘要是用户输入来的，里面可能有 `|`——不转义就会把表格撑坏，
-    多出来的那一段会被当成新的一列。
+    未勾选确认时只提示、不删——与历史记录页同一套做法。
+    归属校验在数据层（`delete_analysis` 放行本人与管理员），界面这里只负责提示。
     """
-    return str(value).replace("|", "\\|").replace("\n", " ")
+    if not confirmed:
+        _flash("请先勾选「确认」再删除。", "warn")
+        st.rerun()
+
+    try:
+        deleted = database.delete_analysis(entry_id, viewer=_viewer())
+    except ZhigouError as exc:
+        _flash(to_user_message(exc), "stop")
+        st.rerun()
+
+    _flash(
+        "已删除这条记录。" if deleted else "这条记录不存在，可能已被删除。",
+        "ok" if deleted else "warn",
+    )
+    st.rerun()
 
 
 def _render_entry_table(entries) -> None:
+    """逐行列出记录，每行自带删除入口。
+
+    **原先是一张 Markdown 表格**，但表格里放不了按钮——删除需要控件，
+    所以改成逐行渲染。字段一个没少：归属、时间、摘要、推荐条数都还在。
+    """
     components.section_title("记录明细")
 
-    lines = [
-        "| 归属用户 | 时间 | 需求摘要 | 推荐条数 |",
-        "|---|---|---|---:|",
-    ]
     for entry in entries:
-        lines.append(
-            f"| {_cell(entry.owner_label)} | {_cell(entry.created_at_label)} "
-            f"| {_cell(entry.demand_summary)} | {entry.result_count} |"
-        )
-
-    st.markdown("\n".join(lines))
+        col_main, col_count, col_delete = st.columns([7, 1, 2])
+        with col_main:
+            st.markdown(
+                f'<div class="zg-row-spec" style="margin-bottom:0">'
+                f"<strong>{esc(entry.owner_label)}</strong>"
+                f"　·　{esc(entry.created_at_label)}<br>"
+                f"{esc(entry.demand_summary)}</div>",
+                unsafe_allow_html=True,
+            )
+        with col_count:
+            st.markdown(
+                f'<div style="padding-top:4px">{entry.result_count} 件</div>',
+                unsafe_allow_html=True,
+            )
+        with col_delete:
+            confirmed = st.checkbox(
+                "确认删除", key=f"ov_del_ok_{entry.id}", help="勾选后才能删除这条记录"
+            )
+            if st.button("删除", key=f"ov_del_{entry.id}", width="stretch"):
+                _delete_entry(entry.id, confirmed)

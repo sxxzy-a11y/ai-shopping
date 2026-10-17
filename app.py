@@ -27,6 +27,7 @@ from src.ui.pages import (
     history,
     home,
     knowledge,
+    knowledge_admin,
     login,
     settings as settings_page,
 )
@@ -53,8 +54,6 @@ NAV_ITEMS: list[NavItem] = [
     NavItem("商品比较", ":material/view_column:", compare.render),
     NavItem("AI 问答", ":material/chat:", knowledge.render),
     NavItem("历史记录", ":material/history:", history.render),
-    NavItem("个人设置", ":material/tune:", settings_page.render),
-    NavItem("项目说明", ":material/info:", about.render),
     # 管理员专属。`admin_only` 控制的是**界面可见性**，不是权限本身——
     # 页面入口有一道 `require_admin`，数据层写入口还有一道（design D3）。
     NavItem("用户管理", ":material/group:", admin.render_users, admin_only=True),
@@ -62,6 +61,13 @@ NAV_ITEMS: list[NavItem] = [
     NavItem(
         "商品维护", ":material/inventory_2:", catalog_admin.render, admin_only=True
     ),
+    NavItem(
+        "知识库管理", ":material/library_books:", knowledge_admin.render, admin_only=True
+    ),
+    # 「个人设置」紧挨「项目说明」放在最末两位：它是低频操作，
+    # 且对两种角色都稳定地出现在同一个位置（管理项只影响中间段）。
+    NavItem("个人设置", ":material/tune:", settings_page.render),
+    NavItem("关于", ":material/info:", about.render),
 ]
 
 PAGES: dict[str, callable] = {item.name: item.renderer for item in NAV_ITEMS}
@@ -130,7 +136,7 @@ def _render_sidebar(user: User) -> str:
                 key=f"nav_{item.name}",
                 icon=item.icon,
                 type="primary" if is_active else "secondary",
-                use_container_width=True,
+                width="stretch",
             ):
                 state.request_page(item.name)
                 st.rerun()
@@ -148,7 +154,7 @@ def _render_sidebar(user: User) -> str:
             f"</div>",
             unsafe_allow_html=True,
         )
-        if st.button("登出", icon=":material/logout:", use_container_width=True):
+        if st.button("登出", icon=":material/logout:", width="stretch"):
             state.sign_out()
             st.rerun()
 
@@ -162,8 +168,6 @@ def _render_sidebar(user: User) -> str:
             f'letter-spacing:.4px;margin-bottom:5px">当前模式</div>'
             f'  <div style="font-size:13.5px;font-weight:600;color:{mode_color};'
             f'margin-bottom:4px">{mode}</div>'
-            f'  <div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED};'
-            f'line-height:1.7">{detail}</div>'
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -258,6 +262,19 @@ def main() -> None:
         # **入口短路**：未登录时只渲染登录页并立即返回。
         # 位置很要紧——下面的 `state.get_catalog()` 走不到了，
         # 「未登录不触发任何数据查询」由这个 return 保证（任务 4.1、4.5）。
+        login.render()
+        return
+
+    # 账号可能已经在别处被停用或删除（管理员在另一个标签页操作）。
+    # `require_admin` 与 `current_user` 都只看**会话里那个对象**，不查库——
+    # 所以这里每轮查一次库：失效就登出，不让一个已经不存在的账号继续操作。
+    # 开销是一次本地查询；库读不出来时 `still_valid` 按「仍然有效」处理，
+    # 免得一个只读故障把所有人踢出去。
+    if not accounts.still_valid(user):
+        state.sign_out()
+        components.show_notice(
+            "你的账号已被停用或删除，请重新登录。", "warn"
+        )
         login.render()
         return
 
