@@ -215,6 +215,33 @@ CREATE TABLE IF NOT EXISTS preference_template (
 > `CREATE TABLE IF NOT EXISTS` 对老表是空操作——紧跟其后的
 > `CREATE INDEX ... (user_id, ...)` 会以 `no such column: user_id` 直接失败。
 
+### 3.2.3 删除账号时的级联
+
+`database.delete_user()` 在**一个事务**里依次删四张表：
+
+```
+analysis_history  WHERE user_id = ?
+favorites         WHERE user_id = ?
+user_preferences  WHERE user_id = ?
+users             WHERE username = ?
+```
+
+**为什么不用外键 `ON DELETE CASCADE`**：这三张表的 `user_id` 都是普通 TEXT 列，
+**没有被 `FOREIGN KEY` 约束住**。想享受级联删除就得先给它们加上外键，
+而 SQLite 改不了已有表的约束——只能重建表。为了让库替我们删三行而重建三张表，
+代价远大于写四条 DELETE。
+
+**为什么必须在一个事务里**：删了历史却没删掉账号（或反过来）会留下**半删状态**——
+账号没了数据还在，或者数据没了账号还在。这类中间态最难排查。
+
+> ⚠️ 这里**不需要**显式 `BEGIN`，而迁移那段需要。区别在语句类型：
+> `DELETE` 是 DML，Python 的 `sqlite3` 会在第一条 DML 之前隐式开启事务；
+> 而 `ALTER TABLE` / `CREATE INDEX` 是 DDL，**不会**自动开事务。
+> 两处写法不同不是疏忽。
+
+删除记录（`delete_analysis`）只动 `analysis_history` 一行，同样在一个事务里；
+归属校验（本人或管理员）在数据层入口，界面上的判断只是提示。
+
 ### 3.3 字段说明
 
 | 字段 | 类型 | 说明 |
