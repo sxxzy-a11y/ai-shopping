@@ -101,16 +101,18 @@ def _configure_logging() -> None:
 def _render_brand() -> None:
     """侧栏顶部的品牌块。"""
     st.markdown(
-        f'<div style="display:flex;align-items:center;gap:11px;padding:6px 2px 16px 2px">'
-        f'  <div style="width:38px;height:38px;border-radius:10px;flex-shrink:0;'
-        f'background:{theme.BRAND};display:flex;align-items:center;'
-        f'justify-content:center;color:#fff">'
-        f"{icons.icon('sparkles', size=21, color='#ffffff')}</div>"
+        f'<div style="display:flex;align-items:center;gap:11px;'
+        f'padding:8px 2px 14px 2px;margin-bottom:8px;'
+        f'border-bottom:1px solid rgba(242,238,228,.10)">'
+        f'  <div style="width:38px;height:38px;border-radius:2px;flex-shrink:0;'
+        f'background:{theme.BRAND_SOLID};display:flex;align-items:center;'
+        f'justify-content:center;color:{theme.ON_BRAND}">'
+        f"{icons.icon('sparkles', size=21, color=theme.ON_BRAND)}</div>"
         f'  <div style="min-width:0">'
-        f'    <div style="font-size:17px;font-weight:700;color:#fff;'
-        f'letter-spacing:.2px;line-height:1.25">智购参谋</div>'
-        f'    <div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED};'
-        f'margin-top:1px">AI 消费决策助手</div>'
+        f'    <div style="font-family:{theme.SERIF};font-size:19px;font-weight:600;'
+        f'color:{theme.SIDEBAR_TEXT};letter-spacing:.04em;line-height:1.25">智购参谋</div>'
+        f'    <div style="font-size:11px;color:{theme.SIDEBAR_MUTED};'
+        f'letter-spacing:.06em;margin-top:2px">AI 消费决策助手</div>'
         f"  </div>"
         f"</div>",
         unsafe_allow_html=True,
@@ -147,7 +149,7 @@ def _render_sidebar(user: User) -> str:
             f'<div style="padding:0 2px">'
             f'  <div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED};'
             f'letter-spacing:.4px;margin-bottom:5px">当前账号</div>'
-            f'  <div style="font-size:13.5px;font-weight:600;color:#fff;'
+            f'  <div style="font-size:13.5px;font-weight:600;color:{theme.SIDEBAR_TEXT};'
             f'margin-bottom:4px">{user.username}</div>'
             f'  <div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED}">'
             f"{user.role_label}</div>"
@@ -161,7 +163,7 @@ def _render_sidebar(user: User) -> str:
         st.divider()
 
         mode, detail = state.current_mode()
-        mode_color = "#7FD1A6" if mode == "AI 增强模式" else theme.SIDEBAR_MUTED
+        mode_color = "#9CC7AC" if mode == "AI 增强模式" else theme.SIDEBAR_MUTED
         st.markdown(
             f'<div style="padding:0 2px">'
             f'  <div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED};'

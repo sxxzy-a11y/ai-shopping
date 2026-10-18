@@ -7,7 +7,8 @@
 1. `.streamlit/config.toml` 的官方 `[theme]` —— 最稳，跨版本可用。
 2. 标准 HTML 标签与稳定类名（`label`、`button[kind]`、`.stButton`）上的自定义
    样式 —— 这些不是 Streamlit 生成的哈希类名，改版不会失效。
-3. 少量 `[data-testid="..."]` 选择器 —— **只有深色侧栏这一处**。
+3. 少量 `[data-testid="..."]` 选择器 —— 深色侧栏、折叠面板、表单、带边框容器、
+   数据表格等 Streamlit 没有官方 API 的部件。**侧栏底色仍然是其中最要紧的一处**。
 
 关于第 3 层的说明
 -----------------
@@ -19,7 +20,9 @@ Streamlit 没有官方 API 能改侧栏底色，只能用 `[data-testid="stSideb
 - `tests/test_app.py` 里有一条断言检查侧栏确实是深色 —— 将来升级把它改坏了，
   测试会失败，而不是悄悄退化成浅色
 
-绝不使用 `st-emotion-cache-*` 这类哈希类名：那是每次发版都会变的东西。
+控件样式尽量走 `data-baseweb`、`button[kind]` 和标准标签；只有确实没有官方
+入口时才加一条 `data-testid`。绝不使用 `st-emotion-cache-*` 这类哈希类名：
+那是每次发版都会变的东西。
 
 图标分工
 --------
@@ -36,51 +39,76 @@ import html
 # 色彩令牌
 # --------------------------------------------------------------------------
 
-# 品牌深蓝：侧栏底色
-NAVY_900 = "#0F2942"
-NAVY_800 = "#16324F"
+# 深色侧栏：从品牌深蓝换成登录页同源的暖黑
+NAVY_900 = "#171714"
+NAVY_800 = "#201F1B"
+SIDEBAR_TEXT = "#F4F0E6"
+ON_NAVY = "#D8D2C4"        # 深色侧栏上的次级文字
+SIDEBAR_MUTED = "#9A9385"  # 深色侧栏上的弱化文字
 
-# 主操作色
-BRAND = "#2563EB"
-BRAND_DARK = "#1D4ED8"
-BRAND_50 = "#EFF4FF"
-BRAND_100 = "#DCE7FF"
+# 主操作色：深琥珀用于文字/图标，亮琥珀用于按钮与选中态
+BRAND = "#A86412"
+BRAND_SOLID = "#D3923C"
+BRAND_DARK = "#C07F2A"
+BRAND_50 = "#F6EBD9"
+BRAND_100 = "#EAD8BC"
+ON_BRAND = "#1D1407"
 
-# 页面与卡片
-BG = "#F7F9FC"
-SURFACE = "#FFFFFF"
-LINE = "#E4E7EC"
-LINE_SOFT = "#F0F2F5"
+# 页面与卡片：参考站浅色模式的暖纸色
+BG = "#F5F3EE"
+SURFACE = "#FFFEFA"
+SURFACE_ALT = "#FBF8F1"
+LINE = "#E1DACD"
+LINE_SOFT = "#EFEAE0"
 
 # 文字
-INK = "#101828"
-INK_SOFT = "#667085"
-INK_FAINT = "#98A2B3"
-ON_NAVY = "#C3D0E0"       # 深色侧栏上的次级文字
-SIDEBAR_MUTED = "#8296AD"  # 深色侧栏上的弱化文字
+INK = "#1F1D18"
+INK_SOFT = "#6F6A5E"
+INK_FAINT = "#7C766A"
 
-# 语义色（前缀 _BG 为浅底，无后缀为前景）
-OK = "#12B76A"
-OK_BG = "#ECFDF3"
-WARN = "#F79009"
-WARN_BG = "#FFFAEB"
-DANGER = "#F04438"
-DANGER_BG = "#FEF3F2"
-INFO = "#175CD3"
-INFO_BG = "#EFF8FF"
-STAR = "#F59E0B"
+# 语义色（统一暖化，避免蓝绿和暖琥珀打架）
+OK = "#2F7D5B"
+OK_BG = "#EAF3ED"
+WARN = "#B26A00"
+WARN_BG = "#FBF1E2"
+DANGER = "#B23A2E"
+DANGER_BG = "#F8E9E6"
+INFO = "#5D5A52"
+INFO_BG = "#F0EDE6"
+STAR = "#B8791F"
+
+# 字体：标题宋体，正文苹方/雅黑
+SERIF = "'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', 'STSong', 'SimSun', '宋体', serif"
+SANS = "'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif"
 
 #: 卡片阴影。克制的一层，不用大扩散。
-SHADOW = "0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06)"
+SHADOW = "0 1px 2px rgba(31,29,24,.035), 0 2px 10px rgba(31,29,24,.035)"
 
 _STYLES = f"""
 <style>
+  /* ===================================================================
+     全局底子：登录页 / 工作台两种底色，共用同一套暖色与字体
+     ===================================================================
+     没有侧栏 = 登录页还没渲染完或未登录：保持暖黑，避免先闪一块浅色。
+     有侧栏 = 已进入工作台：换成暖纸色。 */
+  [data-testid="stAppViewContainer"] {{
+    font-family: {SANS};
+    background: #161511;
+  }}
+  [data-testid="stAppViewContainer"]:has([data-testid="stSidebar"]) {{
+    background:
+      radial-gradient(1200px 520px at 88% -8%, rgba(211, 146, 60, .065), transparent 62%),
+      radial-gradient(900px 500px at -6% 105%, rgba(120, 100, 70, .045), transparent 60%),
+      {BG};
+  }}
+  [data-testid="stAppViewContainer"] a {{ color: {BRAND}; }}
+
   /* ===================================================================
      侧栏（唯一使用 data-testid 的地方，见模块 docstring）
      =================================================================== */
   [data-testid="stSidebar"] {{
     background: {NAVY_900};
-    border-right: none;
+    border-right: 1px solid rgba(242, 238, 228, .10);
   }}
   [data-testid="stSidebar"] > div:first-child {{ background: transparent; }}
   [data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {{
@@ -106,26 +134,32 @@ _STYLES = f"""
     box-shadow: none;
     color: {ON_NAVY};
     font-weight: 500;
-    padding: 9px 12px;
-    border-radius: 9px;
-    min-height: 40px;
-    transition: background .14s ease, color .14s ease;
+    padding: 9px 11px;
+    border-radius: 4px;
+    min-height: 38px;
+    transition: background .16s ease, color .16s ease;
   }}
   [data-testid="stSidebar"] .stButton > button p {{
     color: inherit;
-    font-size: 14.5px;
+    font-size: 13.5px;
+    letter-spacing: .01em;
   }}
   [data-testid="stSidebar"] .stButton > button:hover {{
-    background: rgba(255,255,255,.08);
-    color: #FFFFFF;
+    background: rgba(242, 238, 228, .07);
+    color: {SIDEBAR_TEXT};
   }}
-  /* 当前页：用官方 primary 按钮态，颜色来自 config.toml 的 primaryColor */
+  /* 当前页：亮琥珀底 + 深色字，和登录页主按钮同源 */
   [data-testid="stSidebar"] .stButton > button[kind="primary"] {{
-    background: {BRAND};
-    color: #FFFFFF;
+    background: {BRAND_SOLID};
+    color: {ON_BRAND};
+  }}
+  [data-testid="stSidebar"] .stButton > button[kind="primary"] p,
+  [data-testid="stSidebar"] .stButton > button[kind="primary"] span {{
+    color: {ON_BRAND};
   }}
   [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {{
     background: {BRAND_DARK};
+    color: {ON_BRAND};
   }}
   /* 侧栏内按钮之间收紧间距 */
   [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{ gap: .25rem; }}
@@ -133,13 +167,19 @@ _STYLES = f"""
   /* ===================================================================
      页头
      =================================================================== */
-  .zg-hero {{ margin: 2px 0 20px 0; }}
+  .zg-hero {{ margin: 0 0 22px 0; }}
   .zg-hero h1 {{
-    font-size: 27px; font-weight: 700; color: {INK};
-    margin: 0 0 7px 0; letter-spacing: -.2px; line-height: 1.3;
+    position: relative; padding-top: 15px;
+    font-family: {SERIF};
+    font-size: 32px; font-weight: 600; color: {INK};
+    margin: 0 0 8px 0; letter-spacing: -.4px; line-height: 1.28;
+  }}
+  .zg-hero h1::before {{
+    content: ""; position: absolute; left: 1px; top: 0;
+    width: 26px; height: 1px; background: {BRAND_SOLID};
   }}
   .zg-hero p {{
-    color: {INK_SOFT}; font-size: 14.5px; margin: 0; line-height: 1.75;
+    color: {INK_SOFT}; font-size: 14px; margin: 0; line-height: 1.75;
     max-width: 880px;
   }}
   .zg-hero-row {{
@@ -151,34 +191,40 @@ _STYLES = f"""
      区块标题
      =================================================================== */
   .zg-section {{
-    display: flex; align-items: center; gap: 8px;
-    font-size: 16.5px; font-weight: 650; color: {INK};
-    margin: 26px 0 13px 0;
+    display: flex; align-items: center; gap: 10px;
+    font-family: {SERIF};
+    font-size: 19px; font-weight: 600; color: {INK};
+    margin: 28px 0 13px 0; letter-spacing: .01em;
+  }}
+  .zg-section::before {{
+    content: ""; width: 12px; height: 1px; background: {BRAND_SOLID};
+    flex-shrink: 0;
   }}
   .zg-section .zg-count {{
-    font-size: 12.5px; font-weight: 500; color: {INK_SOFT};
-    background: {LINE_SOFT}; padding: 1px 9px; border-radius: 999px;
+    font-family: {SANS};
+    font-size: 12px; font-weight: 500; color: {INK_SOFT};
+    background: {LINE_SOFT}; padding: 1px 8px; border-radius: 3px;
   }}
-  .zg-caption {{ color: {INK_SOFT}; font-size: 13.5px; line-height: 1.75; }}
-  .zg-muted {{ color: {INK_FAINT}; font-size: 12.5px; }}
+  .zg-caption {{ color: {INK_SOFT}; font-size: 13px; line-height: 1.75; }}
+  .zg-muted {{ color: {INK_FAINT}; font-size: 12px; }}
 
   /* ===================================================================
      卡片
      =================================================================== */
   .zg-card {{
-    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
+    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 4px;
     padding: 18px 20px; margin-bottom: 12px;
     box-shadow: {SHADOW};
   }}
   .zg-card.is-flat {{ box-shadow: none; }}
-  .zg-card.is-accent {{ border-left: 3px solid {BRAND}; }}
-  .zg-card.is-warn {{ border-left: 3px solid {WARN}; }}
+  .zg-card.is-accent {{ border-left: 2px solid {BRAND_SOLID}; }}
+  .zg-card.is-warn {{ border-left: 2px solid {WARN}; }}
   .zg-card-head {{
     display: flex; justify-content: space-between; align-items: flex-start;
     gap: 16px; margin-bottom: 12px;
   }}
   .zg-card-title {{
-    font-size: 15.5px; font-weight: 650; color: {INK}; margin: 0 0 3px 0;
+    font-size: 15px; font-weight: 600; color: {INK}; margin: 0 0 3px 0;
   }}
   .zg-card-sub {{ color: {INK_SOFT}; font-size: 13px; }}
 
@@ -186,7 +232,7 @@ _STYLES = f"""
      商品行的图标块（类别占位图）
      =================================================================== */
   .zg-thumb {{
-    width: 52px; height: 52px; border-radius: 11px; flex-shrink: 0;
+    width: 52px; height: 52px; border-radius: 3px; flex-shrink: 0;
     background: {BRAND_50}; border: 1px solid {BRAND_100};
     display: flex; align-items: center; justify-content: center;
     color: {BRAND};
@@ -194,11 +240,11 @@ _STYLES = f"""
        下面垫着的图标就露出来了——不需要 JS 回调整理状态。 */
     position: relative; overflow: hidden;
   }}
-  .zg-thumb.is-lg {{ width: 62px; height: 62px; border-radius: 13px; }}
+  .zg-thumb.is-lg {{ width: 62px; height: 62px; border-radius: 4px; }}
   .zg-thumb img {{
     position: absolute; inset: 0;
     width: 100%; height: 100%; object-fit: cover;
-    background: #fff;
+    background: {SURFACE};
   }}
 
   /* ===================================================================
@@ -207,7 +253,8 @@ _STYLES = f"""
   .zg-row {{ display: flex; gap: 14px; align-items: flex-start; }}
   .zg-row-main {{ flex: 1; min-width: 0; }}
   .zg-row-name {{
-    font-size: 15.5px; font-weight: 650; color: {INK};
+    font-family: {SERIF};
+    font-size: 16.5px; font-weight: 600; color: {INK};
     margin: 0 0 4px 0; line-height: 1.4;
   }}
   .zg-row-spec {{
@@ -215,7 +262,8 @@ _STYLES = f"""
     margin-bottom: 8px;
   }}
   .zg-price {{
-    font-size: 18px; font-weight: 700; color: {INK};
+    font-family: {SERIF};
+    font-size: 17px; font-weight: 600; color: {INK};
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }}
   .zg-price small {{ font-size: 12px; font-weight: 400; color: {INK_SOFT}; }}
@@ -229,8 +277,9 @@ _STYLES = f"""
 
   /* 排名角标 */
   .zg-rank {{
-    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
-    background: {BRAND}; color: #fff; font-size: 12.5px; font-weight: 700;
+    width: 22px; height: 22px; border-radius: 2px; flex-shrink: 0;
+    background: {BRAND_SOLID}; color: {ON_BRAND};
+    font-family: {SERIF}; font-size: 13px; font-weight: 600;
     display: flex; align-items: center; justify-content: center;
     margin-top: 15px;
   }}
@@ -241,7 +290,7 @@ _STYLES = f"""
      =================================================================== */
   .zg-chip {{
     display: inline-flex; align-items: center; gap: 4px;
-    padding: 2px 9px; border-radius: 6px;
+    padding: 2px 8px; border-radius: 3px;
     font-size: 12px; font-weight: 500; white-space: nowrap;
   }}
   .zg-chip-ok      {{ background: {OK_BG};     color: {OK}; }}
@@ -252,7 +301,7 @@ _STYLES = f"""
   .zg-chip-neutral {{ background: {LINE_SOFT}; color: {INK_SOFT}; }}
 
   /* 可选中的品牌标签（设置页） */
-  .zg-chip-lg {{ padding: 6px 14px; border-radius: 8px; font-size: 13.5px; }}
+  .zg-chip-lg {{ padding: 6px 12px; border-radius: 3px; font-size: 13px; }}
 
   /* ===================================================================
      评分条
@@ -268,9 +317,9 @@ _STYLES = f"""
     font-weight: 650; color: {INK}; font-variant-numeric: tabular-nums;
   }}
   .zg-bar {{
-    height: 6px; background: {LINE_SOFT}; border-radius: 3px; overflow: hidden;
+    height: 6px; background: {LINE_SOFT}; border-radius: 2px; overflow: hidden;
   }}
-  .zg-bar-fill {{ height: 6px; border-radius: 3px; background: {BRAND}; }}
+  .zg-bar-fill {{ height: 6px; border-radius: 2px; background: {BRAND_SOLID}; }}
   .zg-dim-reason {{
     font-size: 12.5px; color: {INK_SOFT}; margin-top: 4px; line-height: 1.65;
   }}
@@ -280,14 +329,14 @@ _STYLES = f"""
      =================================================================== */
   .zg-stars {{ display: inline-flex; gap: 1.5px; vertical-align: middle; }}
   .zg-star-on  {{ color: {STAR}; }}
-  .zg-star-off {{ color: {LINE}; }}
+  .zg-star-off {{ color: #D8D0C0; }}
 
   /* ===================================================================
      状态提示条
      =================================================================== */
   .zg-notice {{
     display: flex; gap: 10px; align-items: flex-start;
-    border-radius: 10px; padding: 12px 15px; margin-bottom: 10px;
+    border-radius: 3px; padding: 12px 15px; margin-bottom: 10px;
     font-size: 13.5px; line-height: 1.75;
   }}
   .zg-notice .zg-notice-icon {{ flex-shrink: 0; margin-top: 2px; }}
@@ -330,7 +379,7 @@ _STYLES = f"""
      这里只在整条上给一层白底，格子之间不加任何框。 */
   .zg-statstrip {{
     display: grid; grid-template-columns: repeat(4, 1fr);
-    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
+    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 4px;
     box-shadow: {SHADOW}; overflow: hidden;
   }}
   .zg-stat {{
@@ -340,12 +389,13 @@ _STYLES = f"""
   }}
   .zg-stat:last-child {{ border-right: none; }}
   .zg-stat-icon {{
-    width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+    width: 38px; height: 38px; border-radius: 3px; flex-shrink: 0;
     background: {BRAND_50}; color: {BRAND};
     display: flex; align-items: center; justify-content: center;
   }}
   .zg-stat-value {{
-    font-size: 25px; font-weight: 700; color: {INK};
+    font-family: {SERIF};
+    font-size: 26px; font-weight: 600; color: {INK};
     line-height: 1.1; font-variant-numeric: tabular-nums;
   }}
   .zg-stat-label {{ font-size: 12.5px; color: {INK_SOFT}; margin-top: 2px; }}
@@ -360,16 +410,17 @@ _STYLES = f"""
      功能卡（首页「快速开始」）
      =================================================================== */
   .zg-feature {{
-    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
+    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 4px;
     padding: 18px; box-shadow: {SHADOW}; height: 100%;
   }}
   .zg-feature-icon {{
-    width: 40px; height: 40px; border-radius: 10px; background: {BRAND_50};
+    width: 40px; height: 40px; border-radius: 3px; background: {BRAND_50};
     color: {BRAND}; display: flex; align-items: center; justify-content: center;
     margin-bottom: 12px;
   }}
   .zg-feature-title {{
-    font-size: 15px; font-weight: 650; color: {INK}; margin-bottom: 5px;
+    font-family: {SERIF};
+    font-size: 16px; font-weight: 600; color: {INK}; margin-bottom: 5px;
   }}
   .zg-feature-desc {{ font-size: 13px; color: {INK_SOFT}; line-height: 1.7; }}
 
@@ -383,7 +434,8 @@ _STYLES = f"""
     align-items: center; justify-content: center;
   }}
   .zg-ring-num {{
-    font-size: 20px; font-weight: 700; color: {INK}; line-height: 1;
+    font-family: {SERIF};
+    font-size: 21px; font-weight: 600; color: {INK}; line-height: 1;
     font-variant-numeric: tabular-nums;
   }}
   .zg-ring-unit {{ font-size: 10.5px; color: {INK_FAINT}; margin-top: 1px; }}
@@ -409,19 +461,21 @@ _STYLES = f"""
     padding-bottom: 6px;
   }}
   .zg-compare-cell {{
-    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
+    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 4px;
     padding: 16px 14px; box-shadow: {SHADOW};
     display: flex; flex-direction: column; align-items: center;
     text-align: center; gap: 0;
   }}
   .zg-compare-name {{
-    font-size: 14.5px; font-weight: 650; color: {INK};
+    font-family: {SERIF};
+    font-size: 15px; font-weight: 600; color: {INK};
     line-height: 1.45; margin: 11px 0 3px 0;
     word-break: break-word;
   }}
   .zg-compare-brand {{ font-size: 12px; color: {INK_SOFT}; line-height: 1.5; }}
   .zg-compare-price {{
-    font-size: 18px; font-weight: 700; color: {INK};
+    font-family: {SERIF};
+    font-size: 17px; font-weight: 600; color: {INK};
     margin: 9px 0 7px 0; font-variant-numeric: tabular-nums;
   }}
   .zg-compare-score {{
@@ -439,7 +493,7 @@ _STYLES = f"""
     gap: 12px;
   }}
   .zg-proscons-card {{
-    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 12px;
+    background: {SURFACE}; border: 1px solid {LINE}; border-radius: 4px;
     padding: 16px 18px; box-shadow: {SHADOW};
   }}
   .zg-proscons-title {{
@@ -457,7 +511,7 @@ _STYLES = f"""
      数据来源脚注
      =================================================================== */
   .zg-source {{
-    font-size: 12px; color: {INK_FAINT}; margin-top: 13px;
+    font-size: 11.5px; color: {INK_FAINT}; margin-top: 13px;
     padding-top: 11px; border-top: 1px dashed {LINE};
     line-height: 1.65;
   }}
@@ -466,7 +520,7 @@ _STYLES = f"""
      空状态
      =================================================================== */
   .zg-empty {{
-    border: 1px dashed {LINE}; border-radius: 12px;
+    border: 1px dashed {LINE}; border-radius: 4px;
     padding: 40px 22px; text-align: center; color: {INK_SOFT};
     background: {SURFACE}; font-size: 14px; line-height: 1.85;
   }}
@@ -478,10 +532,102 @@ _STYLES = f"""
   .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; }}
   [data-testid="stMainBlockContainer"] {{ max-width: 1280px; }}
 
-  /* 收起 Streamlit 默认的输入框描边，统一成我们的线色 */
-  [data-baseweb="input"], [data-baseweb="select"] > div, [data-baseweb="textarea"] {{
-    border-radius: 9px !important;
+  /* ===================================================================
+     主区控件：按钮、输入、折叠面板、Tab、表单、表格
+     ===================================================================
+     只作用于主区（stMain），侧栏在上一节有自己的深色样式。 */
+  [data-testid="stMain"] .stButton > button,
+  [data-testid="stMain"] [data-testid="stBaseButton-secondaryFormSubmit"] {{
+    border-radius: 2px !important;
+    border: 1px solid {LINE} !important;
+    background: {SURFACE} !important;
+    color: {INK} !important;
+    font-weight: 500;
+    letter-spacing: .02em;
+    transition: border-color .16s ease, color .16s ease, background .16s ease;
   }}
+  [data-testid="stMain"] .stButton > button:hover,
+  [data-testid="stMain"] [data-testid="stBaseButton-secondaryFormSubmit"]:hover {{
+    border-color: {BRAND_SOLID} !important;
+    color: {BRAND} !important;
+    background: {SURFACE_ALT} !important;
+  }}
+  [data-testid="stMain"] .stButton > button[kind="primary"],
+  [data-testid="stMain"] [data-testid="stBaseButton-primaryFormSubmit"] {{
+    background: {BRAND_SOLID} !important;
+    border: 1px solid {BRAND_SOLID} !important;
+    color: {ON_BRAND} !important;
+    border-radius: 2px !important;
+    font-weight: 600;
+  }}
+  [data-testid="stMain"] .stButton > button[kind="primary"]:hover,
+  [data-testid="stMain"] [data-testid="stBaseButton-primaryFormSubmit"]:hover {{
+    background: {BRAND_DARK} !important;
+    border-color: {BRAND_DARK} !important;
+    color: {ON_BRAND} !important;
+  }}
+
+  /* 输入框：暖白底 + 发丝边，聚焦时琥珀描边 */
+  [data-baseweb="input"], [data-baseweb="select"] > div, [data-baseweb="textarea"] {{
+    border-radius: 3px !important;
+    background: {SURFACE} !important;
+    border: 1px solid {LINE} !important;
+  }}
+  [data-baseweb="input"]:focus-within,
+  [data-baseweb="select"] > div:focus-within,
+  [data-baseweb="textarea"]:focus-within {{
+    border-color: {BRAND_SOLID} !important;
+    box-shadow: 0 0 0 1px rgba(211, 146, 60, .25) !important;
+  }}
+
+  /* 折叠面板：与卡片同一套发丝边 */
+  [data-testid="stExpander"] {{
+    border: 1px solid {LINE} !important;
+    border-radius: 4px !important;
+    background: {SURFACE};
+    overflow: hidden;
+  }}
+  [data-testid="stExpander"] summary {{
+    color: {INK} !important;
+    font-size: 13.5px;
+  }}
+  [data-testid="stExpander"] summary:hover {{ color: {BRAND} !important; }}
+
+  /* Tab：去掉默认蓝条，换成琥珀短发丝 */
+  [data-baseweb="tab-list"] {{
+    gap: 4px;
+    border-bottom: 1px solid {LINE};
+  }}
+  [data-baseweb="tab"] {{
+    font-size: 13.5px; color: {INK_SOFT};
+  }}
+  [data-baseweb="tab"][aria-selected="true"] {{ color: {INK}; }}
+  [data-baseweb="tab-highlight"] {{
+    background: {BRAND_SOLID} !important;
+    height: 2px !important;
+  }}
+
+  /* 表单与带边框容器 */
+  [data-testid="stForm"] {{
+    border: 1px solid {LINE};
+    border-radius: 4px;
+    background: {SURFACE};
+    padding: 18px 18px 8px 18px;
+  }}
+  [data-testid="stVerticalBlockBorderWrapper"] {{
+    border-color: {LINE} !important;
+    border-radius: 4px !important;
+    background: {SURFACE};
+  }}
+
+  /* 表格容器 */
+  [data-testid="stDataFrame"] {{
+    border: 1px solid {LINE};
+    border-radius: 4px;
+    overflow: hidden;
+  }}
+  [data-testid="stAlert"] {{ border-radius: 3px; }}
+  [data-testid="stMain"] hr {{ border-color: {LINE_SOFT}; }}
 </style>
 """
 

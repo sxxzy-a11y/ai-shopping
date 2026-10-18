@@ -6,14 +6,15 @@
 # 不触碰 st-emotion-cache-* 这类发版就会变的哈希类名。
 
 [theme]
-# 主操作色（也是侧栏当前页按钮的底色）
-primaryColor = "#2563EB"
-# 页面底色：浅灰，让白色卡片浮起来
-backgroundColor = "#F7F9FC"
-# 控件底色：纯白，在浅灰页面上仍清晰
-secondaryBackgroundColor = "#FFFFFF"
+# 主操作色：与登录页一致的琥珀
+primaryColor = "#D3923C"
+# 页面底色：暖纸色，让暖白卡片浮起来
+# 未登录时 theme.py 会把主容器在登录页渲染前压成暖黑，避免浅色骨架停留太久。
+backgroundColor = "#F5F3EE"
+# 控件底色：暖白，在纸色页面上仍清晰
+secondaryBackgroundColor = "#FFFEFA"
 # 正文色
-textColor = "#101828"
+textColor = "#1F1D18"
 font = "sans serif"
 
 [server]
