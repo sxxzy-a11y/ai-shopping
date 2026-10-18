@@ -80,6 +80,7 @@ STAR = "#B8791F"
 # 字体：标题宋体，正文苹方/雅黑
 SERIF = "'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', 'STSong', 'SimSun', '宋体', serif"
 SANS = "'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif"
+MONO = "'Cascadia Mono', 'SF Mono', 'Consolas', 'Liberation Mono', monospace"
 
 #: 卡片阴影。克制的一层，不用大扩散。
 SHADOW = "0 1px 2px rgba(31,29,24,.035), 0 2px 10px rgba(31,29,24,.035)"
@@ -201,12 +202,167 @@ _STYLES = f"""
     flex-shrink: 0;
   }}
   .zg-section .zg-count {{
-    font-family: {SANS};
-    font-size: 12px; font-weight: 500; color: {INK_SOFT};
+    font-family: {MONO};
+    font-size: 11px; font-weight: 500; color: {INK_SOFT};
     background: {LINE_SOFT}; padding: 1px 8px; border-radius: 3px;
   }}
   .zg-caption {{ color: {INK_SOFT}; font-size: 13px; line-height: 1.75; }}
   .zg-muted {{ color: {INK_FAINT}; font-size: 12px; }}
+
+  /* ===================================================================
+     决策台：masthead / 编号脚注 / verdict
+     =================================================================== */
+  .zg-kicker {{
+    font-family: {MONO}; font-size: 10px; letter-spacing: .18em;
+    text-transform: uppercase; color: {BRAND};
+  }}
+  .zg-hero-kicker {{
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    font-family: {MONO}; font-size: 10px; letter-spacing: .16em;
+    text-transform: uppercase; color: {BRAND};
+    padding-bottom: 9px; margin-bottom: 12px; border-bottom: 1px solid {LINE};
+  }}
+  .zg-hero-kicker .zg-hero-status {{
+    color: {INK_FAINT}; letter-spacing: .08em;
+  }}
+
+  .zg-home-masthead {{
+    position: relative; overflow: hidden;
+    margin: 0 0 26px 0; padding: 26px 30px 24px;
+    border-radius: 4px; color: {SIDEBAR_TEXT};
+    background:
+      radial-gradient(70% 130% at 86% 0%, rgba(211, 146, 60, .18), transparent 60%),
+      #171714;
+    border: 1px solid rgba(242, 238, 228, .08);
+  }}
+  .zg-masthead-top {{
+    display: flex; justify-content: space-between; align-items: center; gap: 20px;
+    font-family: {MONO}; font-size: 10px; letter-spacing: .18em;
+    color: #9A9385; padding-bottom: 12px;
+    border-bottom: 1px solid rgba(242, 238, 228, .14);
+  }}
+  .zg-masthead-top b {{ color: #D3923C; font-weight: 500; }}
+  .zg-masthead-top .zg-chip {{
+    background: rgba(242, 238, 228, .06) !important;
+    color: #D8D2C4 !important;
+    border: 1px solid rgba(242, 238, 228, .14);
+  }}
+  .zg-masthead-title {{
+    margin: 26px 0 12px 0;
+    font-family: {SERIF}; font-size: 54px; font-weight: 600;
+    line-height: 1.02; letter-spacing: -1.2px; color: #F4F0E6;
+  }}
+  .zg-masthead-sub {{
+    margin: 0; max-width: 760px;
+    color: #B5B0A5; font-size: 14px; line-height: 1.85;
+  }}
+  .zg-masthead-steps {{
+    display: flex; flex-wrap: wrap; gap: 10px 30px;
+    margin-top: 24px; padding-top: 14px;
+    border-top: 1px solid rgba(242, 238, 228, .14);
+    font-family: {MONO}; font-size: 10.5px; letter-spacing: .08em; color: #9A9385;
+  }}
+  .zg-masthead-steps b {{
+    color: #D3923C; font-weight: 500; margin-right: 7px;
+  }}
+
+  .zg-rail-note {{
+    display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px;
+    padding: 13px 0; border-top: 1px solid {LINE};
+  }}
+  .zg-rail-note:last-child {{ border-bottom: 1px solid {LINE}; }}
+  .zg-rail-index {{
+    font-family: {MONO}; font-size: 10.5px; color: {BRAND}; padding-top: 3px;
+  }}
+  .zg-rail-note b {{
+    display: block; font-family: {SERIF};
+    font-size: 15.5px; font-weight: 600; color: {INK};
+  }}
+  .zg-rail-note p {{
+    margin: 4px 0 0; font-size: 12.5px; line-height: 1.7; color: {INK_SOFT};
+  }}
+
+  .zg-brief-label {{
+    display: flex; align-items: center; gap: 10px;
+    margin: 0 0 8px 0;
+    font-family: {MONO}; font-size: 10px; letter-spacing: .16em;
+    text-transform: uppercase; color: {BRAND};
+  }}
+  .zg-brief-label::after {{
+    content: ""; flex: 1; height: 1px; background: {LINE};
+  }}
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.zg-brief-label) {{
+    border-left: 2px solid {BRAND_SOLID} !important;
+  }}
+
+  .zg-card.zg-dossier {{ border-left: 2px solid {BRAND_SOLID}; }}
+  .zg-card.zg-dossier .zg-fact-key {{
+    font-family: {MONO}; font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  }}
+
+  .zg-verdict {{
+    position: relative; overflow: hidden;
+    margin: 4px 0 20px 0; padding: 20px 22px 18px;
+    border-radius: 4px; color: #F4F0E6;
+    background:
+      radial-gradient(80% 140% at 85% 0%, rgba(211, 146, 60, .16), transparent 60%),
+      #171714;
+    border-top: 1px solid rgba(211, 146, 60, .75);
+  }}
+  .zg-verdict-kicker {{
+    font-family: {MONO}; font-size: 9.5px; letter-spacing: .2em;
+    text-transform: uppercase; color: #D3923C;
+  }}
+  .zg-verdict-main {{
+    display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 20px; margin-top: 10px;
+  }}
+  .zg-verdict-name {{
+    font-family: {SERIF}; font-size: 23px; font-weight: 600;
+    line-height: 1.3; letter-spacing: .01em;
+  }}
+  .zg-verdict-score {{
+    font-family: {MONO}; font-size: 36px; line-height: 1;
+    color: #D3923C; white-space: nowrap;
+  }}
+  .zg-verdict-score small {{ font-size: 10px; color: #9A9385; margin-left: 3px; }}
+  .zg-verdict-meta {{
+    margin-top: 9px; font-family: {MONO}; font-size: 10px;
+    letter-spacing: .06em; color: #B5B0A5;
+  }}
+  .zg-verdict-dims {{ display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }}
+  .zg-verdict-dims span {{
+    padding: 3px 8px; border: 1px solid rgba(242, 238, 228, .16);
+    border-radius: 2px; font-family: {MONO}; font-size: 10px; color: #D8D2C4;
+  }}
+  .zg-verdict-dims b {{ color: #F0B35E; font-weight: 500; }}
+
+  @keyframes zgBriefIn {{
+    from {{ opacity: 0; transform: translateY(12px); }}
+    to   {{ opacity: 1; transform: none; }}
+  }}
+  @keyframes zgRailIn {{
+    from {{ opacity: 0; transform: translateY(8px); }}
+    to   {{ opacity: 1; transform: none; }}
+  }}
+  .zg-enter .zg-masthead-title,
+  .zg-enter.zg-hero h1 {{
+    animation: zgBriefIn .7s cubic-bezier(.16, 1, .3, 1) both;
+  }}
+  .zg-enter .zg-masthead-sub,
+  .zg-enter .zg-masthead-steps,
+  .zg-enter.zg-hero p {{
+    animation: zgBriefIn .6s .08s cubic-bezier(.16, 1, .3, 1) both;
+  }}
+  .zg-enter .zg-rail-note {{
+    animation: zgRailIn .55s cubic-bezier(.16, 1, .3, 1) both;
+  }}
+  .zg-enter .zg-rail-note:nth-child(2) {{ animation-delay: .05s; }}
+  .zg-enter .zg-rail-note:nth-child(3) {{ animation-delay: .1s; }}
+  .zg-enter .zg-rail-note:nth-child(4) {{ animation-delay: .15s; }}
+  .zg-enter .zg-verdict {{
+    animation: zgBriefIn .55s cubic-bezier(.16, 1, .3, 1) both;
+  }}
 
   /* ===================================================================
      卡片
@@ -262,14 +418,15 @@ _STYLES = f"""
     margin-bottom: 8px;
   }}
   .zg-price {{
-    font-family: {SERIF};
-    font-size: 17px; font-weight: 600; color: {INK};
+    font-family: {MONO};
+    font-size: 15px; font-weight: 500; color: {INK};
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }}
   .zg-price small {{ font-size: 12px; font-weight: 400; color: {INK_SOFT}; }}
   .zg-row-score {{ text-align: right; flex-shrink: 0; min-width: 92px; }}
   .zg-score-num {{
-    font-size: 25px; font-weight: 700; color: {INK};
+    font-family: {MONO};
+    font-size: 23px; font-weight: 500; color: {INK};
     font-variant-numeric: tabular-nums; line-height: 1.1;
   }}
   .zg-score-num small {{ font-size: 12px; font-weight: 400; color: {INK_FAINT}; }}
@@ -279,7 +436,7 @@ _STYLES = f"""
   .zg-rank {{
     width: 22px; height: 22px; border-radius: 2px; flex-shrink: 0;
     background: {BRAND_SOLID}; color: {ON_BRAND};
-    font-family: {SERIF}; font-size: 13px; font-weight: 600;
+    font-family: {MONO}; font-size: 11.5px; font-weight: 500;
     display: flex; align-items: center; justify-content: center;
     margin-top: 15px;
   }}
@@ -314,7 +471,8 @@ _STYLES = f"""
   .zg-dim-name {{ color: {INK}; font-weight: 500; }}
   .zg-dim-weight {{ color: {INK_FAINT}; font-size: 11.5px; margin-left: 5px; }}
   .zg-dim-score {{
-    font-weight: 650; color: {INK}; font-variant-numeric: tabular-nums;
+    font-family: {MONO}; font-weight: 500; color: {INK};
+    font-variant-numeric: tabular-nums;
   }}
   .zg-bar {{
     height: 6px; background: {LINE_SOFT}; border-radius: 2px; overflow: hidden;
@@ -394,8 +552,8 @@ _STYLES = f"""
     display: flex; align-items: center; justify-content: center;
   }}
   .zg-stat-value {{
-    font-family: {SERIF};
-    font-size: 26px; font-weight: 600; color: {INK};
+    font-family: {MONO};
+    font-size: 24px; font-weight: 500; color: {INK};
     line-height: 1.1; font-variant-numeric: tabular-nums;
   }}
   .zg-stat-label {{ font-size: 12.5px; color: {INK_SOFT}; margin-top: 2px; }}
@@ -434,8 +592,8 @@ _STYLES = f"""
     align-items: center; justify-content: center;
   }}
   .zg-ring-num {{
-    font-family: {SERIF};
-    font-size: 21px; font-weight: 600; color: {INK}; line-height: 1;
+    font-family: {MONO};
+    font-size: 20px; font-weight: 500; color: {INK}; line-height: 1;
     font-variant-numeric: tabular-nums;
   }}
   .zg-ring-unit {{ font-size: 10.5px; color: {INK_FAINT}; margin-top: 1px; }}
@@ -474,12 +632,13 @@ _STYLES = f"""
   }}
   .zg-compare-brand {{ font-size: 12px; color: {INK_SOFT}; line-height: 1.5; }}
   .zg-compare-price {{
-    font-family: {SERIF};
-    font-size: 17px; font-weight: 600; color: {INK};
+    font-family: {MONO};
+    font-size: 16px; font-weight: 500; color: {INK};
     margin: 9px 0 7px 0; font-variant-numeric: tabular-nums;
   }}
   .zg-compare-score {{
-    font-size: 20px; font-weight: 700; color: {INK};
+    font-family: {MONO};
+    font-size: 19px; font-weight: 500; color: {INK};
     font-variant-numeric: tabular-nums; line-height: 1.1;
   }}
   .zg-compare-score small {{ font-size: 11.5px; font-weight: 400; color: {INK_FAINT}; }}
@@ -511,7 +670,9 @@ _STYLES = f"""
      数据来源脚注
      =================================================================== */
   .zg-source {{
-    font-size: 11.5px; color: {INK_FAINT}; margin-top: 13px;
+    font-family: {MONO};
+    font-size: 10.5px; letter-spacing: .01em;
+    color: {INK_FAINT}; margin-top: 13px;
     padding-top: 11px; border-top: 1px dashed {LINE};
     line-height: 1.65;
   }}
@@ -525,6 +686,32 @@ _STYLES = f"""
     background: {SURFACE}; font-size: 14px; line-height: 1.85;
   }}
   .zg-empty-icon {{ color: {INK_FAINT}; margin-bottom: 10px; }}
+
+  /* 悬停：卡片只抬起 1px，边框变琥珀；不做夸张位移 */
+  .zg-card, .zg-feature, .zg-compare-cell, .zg-proscons-card {{
+    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+  }}
+  .zg-card:hover, .zg-feature:hover,
+  .zg-compare-cell:hover, .zg-proscons-card:hover {{
+    border-color: rgba(211, 146, 60, .48);
+    box-shadow: 0 8px 22px rgba(31, 29, 24, .06);
+    transform: translateY(-1px);
+  }}
+
+  @media (prefers-reduced-motion: reduce) {{
+    .zg-enter .zg-masthead-title,
+    .zg-enter .zg-masthead-sub,
+    .zg-enter .zg-masthead-steps,
+    .zg-enter .zg-rail-note,
+    .zg-enter .zg-verdict,
+    .zg-enter.zg-hero h1,
+    .zg-enter.zg-hero p {{
+      animation: none !important;
+    }}
+    .zg-card, .zg-feature, .zg-compare-cell, .zg-proscons-card {{
+      transition: none !important;
+    }}
+  }}
 
   /* ===================================================================
      主区微调

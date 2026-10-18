@@ -19,7 +19,7 @@ from src.demand_parser import (
 from src.errors import EmptyDemand, ZhigouError, to_user_message
 from src.recommender import recommend
 from src.ui import components, state
-from src.ui.theme import bullet_list, facts
+from src.ui.theme import bullet_list, esc, facts
 
 #: 首页「快速开始」与输入框占位符共用的示例句。
 EXAMPLE_DEMAND = (
@@ -394,12 +394,8 @@ def _summary_pairs(demand: Demand) -> list[tuple[str, str]]:
 
 def _render_left_column(demand: Demand, result) -> None:
     components.section_title("需求摘要")
-    st.markdown(
-        f'<div class="zg-card is-flat">{facts(_summary_pairs(demand))}</div>',
-        unsafe_allow_html=True,
-    )
 
-    # 预算匹配度：候选中落在预算内的比例。真实可算，不是编的指标。
+    ring_html = ""
     if result.candidate_count:
         ratio = len(result.within_budget) / result.candidate_count * 100
         if len(result.within_budget) == 0:
@@ -408,21 +404,26 @@ def _render_left_column(demand: Demand, result) -> None:
             desc = "推荐商品多数在预算范围内"
         else:
             desc = "预算偏紧，多数候选超出预算"
-        st.write("")
-        st.markdown(
-            f'<div class="zg-card is-flat">{components.score_ring(ratio, "预算匹配度", desc)}</div>',
-            unsafe_allow_html=True,
+        ring_html = (
+            '<div class="zg-dossier-divider"></div>'
+            '<div class="zg-dossier-head"><span>预算匹配度</span></div>'
+            + components.score_ring(ratio, "预算匹配度", desc)
         )
 
-    st.write("")
-    components.section_title("筛选情况")
     st.markdown(
-        f'<div class="zg-card is-flat">{facts([
-            ("候选商品", f"{result.candidate_count} 件"),
-            ("预算内", f"{result.within_budget_total} 件"),
-            ("超出预算", f"{result.over_budget_total} 件"),
-            ("排序依据", config.SCORE_DISPLAY_NAME),
-        ])}</div>',
+        f'<div class="zg-card is-flat zg-dossier">'
+        f'  <div class="zg-dossier-head"><span>需求条件</span></div>'
+        f"  {facts(_summary_pairs(demand))}"
+        f'  <div class="zg-dossier-divider"></div>'
+        f'  <div class="zg-dossier-head"><span>筛选情况</span></div>'
+        f"  {facts([
+            ('候选商品', f'{result.candidate_count} 件'),
+            ('预算内', f'{result.within_budget_total} 件'),
+            ('超出预算', f'{result.over_budget_total} 件'),
+            ('排序依据', config.SCORE_DISPLAY_NAME),
+        ])}"
+        f"  {ring_html}"
+        f"</div>",
         unsafe_allow_html=True,
     )
     components.caption("排序看的是需求匹配度，不是价格高低。")
@@ -430,6 +431,39 @@ def _render_left_column(demand: Demand, result) -> None:
     if demand.raw_text:
         with st.expander("原始输入"):
             st.write(demand.raw_text)
+
+
+def _render_insights_column(result) -> None:
+    """右侧分析说明：只展示真实模式、数量和已有执行记录。"""
+    components.section_title("分析说明")
+    mode, _detail = state.current_mode()
+    rows = [
+        ("分析模式", mode),
+        ("候选商品", f"{result.candidate_count} 件"),
+        ("预算内", f"{result.within_budget_total} 件"),
+        ("超出预算", f"{result.over_budget_total} 件"),
+        ("排序依据", config.SCORE_DISPLAY_NAME),
+    ]
+    rows_html = "".join(
+        f'<div class="zg-insight-row"><span>{esc(key)}</span><b>{esc(value)}</b></div>'
+        for key, value in rows
+    )
+    st.markdown(
+        f'<div class="zg-card is-flat zg-dossier">'
+        f'  <div class="zg-dossier-head"><span>本次分析</span></div>'
+        f'  <div class="zg-insight-list">{rows_html}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    components.caption(
+        "价格是采集时的参考价，不是实时价格；"
+        "评分是系统匹配度，不是用户评价或市场口碑。"
+    )
+
+    agent_run = state.get("zg_agent_run")
+    if agent_run:
+        with st.expander("分析过程", expanded=False):
+            components.render_agent_trace(agent_run)
 
 
 def _favorite_actions(product) -> None:
@@ -465,6 +499,10 @@ def _render_right_column(result) -> None:
     per_product = explanation.get("per_product") or {}
 
     if total:
+        st.markdown(
+            components.verdict_strip(result.within_budget[0]),
+            unsafe_allow_html=True,
+        )
         components.section_title("为你推荐", total)
         components.caption(
             "按需求匹配度排序，第 1 名为当前条件下的首选。"
@@ -593,11 +631,6 @@ def _render_results() -> None:
     for note in state.get("zg_ai_notes") or []:
         components.show_notice(note, "warn")
 
-    # AI 执行轨迹属于过程细节：收进折叠区，默认不打扰阅读。
-    if state.get("zg_agent_run"):
-        with st.expander("AI 执行过程", expanded=False):
-            components.render_agent_trace(state.get("zg_agent_run"))
-
     explanation = state.get("zg_ai_explanation")
     if explanation and explanation.get("overview"):
         components.show_notice(f"AI 总述：{explanation['overview']}", "info")
@@ -618,15 +651,18 @@ def _render_results() -> None:
         components.show_notice(fav_error, "warn")
 
     report = state.get(state.KEY_REPORT)
+
+    center, right = st.columns([2.55, 1.1], gap="large")
+    with center:
+        _render_right_column(result)
+    with right:
+        _render_left_column(demand, result)
+        _render_insights_column(result)
+
+    # 导出是附件，不是主操作：放到结果之后，降低视觉权重。
     if report is not None:
         st.write("")
         _render_export(report)
-
-    left, right = st.columns([2, 3], gap="large")
-    with left:
-        _render_left_column(demand, result)
-    with right:
-        _render_right_column(result)
 
 
 # --------------------------------------------------------------------------
@@ -646,10 +682,13 @@ def render(catalog: Catalog) -> None:
         "智能分析",
         "描述你的购买需求，系统会筛选候选商品、按需求匹配度打分排序，"
         "并把评分怎么算出来的逐项摊开给你看。",
+        enter_key="analysis",
     )
 
     _render_ai_controls()
-    _render_inputs(catalog)
+    with st.container(border=True):
+        components.brief_label("需求与条件")
+        _render_inputs(catalog)
 
     st.write("")
     left, mid, right = st.columns([1, 1, 4])

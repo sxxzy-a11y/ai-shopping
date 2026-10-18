@@ -47,55 +47,69 @@ def analysis_no_category() -> str:
 
 
 def render(catalog: Catalog) -> None:
-    components.page_header(
-        "智购参谋",
-        "基于 AI 的消费决策助手 —— 帮你在预算内买到真正适合自己的商品，"
-        "并且告诉你这个结论是怎么得出来的。",
-        right=components.runtime_chip(),
+    enter_cls = components.enter_once("home")
+
+    st.markdown(
+        components.home_masthead(
+            "智购参谋",
+            "基于 AI 的消费决策助手 —— 帮你在预算内买到真正适合自己的商品，"
+            "并且告诉你这个结论是怎么得出来的。",
+            enter_class=enter_cls,
+        ),
+        unsafe_allow_html=True,
     )
 
-    # --- 需求输入（做成一张卡，让首屏有一个明确的操作焦点）--------------
-    with st.container(border=True):
-        st.markdown(
-            '<div class="zg-card-title">描述你的购买需求</div>'
-            '<div class="zg-card-sub" style="margin-bottom:10px">'
-            "说清楚要买什么、预算多少、主要用来做什么就够了。"
-            "没说到的信息，系统会在下一步追问，不会替你猜。"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-        st.text_area(
-            "描述你的购买需求",
-            key="zg_home_input",
-            height=110,
-            placeholder=f"例如：{EXAMPLE_DEMAND}",
-            label_visibility="collapsed",
-        )
-
-        col_action, col_hint = st.columns([1, 3])
-        with col_action:
-            if st.button("开始分析", type="primary", width="stretch"):
-                text = st.session_state.get("zg_home_input", "").strip()
-                if text:
-                    go_to_analysis(text)
-                else:
-                    # 没填内容就直接跳过去，那边会给出「请先描述需求」的提示
-                    state.clear_analysis()
-                    state.request_page("智能分析")
-                    st.rerun()
-        with col_hint:
+    # 左侧是「提问台」，右侧是决策台的方法说明；不再排成四张功能卡。
+    left, right = st.columns([1.45, 0.85], gap="large")
+    with left:
+        with st.container(border=True):
+            components.brief_label("需求")
             st.markdown(
-                '<div class="zg-caption" style="padding-top:9px">'
-                "也可以到「智能分析」页用下拉选项逐项填写。</div>",
+                '<div class="zg-card-title">描述你的购买需求</div>'
+                '<div class="zg-card-sub" style="margin-bottom:10px">'
+                "说清楚要买什么、预算多少、主要用来做什么就够了。"
+                "没说到的信息，系统会在下一步追问，不会替你猜。"
+                "</div>",
                 unsafe_allow_html=True,
             )
+            st.text_area(
+                "描述你的购买需求",
+                key="zg_home_input",
+                height=132,
+                placeholder=f"例如：{EXAMPLE_DEMAND}",
+                label_visibility="collapsed",
+            )
 
-    # --- 产品能力 ---------------------------------------------------------
-    components.section_title("它能做什么")
-    components.feature_row(_CAPABILITIES)
+            col_action, col_hint = st.columns([1, 3])
+            with col_action:
+                if st.button("开始分析", type="primary", width="stretch"):
+                    text = st.session_state.get("zg_home_input", "").strip()
+                    if text:
+                        go_to_analysis(text)
+                    else:
+                        # 没填内容就直接跳过去，那边会给出「请先描述需求」的提示
+                        state.clear_analysis()
+                        state.request_page("智能分析")
+                        st.rerun()
+            with col_hint:
+                st.markdown(
+                    '<div class="zg-caption" style="padding-top:9px">'
+                    "也可以到「智能分析」页用下拉选项逐项填写。</div>",
+                    unsafe_allow_html=True,
+                )
+
+    with right:
+        components.section_title("它能做什么")
+        st.markdown(
+            components.rail_notes(_CAPABILITIES, enter_class=enter_cls),
+            unsafe_allow_html=True,
+        )
 
     # --- 数据概览 ---------------------------------------------------------
-    st.write("")
+    st.markdown(
+        '<div class="zg-kicker" style="margin:26px 0 10px 0">数据概览</div>',
+        unsafe_allow_html=True,
+    )
     components.stat_row(
         [
             ("tag", f"{len(catalog)}", "件商品"),

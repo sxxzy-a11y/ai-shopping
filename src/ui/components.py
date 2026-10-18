@@ -50,16 +50,117 @@ def _budget_tone(label: str) -> str:
 # --------------------------------------------------------------------------
 
 
-def page_header(title: str, subtitle: str = "", *, right: str = "") -> None:
-    """页面顶部标题区。`right` 可放一段右对齐的 HTML（按钮等）。"""
+def enter_once(key: str) -> str:
+    """本次会话第一次进入某页时返回入场类名，之后返回空串。
+
+    每页一个标记：侧栏切换、展开评分、提交表单都会重跑脚本，
+    没有这个标记的话入场动画会在每次交互时重播。
+    """
+    flag = f"zg_enter_{key}"
+    if st.session_state.get(flag):
+        return ""
+    st.session_state[flag] = True
+    return " zg-enter"
+
+
+def page_header(
+    title: str,
+    subtitle: str = "",
+    *,
+    right: str = "",
+    kicker: str = "采购工作台",
+    enter_key: str = "",
+) -> None:
+    """页面顶部标题区。`right` 可放一段右对齐的 HTML（状态、按钮等）。"""
     sub = f"<p>{esc(subtitle)}</p>" if subtitle else ""
+    kicker_html = (
+        f'<div class="zg-hero-kicker"><span>{esc(kicker)}</span></div>'
+        if kicker
+        else ""
+    )
     left = f'<div style="min-width:0"><h1>{esc(title)}</h1>{sub}</div>'
     row = f'<div class="zg-hero-row">{left}{right}</div>' if right else left
-    st.markdown(f'<div class="zg-hero">{row}</div>', unsafe_allow_html=True)
+    enter = enter_once(enter_key) if enter_key else ""
+    st.markdown(
+        f'<div class="zg-hero{enter}">{kicker_html}{row}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def home_masthead(
+    title: str,
+    subtitle: str,
+    *,
+    right: str = "",
+    enter_class: str = "",
+) -> str:
+    """首页深色刊头：把「决策台」的流程直接写在页面上。"""
+    return (
+        f'<section class="zg-home-masthead{enter_class}">'
+        f'  <div class="zg-masthead-top">'
+        f'    <span><b>智购参谋</b> · 采购决策工作台</span>'
+        f"    <span>{right}</span>"
+        f"  </div>"
+        f'  <h1 class="zg-masthead-title">{esc(title)}</h1>'
+        f'  <p class="zg-masthead-sub">{esc(subtitle)}</p>'
+        f'  <div class="zg-masthead-steps">'
+        f"    <span>描述需求</span>"
+        f"    <span>核对证据</span>"
+        f"    <span>做出决定</span>"
+        f"  </div>"
+        f"</section>"
+    )
+
+
+def rail_notes(
+    items: list[tuple[str, str, str]], *, enter_class: str = ""
+) -> str:
+    """编号脚注列表：把能力说明从「四张卡」改成一条可读的边栏。"""
+    notes = "".join(
+        f'<div class="zg-rail-note">'
+        f'  <span class="zg-rail-index"></span>'
+        f"  <div><b>{esc(title)}</b><p>{esc(desc)}</p></div>"
+        f"</div>"
+        for _icon, title, desc in items
+    )
+    cls = f"zg-rail{enter_class}"
+    return f'<div class="{cls}">{notes}</div>'
+
+
+def brief_label(text: str) -> None:
+    """表单/区块前的等宽小标，像研究简报的栏目标签。"""
+    st.markdown(
+        f'<div class="zg-brief-label">{esc(text)}</div>', unsafe_allow_html=True
+    )
 
 
 def section_title(text: str, count: int | None = None) -> None:
     st.markdown(section(text, count), unsafe_allow_html=True)
+
+
+def verdict_strip(item) -> str:
+    """分析结果的第一屏结论：首选、分数、预算状态与最强项。
+
+    只使用本次已经算出的真实字段，不另写推荐语。
+    """
+    product = item.product
+    score = item.score
+    dims = sorted(score.dimensions, key=lambda d: (-d.score, d.key))[:2]
+    dim_html = "".join(
+        f"<span>{esc(d.label)} <b>{d.score:.0f}</b></span>" for d in dims
+    )
+    return (
+        '<div class="zg-verdict">'
+        '  <div class="zg-verdict-kicker">首选方案</div>'
+        '  <div class="zg-verdict-main">'
+        f'    <div class="zg-verdict-name">{esc(product.name or product.id)}</div>'
+        f'    <div class="zg-verdict-score">{score.total:.0f}<small>/100</small></div>'
+        f"  </div>"
+        f'  <div class="zg-verdict-meta">{esc(product.price_label)}'
+        f"　·　{esc(item.budget_label)}　·　{esc(score.match_level)}</div>"
+        f'  <div class="zg-verdict-dims">{dim_html}</div>'
+        f"</div>"
+    )
 
 
 def caption(text: str) -> None:
@@ -236,7 +337,7 @@ def score_breakdown_html(score: ScoreResult) -> str:
 
 def render_score_breakdown(score: ScoreResult, *, expanded: bool = False) -> None:
     with st.expander(
-        f"评分构成与依据 · {config.SCORE_DISPLAY_NAME} {score.total:.0f} 分"
+        f"查看详情 · 评分构成与依据 · {config.SCORE_DISPLAY_NAME} {score.total:.0f} 分"
         f"（{score.match_level}）",
         expanded=expanded,
     ):
@@ -375,6 +476,17 @@ def product_row(
         muted = " is-muted" if rank > 3 else ""
         rank_html = f'<div class="zg-rank{muted}">{rank}</div>'
 
+    top_dim = (
+        max(score.dimensions, key=lambda dimension: dimension.score)
+        if score.dimensions
+        else None
+    )
+    reason_html = (
+        f'<div class="zg-row-reason">{esc(top_dim.reason)}</div>'
+        if top_dim is not None and top_dim.reason
+        else ""
+    )
+
     return (
         f'<div class="zg-card{" is-accent" if highlight else ""}">'
         f'  <div class="zg-row">'
@@ -387,16 +499,15 @@ def product_row(
         f'      <div style="display:flex;flex-wrap:wrap;gap:6px">'
         f'        {chip(budget_label, _budget_tone(budget_label))}'
         f'        {chip(score.match_level, _MATCH_TONE.get(score.match_level, "neutral"))}'
-        f"        {_highlight_chips(score)}"
         f"        {data_issue_chip(product)}"
         f"      </div>"
+        f"      {reason_html}"
         f"    </div>"
         f'    <div style="text-align:right;flex-shrink:0">'
         f'      <div class="zg-price">{esc(product.price_label)}</div>'
         f"    </div>"
         f'    <div class="zg-row-score">'
         f'      <div class="zg-score-num">{score.total:.0f}<small>/100</small></div>'
-        f'      <div style="margin:3px 0">{stars(score.total)}</div>'
         f'      <div class="zg-score-name">{esc(config.SCORE_DISPLAY_NAME)}</div>'
         f"    </div>"
         f"  </div>"

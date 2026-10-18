@@ -17,7 +17,7 @@ import streamlit as st
 from src import accounts, config, settings
 from src.auth import User, is_admin
 from src.errors import ZhigouError, to_user_message
-from src.ui import components, icons, state, theme
+from src.ui import backend_theme, components, icons, state, theme
 from src.ui.pages import (
     about,
     admin,
@@ -103,16 +103,18 @@ def _render_brand() -> None:
     st.markdown(
         f'<div style="display:flex;align-items:center;gap:11px;'
         f'padding:8px 2px 14px 2px;margin-bottom:8px;'
-        f'border-bottom:1px solid rgba(242,238,228,.10)">'
-        f'  <div style="width:38px;height:38px;border-radius:2px;flex-shrink:0;'
-        f'background:{theme.BRAND_SOLID};display:flex;align-items:center;'
-        f'justify-content:center;color:{theme.ON_BRAND}">'
-        f"{icons.icon('sparkles', size=21, color=theme.ON_BRAND)}</div>"
+        f'border-bottom:1px solid rgba(120,100,75,.16)">'
+        f'  <div style="width:40px;height:40px;border-radius:12px;flex-shrink:0;'
+        f'background:linear-gradient(135deg,#E7C27A,{backend_theme.GOLD});'
+        f'display:flex;align-items:center;justify-content:center;'
+        f'box-shadow:0 8px 18px rgba(169,119,46,.22), inset 0 1px 0 rgba(255,255,255,.45);'
+        f'color:{backend_theme.BROWN}">'
+        f"{icons.icon('sparkles', size=21, color=backend_theme.BROWN)}</div>"
         f'  <div style="min-width:0">'
-        f'    <div style="font-family:{theme.SERIF};font-size:19px;font-weight:600;'
-        f'color:{theme.SIDEBAR_TEXT};letter-spacing:.04em;line-height:1.25">智购参谋</div>'
-        f'    <div style="font-size:11px;color:{theme.SIDEBAR_MUTED};'
-        f'letter-spacing:.06em;margin-top:2px">AI 消费决策助手</div>'
+        f'    <div style="font-family:{backend_theme.SANS};font-size:20px;font-weight:700;'
+        f'color:{backend_theme.BROWN};letter-spacing:.02em;line-height:1.25">智购参谋</div>'
+        f'    <div style="font-size:11px;color:{backend_theme.MUTED};'
+        f'letter-spacing:.06em;margin-top:2px">采购决策工作台</div>'
         f"  </div>"
         f"</div>",
         unsafe_allow_html=True,
@@ -146,16 +148,17 @@ def _render_sidebar(user: User) -> str:
         st.divider()
 
         st.markdown(
-            f'<div style="padding:0 2px">'
-            f'  <div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED};'
+            f'<div style="padding:0 2px 8px 2px">'
+            f'  <div style="font-size:11.5px;color:{backend_theme.MUTED};'
             f'letter-spacing:.4px;margin-bottom:5px">当前账号</div>'
-            f'  <div style="font-size:13.5px;font-weight:600;color:{theme.SIDEBAR_TEXT};'
+            f'  <div style="font-size:13.5px;font-weight:600;color:{backend_theme.BROWN};'
             f'margin-bottom:4px">{user.username}</div>'
-            f'  <div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED}">'
+            f'  <div style="font-size:11.5px;color:{backend_theme.MUTED}">'
             f"{user.role_label}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
+        st.write("")
         if st.button("登出", icon=":material/logout:", width="stretch"):
             state.sign_out()
             st.rerun()
@@ -163,10 +166,10 @@ def _render_sidebar(user: User) -> str:
         st.divider()
 
         mode, detail = state.current_mode()
-        mode_color = "#9CC7AC" if mode == "AI 增强模式" else theme.SIDEBAR_MUTED
+        mode_color = "#3F7A5C" if mode == "AI 增强模式" else backend_theme.MUTED
         st.markdown(
-            f'<div style="padding:0 2px">'
-            f'  <div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED};'
+            f'<div style="padding:0 2px 8px 2px">'
+            f'  <div style="font-size:11.5px;color:{backend_theme.MUTED};'
             f'letter-spacing:.4px;margin-bottom:5px">当前模式</div>'
             f'  <div style="font-size:13.5px;font-weight:600;color:{mode_color};'
             f'margin-bottom:4px">{mode}</div>'
@@ -177,17 +180,39 @@ def _render_sidebar(user: User) -> str:
         st.divider()
 
         st.markdown(
-            f'<div style="font-size:11.5px;color:{theme.SIDEBAR_MUTED};'
-            f'line-height:1.75;padding:0 2px">'
+            f'<div style="font-size:11.5px;color:{backend_theme.MUTED};'
+            f'line-height:1.75;padding:0 2px 8px 2px">'
             f"商品数据来自公开资料整理：品牌与型号真实，"
-            f"价格是采集时的参考价、<strong style=\"color:{theme.ON_NAVY}\">不是实时价格</strong>，"
-            f"参数经简化且<strong style=\"color:{theme.ON_NAVY}\">未核验</strong>。<br><br>"
+            f"价格是采集时的参考价、<strong style=\"color:{backend_theme.BROWN}\">不是实时价格</strong>，"
+            f"参数经简化且<strong style=\"color:{backend_theme.BROWN}\">未核验</strong>。<br><br>"
             f"「系统匹配评分」衡量的是与你需求的匹配程度，"
             f"不是用户评价或市场口碑。</div>",
             unsafe_allow_html=True,
         )
 
     return active
+
+
+def _render_topbar(page: str, user: User) -> None:
+    """后台顶部工作台条：当前页面 + 当前模式 + 账号。
+
+    这里不放搜索框——产品目前没有全局搜索能力，宁可不做，
+    也不放一个点了没反应的假输入框。
+    """
+    st.markdown(
+        f'<div class="zg-topbar">'
+        f'  <div class="zg-topbar-left">'
+        f'    <span class="zg-topbar-brand">智购参谋</span>'
+        f'    <span class="zg-topbar-sep">/</span>'
+        f'    <span class="zg-topbar-page">{components.esc(page)}</span>'
+        f'  </div>'
+        f'  <div class="zg-topbar-right">'
+        f'    {components.runtime_chip()}'
+        f'    <span class="zg-topbar-user">{components.esc(user.username)}</span>'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_data_help() -> None:
@@ -280,13 +305,17 @@ def main() -> None:
         login.render()
         return
 
+    # 后台专属视觉层：只在这里注入，登录页不会加载它。
+    backend_theme.inject()
+
     # 登录成功后的第一次重跑：在侧栏和页面之前铺一层暖色渐变，
-    # 盖住白底工作台的出现，再淡出到首页。
+    # 盖住工作台的出现，再淡出到首页。
     login.render_login_transition()
 
     page = _render_sidebar(user)
     if page not in PAGES:
         page = state.DEFAULT_PAGE
+    _render_topbar(page, user)
 
     # 数据加载是所有页面的前提。失败时给出中文提示并停在这里，
     # 而不是让每个页面各自崩一次。
