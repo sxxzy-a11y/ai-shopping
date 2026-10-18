@@ -278,6 +278,10 @@ def main() -> None:
         login.render()
         return
 
+    # 登录成功后的第一次重跑：在侧栏和页面之前铺一层暖色渐变，
+    # 盖住白底工作台的出现，再淡出到首页。
+    login.render_login_transition()
+
     page = _render_sidebar(user)
     if page not in PAGES:
         page = state.DEFAULT_PAGE

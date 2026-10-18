@@ -21,6 +21,9 @@ _KEY_MODE = "zg_auth_mode"
 _MODE_LOGIN = "login"
 _MODE_REGISTER = "register"
 
+#: 登录成功后的一次性过场标记。由登录页写入，由首页渲染前消费。
+_KEY_TRANSITION = "zg_login_transition"
+
 
 def render() -> None:
     """渲染登录页。**不接受 catalog**——未登录时不该有任何数据可查。"""
@@ -63,6 +66,18 @@ def render() -> None:
     st.markdown(_LOGIN_DECISION, unsafe_allow_html=True)
 
 
+def render_login_transition() -> None:
+    """登录成功后的暖色渐变过场。
+
+    在 `app.py` 里、绘制侧栏和页面之前调用：新页面先铺满登录页同色系的
+    深色渐变，再淡出到首页，避免从登录页直接切到白底工作台。
+    只消费一次标记，后续页面切换不会重播。
+    """
+    if not st.session_state.pop(_KEY_TRANSITION, False):
+        return
+    st.markdown(_LOGIN_TRANSITION, unsafe_allow_html=True)
+
+
 # --------------------------------------------------------------------------
 # 登录
 # --------------------------------------------------------------------------
@@ -72,6 +87,7 @@ def _sign_in(user) -> None:
     """登录成功后的落库动作：记当前用户、把页面送到首页、整页重跑。"""
     state.set_current_user(user)
     state.request_page(state.DEFAULT_PAGE)
+    st.session_state[_KEY_TRANSITION] = True
     st.rerun()
 
 
@@ -702,4 +718,87 @@ _LOGIN_DECISION = """
     </div>
   </div>
 </section>
+"""
+
+#: 登录成功后的全屏过场。深色渐变先把白底工作台盖住，再淡出；
+#: `pointer-events: none` 保证过场期间不会拦住任何操作。
+_LOGIN_TRANSITION = """
+<style>
+  @keyframes zgLoginEnterOut {
+    0%   { opacity: 1; }
+    68%  { opacity: 1; }
+    100% { opacity: 0; visibility: hidden; }
+  }
+  @keyframes zgLoginEnterLine {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+  @keyframes zgLoginEnterSheen {
+    0%   { transform: translateX(-45%) rotate(7deg); opacity: 0; }
+    35%  { opacity: .55; }
+    100% { transform: translateX(45%) rotate(7deg); opacity: 0; }
+  }
+
+  .zg-login-transition {
+    position: fixed; inset: 0;
+    z-index: 2147483647;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; pointer-events: none;
+    background:
+      radial-gradient(65% 55% at 68% 36%, rgba(211, 146, 60, .20), transparent 66%),
+      linear-gradient(135deg, #161511 0%, #1B1813 52%, #241C12 100%);
+    animation: zgLoginEnterOut 1.5s cubic-bezier(.22, .61, .36, 1) .1s forwards;
+  }
+  .zg-login-transition::before {
+    content: ""; position: absolute; inset: -25%;
+    background: linear-gradient(
+      112deg,
+      transparent 34%,
+      rgba(242, 238, 228, .055) 45%,
+      rgba(211, 146, 60, .15) 51%,
+      transparent 64%
+    );
+    transform: translateX(-45%) rotate(7deg);
+    animation: zgLoginEnterSheen 1.05s ease-out .1s both;
+  }
+  .zg-login-transition-inner {
+    position: relative; z-index: 1; text-align: center;
+  }
+  .zg-login-transition-mark {
+    font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "STSong", "SimSun", "宋体", serif;
+    font-size: 40px; font-weight: 600; letter-spacing: .14em;
+    color: #F4F0E6; text-shadow: 0 0 30px rgba(211, 146, 60, .16);
+  }
+  .zg-login-transition-line {
+    display: block; width: 64px; height: 2px; margin: 19px auto 15px;
+    background: linear-gradient(90deg, rgba(211, 146, 60, 0), #D3923C, rgba(211, 146, 60, 0));
+    transform-origin: center;
+    animation: zgLoginEnterLine .55s cubic-bezier(.16, 1, .3, 1) .2s both;
+  }
+  .zg-login-transition-sub {
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 10px; letter-spacing: .28em; text-transform: uppercase;
+    color: #8C867A;
+  }
+
+  /* 登录换页的瞬间，DOM 里会短暂残留登录页内容；过场期间先把它藏掉，
+     免得渐变淡出时露出「侧栏 + 旧登录页」的中间态。 */
+  [data-testid="stAppViewContainer"]:has(.zg-login-transition) [data-testid="stHorizontalBlock"]:has(.zg-editorial),
+  [data-testid="stAppViewContainer"]:has(.zg-login-transition) .zg-decision,
+  [data-testid="stAppViewContainer"]:has(.zg-login-transition) .zg-login-bg,
+  [data-testid="stAppViewContainer"]:has(.zg-login-transition) .zg-login-net {
+    display: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .zg-login-transition { display: none !important; }
+  }
+</style>
+<div class="zg-login-transition" aria-hidden="true">
+  <div class="zg-login-transition-inner">
+    <div class="zg-login-transition-mark">登录成功</div>
+    <span class="zg-login-transition-line"></span>
+    <div class="zg-login-transition-sub">正在进入智购参谋</div>
+  </div>
+</div>
 """
