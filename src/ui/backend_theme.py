@@ -56,7 +56,7 @@ _STYLES = f"""
     box-shadow: 8px 0 32px rgba(120, 100, 75, .07);
   }}
   {_SIDEBAR} > div:first-child {{ background: transparent; }}
-  {_SIDEBAR} [data-testid="stSidebarUserContent"] {{ padding-top: 8px; }}
+  {_SIDEBAR} [data-testid="stSidebarUserContent"] {{ padding-top: 8px; padding-bottom: 22px; }}
   {_SIDEBAR} hr {{
     border-color: rgba(120, 100, 75, .14);
     margin: 13px 0;
@@ -749,6 +749,165 @@ _STYLES = f"""
     cursor: not-allowed !important;
     transform: none !important;
     box-shadow: none !important;
+  }}
+
+  /* ===================================================================
+     最终磨砂玻璃层：控件也要有白色玻璃体，而不是只降低透明度
+     =================================================================== */
+  {_SIDEBAR} {{
+    margin: 14px 0 14px 14px !important;
+    height: calc(100vh - 28px) !important;
+    border: 1px solid rgba(201, 154, 74, .30) !important;
+    border-radius: 24px !important;
+    background: linear-gradient(180deg, rgba(255, 250, 242, .82), rgba(245, 237, 224, .62)) !important;
+    backdrop-filter: blur(30px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(30px) saturate(140%) !important;
+    box-shadow: 0 26px 60px rgba(120, 100, 75, .18), inset 0 1px 0 rgba(255,255,255,.80) !important;
+    overflow: hidden !important;
+  }}
+  {_SIDEBAR} > div:first-child {{
+    height: 100%; border-radius: 24px; overflow-y: auto;
+  }}
+
+  {_SCOPE} .zg-topbar {{
+    background: linear-gradient(120deg, rgba(255, 250, 242, .70), rgba(255, 250, 242, .46)) !important;
+    border: 1px solid rgba(201, 154, 74, .28) !important;
+    border-radius: 18px !important;
+    backdrop-filter: blur(26px) saturate(138%) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(138%) !important;
+    box-shadow: 0 18px 44px rgba(120, 100, 75, .14), inset 0 1px 0 rgba(255,255,255,.85) !important;
+  }}
+
+  {_SCOPE} .zg-card,
+  {_SCOPE} .zg-feature,
+  {_SCOPE} .zg-statstrip,
+  {_SCOPE} .zg-compare-cell,
+  {_SCOPE} .zg-proscons-card {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .68), rgba(255, 250, 242, .46)) !important;
+    border: 1px solid rgba(201, 154, 74, .26) !important;
+    border-radius: 18px !important;
+    backdrop-filter: blur(26px) saturate(138%) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(138%) !important;
+    box-shadow: 0 24px 54px rgba(120, 100, 75, .15), inset 0 1px 0 rgba(255,255,255,.80) !important;
+  }}
+  {_SCOPE} .zg-card:has(.zg-row) {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .84), rgba(255, 250, 242, .62)) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 22px 48px rgba(120, 100, 75, .16), inset 0 1px 0 rgba(255,255,255,.88) !important;
+  }}
+  {_SCOPE} .zg-card.is-flat,
+  {_SCOPE} .zg-card.zg-dossier {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .58), rgba(255, 250, 242, .38)) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 18px 40px rgba(120, 100, 75, .12), inset 0 1px 0 rgba(255,255,255,.78) !important;
+  }}
+  {_SCOPE} .zg-rail {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .64), rgba(255, 250, 242, .46)) !important;
+    border-radius: 18px !important;
+    backdrop-filter: blur(24px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(135%) !important;
+    box-shadow: 0 20px 46px rgba(120, 100, 75, .13), inset 0 1px 0 rgba(255,255,255,.82) !important;
+  }}
+  {_SCOPE} .zg-home-masthead {{
+    background:
+      radial-gradient(60% 120% at 88% 0%, rgba(231, 201, 143, .55), transparent 62%),
+      linear-gradient(135deg, rgba(255, 250, 242, .78), rgba(245, 237, 224, .56)) !important;
+    border-radius: 22px !important;
+    backdrop-filter: blur(28px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(140%) !important;
+    box-shadow: 0 28px 64px rgba(120, 100, 75, .16), inset 0 1px 0 rgba(255,255,255,.85) !important;
+  }}
+  {_SCOPE} .zg-verdict {{
+    background:
+      radial-gradient(80% 140% at 90% 0%, rgba(231, 201, 143, .48), transparent 62%),
+      linear-gradient(135deg, rgba(255, 249, 238, .84), rgba(244, 226, 193, .56)) !important;
+    border-radius: 18px !important;
+    backdrop-filter: blur(24px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(135%) !important;
+    box-shadow: 0 22px 52px rgba(120, 100, 75, .15), inset 0 1px 0 rgba(255,255,255,.88) !important;
+  }}
+
+  /* 表单/输入大卡：明显的磨砂白玻璃体 */
+  {_SCOPE} [data-testid="stForm"],
+  {_SCOPE} [data-testid="stVerticalBlockBorderWrapper"],
+  {_SCOPE} [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .70), rgba(255, 250, 242, .48)) !important;
+    border: 1px solid rgba(201, 154, 74, .28) !important;
+    border-radius: 18px !important;
+    backdrop-filter: blur(26px) saturate(138%) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(138%) !important;
+    box-shadow: 0 24px 52px rgba(120, 100, 75, .15), inset 0 1px 0 rgba(255,255,255,.85) !important;
+  }}
+
+  /* 输入框、下拉框、文本域：玻璃控件，不是一条淡淡的线 */
+  {_SCOPE} [data-baseweb="input"],
+  {_SCOPE} [data-baseweb="select"] > div,
+  {_SCOPE} [data-baseweb="textarea"] {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .82), rgba(255, 250, 242, .60)) !important;
+    border: 1px solid rgba(201, 154, 74, .30) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(16px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(135%) !important;
+    box-shadow: 0 8px 20px rgba(120, 100, 75, .08), inset 0 1px 0 rgba(255,255,255,.88) !important;
+  }}
+  {_SCOPE} [data-baseweb="input"]:focus-within,
+  {_SCOPE} [data-baseweb="select"] > div:focus-within,
+  {_SCOPE} [data-baseweb="textarea"]:focus-within {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .94), rgba(255, 250, 242, .76)) !important;
+    border-color: {GOLD} !important;
+    box-shadow: 0 0 0 3px rgba(201, 154, 74, .16), 0 10px 24px rgba(120, 100, 75, .10), inset 0 1px 0 rgba(255,255,255,.9) !important;
+  }}
+
+  /* 次级按钮也做成磨砂玻璃；主按钮保持香槟金 */
+  {_SCOPE} [data-testid="stMain"] .stButton > button,
+  {_SCOPE} [data-testid="stMain"] [data-testid="stBaseButton-secondaryFormSubmit"],
+  {_SCOPE} [data-testid="stMain"] [data-testid="stBaseButton-secondary"] {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .82), rgba(255, 250, 242, .58)) !important;
+    border: 1px solid rgba(201, 154, 74, .30) !important;
+    border-radius: 10px !important;
+    backdrop-filter: blur(14px) saturate(132%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(132%) !important;
+    box-shadow: 0 8px 20px rgba(120, 100, 75, .10), inset 0 1px 0 rgba(255,255,255,.85) !important;
+  }}
+  {_SCOPE} [data-testid="stMain"] .stButton > button:hover {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .94), rgba(255, 250, 242, .72)) !important;
+    border-color: {GOLD} !important;
+    color: {GOLD_DEEP} !important;
+  }}
+  {_SCOPE} [data-testid="stMain"] .stButton > button[kind="primary"],
+  {_SCOPE} [data-testid="stMain"] [data-testid="stBaseButton-primary"],
+  {_SCOPE} [data-testid="stMain"] [data-testid="stBaseButton-primaryFormSubmit"] {{
+    background: linear-gradient(135deg, #EBCB8D, {GOLD}) !important;
+    border: 1px solid rgba(169, 119, 46, .40) !important;
+    border-radius: 10px !important;
+    color: {BROWN} !important;
+    box-shadow: 0 12px 26px rgba(169, 119, 46, .24), inset 0 1px 0 rgba(255,255,255,.55) !important;
+  }}
+  {_SCOPE} [data-testid="stMain"] .stButton > button[kind="primary"]:hover,
+  {_SCOPE} [data-testid="stMain"] [data-testid="stBaseButton-primary"]:hover,
+  {_SCOPE} [data-testid="stMain"] [data-testid="stBaseButton-primaryFormSubmit"]:hover {{
+    background: linear-gradient(135deg, #F4D9A9, #D8AC5D) !important;
+  }}
+
+  {_SCOPE} [data-testid="stExpander"] {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .56), rgba(255, 250, 242, .36)) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(18px) saturate(130%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(130%) !important;
+    box-shadow: 0 12px 28px rgba(120, 100, 75, .08), inset 0 1px 0 rgba(255,255,255,.78) !important;
+  }}
+  {_SCOPE} [data-testid="stChatMessage"] {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .60), rgba(255, 250, 242, .40)) !important;
+    border-radius: 14px !important;
+    backdrop-filter: blur(16px) !important;
+    box-shadow: 0 12px 28px rgba(120, 100, 75, .08), inset 0 1px 0 rgba(255,255,255,.78) !important;
+  }}
+  {_SCOPE} [data-testid="stChatInput"] {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .82), rgba(255, 250, 242, .60)) !important;
+    border: 1px solid rgba(201, 154, 74, .30) !important;
+    border-radius: 14px !important;
+    backdrop-filter: blur(16px) !important;
+    box-shadow: 0 8px 20px rgba(120, 100, 75, .08), inset 0 1px 0 rgba(255,255,255,.85) !important;
   }}
 
   /* 不支持 backdrop-filter 时退回不透明暖象牙表面，保证对比度 */
