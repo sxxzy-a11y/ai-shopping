@@ -61,9 +61,8 @@ def render() -> None:
         st.write("")
         components.caption("账号凭据仅保存在当前会话；刷新页面需重新登录。")
 
-    # 横跨双栏的产品预览：借用 Neuralyn 的 dashboard mockup 结构，
-    # 但换成本产品的「决策卡」，用演示数据，不查询真实 catalog。
-    st.markdown(_LOGIN_DECISION, unsafe_allow_html=True)
+    # 底部索引条：告诉第一次来的人登录后能做什么，同时把页面下半部撑住。
+    st.markdown(_LOGIN_INDEX, unsafe_allow_html=True)
 
 
 def render_login_transition() -> None:
@@ -336,6 +335,43 @@ _LOGIN_FX = """
     text-transform: uppercase; color: #6A655A;
   }
 
+  /* ---------- 底部索引条：登录后可以做什么 ---------- */
+  .zg-login-index {
+    margin: 36px 0 0 0; padding: 18px 0 2px 0;
+    border-top: 1px solid rgba(242, 238, 228, .14);
+  }
+  .zg-login-index-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: "Cascadia Mono", "SF Mono", "Consolas", monospace;
+    font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+    color: #7C766A; margin-bottom: 16px;
+  }
+  .zg-login-index-head em { font-style: normal; color: #D3923C; }
+  .zg-login-index-grid {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+  .zg-login-index-item {
+    display: grid; grid-template-columns: 32px minmax(0, 1fr);
+    gap: 12px; padding: 2px 26px 0 0; margin-right: 26px;
+    border-right: 1px solid rgba(242, 238, 228, .10);
+  }
+  .zg-login-index-item:last-child {
+    border-right: none; margin-right: 0; padding-right: 0;
+  }
+  .zg-login-index-num {
+    font-family: "Cascadia Mono", "SF Mono", "Consolas", monospace;
+    font-size: 10.5px; color: #D3923C; padding-top: 3px;
+  }
+  .zg-login-index-item h3 {
+    margin: 0 0 5px 0;
+    font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "STSong", "SimSun", "宋体", serif;
+    font-size: 17px; font-weight: 600; color: #F4F0E6; line-height: 1.3;
+  }
+  .zg-login-index-item p {
+    margin: 0; font-size: 12px; line-height: 1.7; color: #A79F90;
+  }
+
   /* ---------- 底部产品预览：决策卡 ---------- */
   .zg-decision {
     position: relative; overflow: hidden;
@@ -567,6 +603,9 @@ _LOGIN_FX = """
   [data-testid="stAppViewContainer"]:has(.zg-login-enter) .zg-ed-foot {
     animation: zgFadeUp .55s .48s cubic-bezier(.22, .61, .36, 1) both;
   }
+  [data-testid="stAppViewContainer"]:has(.zg-login-enter) .zg-login-index {
+    animation: zgFadeUp .65s .56s cubic-bezier(.22, .61, .36, 1) both;
+  }
   [data-testid="stAppViewContainer"]:has(.zg-login-enter) .zg-form-head {
     animation: zgFadeUp .5s .2s cubic-bezier(.22, .61, .36, 1) both;
   }
@@ -617,13 +656,20 @@ _LOGIN_FX = """
       row-gap: 14px;
     }
     .zg-decision-bars, .zg-decision-verdict { grid-column: 1 / -1; }
+    .zg-login-index { margin-top: 28px; }
+    .zg-login-index-grid { grid-template-columns: 1fr; }
+    .zg-login-index-item {
+      border-right: none; margin-right: 0; padding: 12px 0;
+      border-top: 1px solid rgba(242, 238, 228, .10);
+    }
+    .zg-login-index-item:first-child { border-top: none; padding-top: 2px; }
   }
 
   /* ---------- 无障碍 ---------- */
   @media (prefers-reduced-motion: reduce) {
     .zg-login-veil, .zg-login-veil-mark span, .zg-login-veil-bar, .zg-login-bg span,
     .zg-ed-meta, .zg-ed-kicker, .zg-ed-title, .zg-ed-sub, .zg-ed-facts, .zg-ed-foot,
-    .zg-form-head, .zg-decision,
+    .zg-form-head, .zg-decision, .zg-login-index,
     [data-testid="stAppViewContainer"]:has(.zg-login-enter) [data-testid="stForm"],
     [data-testid="stAppViewContainer"]:has(.zg-login-enter) .stButton,
     [data-testid="stAppViewContainer"]:has(.zg-login-enter) .zg-dbar i em,
@@ -692,29 +738,24 @@ _LOGIN_EDITORIAL = """
 </div>
 """
 
-_LOGIN_DECISION = """
-<section class="zg-decision" aria-label="决策预览">
-  <div class="zg-decision-top">
-    <span>决策预览 <em>/ Decision 01</em></span>
-    <span class="zg-decision-tag">演示数据 · 可追溯</span>
+_LOGIN_INDEX = """
+<section class="zg-login-index" aria-label="登录后可以做什么">
+  <div class="zg-login-index-head">
+    <span><em>登录后</em>可以做什么</span>
+    <span>03 个模块</span>
   </div>
-  <div class="zg-decision-grid">
-    <div class="zg-decision-product">
-      <div class="zg-decision-name">联想 小新Pro14 2024 锐龙版</div>
-      <div class="zg-decision-price"><b>¥5,199</b> · 14 英寸 · 1.46 kg</div>
+  <div class="zg-login-index-grid">
+    <div class="zg-login-index-item">
+      <span class="zg-login-index-num">01</span>
+      <div><h3>智能分析</h3><p>说清预算与用途，得到逐项可解释的推荐。</p></div>
     </div>
-    <div class="zg-decision-score">
-      <b>86</b><span>/ 100</span>
-      <small>综合分</small>
+    <div class="zg-login-index-item">
+      <span class="zg-login-index-num">02</span>
+      <div><h3>商品比较</h3><p>把候选商品放进同一张表，横向看差异。</p></div>
     </div>
-    <div class="zg-decision-bars">
-      <div class="zg-dbar"><span>预算匹配</span><i><em style="width:92%"></em></i><b>92</b></div>
-      <div class="zg-dbar"><span>性能匹配</span><i><em style="width:88%"></em></i><b>88</b></div>
-      <div class="zg-dbar"><span>便携程度</span><i><em style="width:74%"></em></i><b>74</b></div>
-    </div>
-    <div class="zg-decision-verdict">
-      <small>结论</small>
-      <p>在 5,000 元档里，<em>性能与便携最均衡</em>；重度游戏需要再上一档。</p>
+    <div class="zg-login-index-item">
+      <span class="zg-login-index-num">03</span>
+      <div><h3>AI 问答</h3><p>基于知识库继续追问，结论不离开数据。</p></div>
     </div>
   </div>
 </section>
