@@ -193,21 +193,30 @@ def test_navigation_lists_every_page():
     它原先排在管理员三项**之前**，于是管理员看到的顺序里它被挤到中间——
     同一项在不同角色下的位置不一样。放到最后对两种角色都是一致的。
     """
-    from app import NAV_ITEMS
+    from app import NAV_ITEMS, _visible_nav
 
     assert [item.name for item in NAV_ITEMS] == [
         "首页",
-        "智能分析",
         "商品比较",
+        "智能分析",
         "AI 问答",
         "历史记录",
-        "用户管理",
-        "全站概览",
         "商品维护",
         "知识库管理",
+        "全站概览",
+        "用户管理",
         "个人设置",
         "关于",
     ]
+    assert [item.name for item in _visible_nav(None)] == [
+        "首页",
+        "商品比较",
+        "智能分析",
+        "AI 问答",
+        "历史记录",
+        "个人设置",
+        "关于",
+    ], "普通用户应保持同一顺序，只隐藏管理项"
     assert NAV_ITEMS[-2].name == "个人设置", "个人设置应紧挨项目说明"
     assert NAV_ITEMS[-1].name == "关于"
     assert NAV_ITEMS[-1].admin_only is False, "它对所有角色可见，只是排在最后"

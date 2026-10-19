@@ -50,20 +50,20 @@ class NavItem:
 #: 导航项。图标走 Streamlit 官方的 `icon=` 参数，这是最稳的接入方式。
 NAV_ITEMS: list[NavItem] = [
     NavItem("首页", ":material/home:", home.render),
-    NavItem("智能分析", ":material/insights:", analysis.render),
     NavItem("商品比较", ":material/view_column:", compare.render),
+    NavItem("智能分析", ":material/insights:", analysis.render),
     NavItem("AI 问答", ":material/chat:", knowledge.render),
     NavItem("历史记录", ":material/history:", history.render),
     # 管理员专属。`admin_only` 控制的是**界面可见性**，不是权限本身——
     # 页面入口有一道 `require_admin`，数据层写入口还有一道（design D3）。
-    NavItem("用户管理", ":material/group:", admin.render_users, admin_only=True),
-    NavItem("全站概览", ":material/analytics:", admin.render_overview, admin_only=True),
     NavItem(
         "商品维护", ":material/inventory_2:", catalog_admin.render, admin_only=True
     ),
     NavItem(
         "知识库管理", ":material/library_books:", knowledge_admin.render, admin_only=True
     ),
+    NavItem("全站概览", ":material/analytics:", admin.render_overview, admin_only=True),
+    NavItem("用户管理", ":material/group:", admin.render_users, admin_only=True),
     # 「个人设置」紧挨「项目说明」放在最末两位：它是低频操作，
     # 且对两种角色都稳定地出现在同一个位置（管理项只影响中间段）。
     NavItem("个人设置", ":material/tune:", settings_page.render),
