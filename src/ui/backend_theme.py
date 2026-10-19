@@ -864,6 +864,28 @@ _STYLES = f"""
     border-color: {GOLD} !important;
     box-shadow: 0 0 0 3px rgba(201, 154, 74, .16), 0 10px 24px rgba(120, 100, 75, .10), inset 0 1px 0 rgba(255,255,255,.9) !important;
   }}
+  /* Streamlit 新版文本输入 DOM */
+  {_SCOPE} [data-testid="stTextInputRootElement"] {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .82), rgba(255, 250, 242, .60)) !important;
+    border: 1px solid rgba(201, 154, 74, .30) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(16px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(135%) !important;
+    box-shadow: 0 8px 20px rgba(120, 100, 75, .08), inset 0 1px 0 rgba(255,255,255,.88) !important;
+  }}
+  {_SCOPE} [data-testid="stTextInputRootElement"]:focus-within {{
+    background: linear-gradient(145deg, rgba(255, 250, 242, .94), rgba(255, 250, 242, .76)) !important;
+    border-color: {GOLD} !important;
+    box-shadow: 0 0 0 3px rgba(201, 154, 74, .16), 0 10px 24px rgba(120, 100, 75, .10), inset 0 1px 0 rgba(255,255,255,.9) !important;
+  }}
+  {_SCOPE} [data-testid="stTextInputRootElement"] input {{
+    color: {BROWN} !important;
+    background: transparent !important;
+    caret-color: {GOLD_DEEP};
+  }}
+  {_SCOPE} [data-testid="stTextInputRootElement"] input::placeholder {{
+    color: {MUTED_LIGHT} !important;
+  }}
 
   /* 次级按钮也做成磨砂玻璃；主按钮保持香槟金 */
   {_SCOPE} [data-testid="stMain"] .stButton > button,

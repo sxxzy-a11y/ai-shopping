@@ -532,6 +532,31 @@ _LOGIN_FX = """
   [data-testid="stAppViewContainer"]:has(.zg-login-fx) [data-baseweb="input"] button {
     background: transparent !important; color: #8C867A !important;
   }
+  /* Streamlit 新版文本输入 DOM（stTextInputRootElement），线上版本会用到 */
+  [data-testid="stAppViewContainer"]:has(.zg-login-fx) [data-testid="stTextInputRootElement"] {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(242, 238, 228, .18) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transition: border-color .2s ease;
+  }
+  [data-testid="stAppViewContainer"]:has(.zg-login-fx) [data-testid="stTextInputRootElement"]:focus-within {
+    border-bottom: 1px solid #D3923C !important;
+    box-shadow: none !important;
+  }
+  [data-testid="stAppViewContainer"]:has(.zg-login-fx) [data-testid="stTextInputRootElement"] input {
+    background: transparent !important;
+    color: #F4F0E6 !important;
+    caret-color: #D3923C;
+    font-size: 15px; padding-left: 0 !important;
+  }
+  [data-testid="stAppViewContainer"]:has(.zg-login-fx) [data-testid="stTextInputRootElement"] input::placeholder {
+    color: #5E594F !important;
+  }
+  [data-testid="stAppViewContainer"]:has(.zg-login-fx) [data-testid="stTextInputRootElement"] button {
+    background: transparent !important; color: #8C867A !important;
+  }
   /* 隐藏 Edge 自带的密码显示按钮，只保留 Streamlit 的那一个 */
   [data-testid="stAppViewContainer"]:has(.zg-login-fx) input[type="password"]::-ms-reveal,
   [data-testid="stAppViewContainer"]:has(.zg-login-fx) input[type="password"]::-ms-clear {

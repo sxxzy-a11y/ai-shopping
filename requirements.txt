@@ -1,14 +1,14 @@
-# 智购参谋 —— 运行依赖
+# 智购参谋 — 运行依赖
 #
 # 安装：pip install -r requirements.txt
 #
-# 版本下限按开发机实测版本设定（Windows / Python 3.13）：
-#   streamlit 1.51.0 · pandas 2.3.3 · pydantic 2.12.4 · httpx 0.28.1 · pytest 8.4.2
-# --- 运行时 ---
-streamlit>=1.40,<2.0      # Web 界面
-pandas>=2.0               # 商品数据整理与比较表
-pydantic>=2.0             # 结构化数据校验（商品模型、需求模型）
-httpx>=0.27               # 大模型 API 调用（可选功能，用标准 HTTP 直连，不依赖官方 SDK）
+# 生产/云端锁定到开发机实测通过的版本，避免 Streamlit 升级后
+# 输入框、按钮等 DOM 结构变化，导致本地和线上样式不一致。
+streamlit==1.51.0      # Web 界面
+pandas==2.3.3          # 商品数据整理与比较表
+pydantic==2.12.4       # 结构化数据校验（商品模型、需求模型）
+httpx==0.28.1          # 大模型 API 调用（可选功能，用标准 HTTP 直连，不依赖官方 SDK）
+numpy==2.3.5
+
 # --- 开发与测试 ---
-pytest>=8.0               # 自动化测试
-numpy>=1.24
+pytest==8.4.2
