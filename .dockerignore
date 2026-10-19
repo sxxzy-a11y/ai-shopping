@@ -1,0 +1,22 @@
+# 构建镜像时不要带本机密钥、历史库和缓存
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+storage/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+tests/
+docs/
+openspec/

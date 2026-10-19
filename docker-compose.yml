@@ -1,0 +1,12 @@
+services:
+  zhigou:
+    build: .
+    container_name: zhigou
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      # 账号、历史、收藏、商品库、偏好、日志都保存在这里
+      - ./storage:/app/storage
+    restart: unless-stopped

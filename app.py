@@ -280,6 +280,9 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
 
+    # 云端 Secrets → 环境变量；本地没有 secrets 时静默跳过。
+    config.adopt_streamlit_secrets()
+
     _configure_logging()
     theme.inject_styles()
     _bootstrap_once()

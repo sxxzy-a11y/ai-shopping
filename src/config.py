@@ -61,6 +61,57 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+#: 允许从 Streamlit Community Cloud 的 Secrets 读取的配置项。
+#: 云端只会把 secrets 暴露成 st.secrets，不会自动变成环境变量；
+#: 启动时把它们桥接进 os.environ，业务层继续只读环境变量。
+_SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
+    "ZHIGOU_LLM_API_KEY",
+    "ZHIGOU_LLM_BASE_URL",
+    "ZHIGOU_LLM_MODEL",
+    "ZHIGOU_LLM_TIMEOUT",
+    "ZHIGOU_LLM_MAX_TOKENS",
+    "ZHIGOU_EMBEDDING_API_KEY",
+    "ZHIGOU_EMBEDDING_BASE_URL",
+    "ZHIGOU_EMBEDDING_MODEL",
+    "ZHIGOU_EMBEDDING_DIM",
+    "ZHIGOU_EMBEDDING_TIMEOUT",
+    "ZHIGOU_ADMIN_USERNAME",
+    "ZHIGOU_ADMIN_PASSWORD",
+    "ZHIGOU_ALLOW_REGISTRATION",
+)
+
+
+def adopt_streamlit_secrets() -> None:
+    """把 st.secrets 桥接成环境变量，已存在的环境变量优先。
+
+    只在 Streamlit 运行时调用；本地/测试没有 secrets 时静默跳过。
+    Community Cloud、Railway 等平台的密钥因此可以走平台 Secret 面板，
+    不必把 `.env` 带进镜像或仓库。
+    """
+    try:
+        import streamlit as st
+
+        secrets = st.secrets
+    except Exception:  # noqa: BLE001 —— 没有 secrets 是正常情况
+        return
+
+    for key in _SECRET_ENV_KEYS:
+        if os.environ.get(key):
+            continue
+        try:
+            value = secrets[key]
+        except Exception:  # noqa: BLE001 —— 单个 key 不存在不影响其它 key
+            continue
+        if value is not None:
+            os.environ[key] = str(value)
+
+
+def allow_registration() -> bool:
+    """是否允许自助注册。公网部署建议设为 false。"""
+    raw = _env_str("ZHIGOU_ALLOW_REGISTRATION", "true").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
 # --------------------------------------------------------------------------
 # 数据与存储路径
 # --------------------------------------------------------------------------

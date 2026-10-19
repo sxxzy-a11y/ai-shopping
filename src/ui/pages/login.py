@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import accounts
+from src import accounts, config
 from src.errors import ZhigouError, to_user_message
 from src.ui import components, state
 
@@ -47,6 +47,9 @@ def render() -> None:
         st.markdown(_LOGIN_EDITORIAL, unsafe_allow_html=True)
     with right:
         mode = st.session_state.get(_KEY_MODE, _MODE_LOGIN)
+        if mode == _MODE_REGISTER and not config.allow_registration():
+            mode = _MODE_LOGIN
+            st.session_state[_KEY_MODE] = _MODE_LOGIN
         st.markdown(
             '<div class="zg-form-head">'
             + ("登录 / Sign in" if mode == _MODE_LOGIN else "注册 / Register")
@@ -116,6 +119,8 @@ def _render_login_form() -> None:
 
 
 def _render_register_form() -> None:
+    if not config.allow_registration():
+        return
     components.caption(
         "注册得到的账号一律是**普通用户**。管理员权限只能由现有管理员授予——"
         "不设「第一个注册的人自动成为管理员」这种规则。"
@@ -153,7 +158,7 @@ def _render_mode_switch(mode: str) -> None:
         if st.button("已有账号，去登录", width="stretch"):
             st.session_state[_KEY_MODE] = _MODE_LOGIN
             st.rerun()
-    else:
+    elif config.allow_registration():
         if st.button("没有账号？注册一个", width="stretch"):
             st.session_state[_KEY_MODE] = _MODE_REGISTER
             st.rerun()
