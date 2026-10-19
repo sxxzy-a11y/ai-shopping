@@ -248,6 +248,17 @@ def _bootstrap_once() -> None:
         logger.warning("初始管理员创建失败: %s", exc.detail or exc)
         return
 
+    # 一次性恢复通道：部署平台临时设置 ZHIGOU_RESET_ADMIN_PASSWORD 后重启，
+    # 用新密码覆盖已有管理员；成功后应立即从 Secrets 删除该变量。
+    try:
+        if accounts.reset_admin_password_from_env():
+            logger.info(
+                "管理员密码已按临时 Secret 重置；请立即删除 "
+                "ZHIGOU_RESET_ADMIN_PASSWORD 并重启。"
+            )
+    except ZhigouError as exc:
+        logger.warning("临时管理员密码重置失败: %s", exc.detail or exc)
+
     if created is None:
         return
 

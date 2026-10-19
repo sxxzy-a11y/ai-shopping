@@ -160,3 +160,23 @@ def ensure_initial_admin() -> tuple[User, str] | None:
         lines.append("这段密码只在本次启动输出里出现一次，请登录后立即修改。")
 
     return user, "\n".join(lines)
+
+
+def reset_admin_password_from_env() -> bool:
+    """按临时 Secret 重置已有管理员密码；用后应立即删除该 Secret。
+
+    只重置配置的管理员名（默认 admin），且要求该账号仍存在且为管理员。
+    这是给“初始密码丢了/忘了”准备的一次性恢复通道，不改变注册与权限规则。
+    """
+    password = config.reset_admin_password()
+    if not password:
+        return False
+
+    username = config.admin_username() or DEFAULT_ADMIN_USERNAME
+    user = database.get_user(username)
+    if user is None or user.role != ROLE_ADMIN:
+        return False
+
+    validate_password(password)
+    database.set_user_password(username, password, viewer=user)
+    return True

@@ -78,6 +78,7 @@ _SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
     "ZHIGOU_ADMIN_USERNAME",
     "ZHIGOU_ADMIN_PASSWORD",
     "ZHIGOU_ALLOW_REGISTRATION",
+    "ZHIGOU_RESET_ADMIN_PASSWORD",
 )
 
 
@@ -200,6 +201,11 @@ def admin_password() -> str:
     克隆这份代码的人发一个公开密码。
     """
     return _env_str(ADMIN_PASSWORD_ENV)
+
+
+def reset_admin_password() -> str:
+    """一次性重置已有管理员密码的临时值；用后应从部署平台删除。"""
+    return _env_str("ZHIGOU_RESET_ADMIN_PASSWORD")
 
 
 # --------------------------------------------------------------------------
