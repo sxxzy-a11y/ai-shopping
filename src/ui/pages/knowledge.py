@@ -12,15 +12,15 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import ai_enhance, ai_service, config
+from src import ai_enhance, ai_service
 from src.data_loader import Catalog
+from src.demand_parser import parse_demand
 from src.errors import ZhigouError, to_user_message
-from src.knowledge.search import search_knowledge
+from src.recommender import recommend
 from src.ui import components, state
 
 _INPUT_KEY = "zg_knowledge_query"
 _RESULT_KEY = "zg_knowledge_results"
-_PRICE_KEY = "zg_knowledge_price_query"
 
 #: 待执行的问题。示例按钮点击后写这里、`st.rerun()`，
 #: 由本轮渲染**在输入控件实例化之前**消费。
@@ -36,6 +36,7 @@ _ANSWER_KEY = "zg_knowledge_answer"
 _AI_NOTE_KEY = "zg_knowledge_notes"
 _MODE_KEY = "zg_knowledge_mode"
 _SOURCE_KEY = "zg_knowledge_source"
+_PRODUCT_COUNT_KEY = "zg_knowledge_product_count"
 _NEED_KEY_KEY = "zg_knowledge_need_key"
 _DISABLED_KEY = "zg_knowledge_disabled"
 
@@ -57,13 +58,33 @@ EXAMPLE_QUESTIONS: tuple[str, ...] = (
 )
 
 
-def _has_price_intent(text: str) -> bool:
-    """问题里是否在追问价格。
+_PRODUCT_INTENT_TERMS = (
+    "推荐",
+    "买什么",
+    "买哪",
+    "哪款",
+    "哪个好",
+    "值得买",
+    "值得",
+    "选购",
+    "选什么",
+    "怎么选",
+    "用什么",
+    "买",
+)
 
-    价格类问题**不走问答**——检索按文本相关性找资料，不理解数值约束。
-    原型实测时问「2000 元以内买什么手机」，它会返回一款远超预算的商品。
+
+def _has_product_intent(query: str, demand) -> bool:
+    """是否应该用「知识库 + 商品库」回答具体商品。
+
+    只说品类但没有“推荐/买/预算”等问题，仍然走知识问答；
+    有明确预算或推荐意图时，改为检索商品库候选。
     """
-    return any(term in text for term in config.KNOWLEDGE_PRICE_INTENT_TERMS)
+    if not (demand.category or demand.budget is not None):
+        return False
+    return demand.budget is not None or any(
+        term in query for term in _PRODUCT_INTENT_TERMS
+    )
 
 
 def _ai_ready() -> bool:
@@ -93,9 +114,9 @@ def _clear_results() -> None:
         _NEED_KEY_KEY,
         _DISABLED_KEY,
         _RESULT_KEY,
-        _PRICE_KEY,
         _MODE_KEY,
         _SOURCE_KEY,
+        _PRODUCT_COUNT_KEY,
     ):
         st.session_state.pop(key, None)
 
@@ -118,13 +139,9 @@ def _remember_general_answer(query: str) -> None:
         )
 
 
-def _run_query(query: str) -> None:
-    """执行一次提问：检索 → 组织回答。只把结果写进会话状态，不做渲染。"""
+def _run_query(query: str, catalog: Catalog) -> None:
+    """执行一次提问：知识库 / 商品库 → 组织回答。只写会话状态。"""
     _clear_results()
-
-    if _has_price_intent(query):
-        st.session_state[_PRICE_KEY] = query
-        return
 
     from src import settings as _settings
 
@@ -137,10 +154,40 @@ def _run_query(query: str) -> None:
         st.session_state[_NEED_KEY_KEY] = True
         return
 
+    try:
+        demand = parse_demand(query, known_brands=catalog.brands())
+    except ZhigouError:
+        demand = None
+
+    product_intent = demand is not None and _has_product_intent(query, demand)
+
     result = state.retrieve_knowledge(query)
     passages = result.passages
     st.session_state[_RESULT_KEY] = passages
     st.session_state[_MODE_KEY] = (result.mode_label, result.note)
+
+    # 涉及具体商品/预算：用真实商品库候选，让 AI 说出具体型号与参考价。
+    if product_intent:
+        try:
+            rec = recommend(catalog, demand, limit=5)
+            items = rec.within_budget[:5] or rec.over_budget[:5]
+        except ZhigouError:
+            items = []
+        if items:
+            try:
+                answer = ai_enhance.answer_with_products(
+                    query,
+                    passages,
+                    items,
+                    service=ai_service.get_service(),
+                )
+            except ZhigouError:
+                answer = ""
+            if answer:
+                st.session_state[_ANSWER_KEY] = answer
+                st.session_state[_SOURCE_KEY] = "products"
+                st.session_state[_PRODUCT_COUNT_KEY] = len(items)
+                return
 
     # 知识库没有直接资料：用 AI 通用知识补答，界面会明确标注。
     if not passages:
@@ -178,6 +225,14 @@ def _render_answer() -> None:
             "不是本项目知识库或商品数据；具体价格、库存和参数请到"
             "「智能分析」按条件筛选核实。",
             "warn",
+        )
+    elif st.session_state.get(_SOURCE_KEY) == "products":
+        count = st.session_state.get(_PRODUCT_COUNT_KEY, 0)
+        components.show_notice(
+            f"以下推荐来自知识库与商品库（{count} 件真实候选）。"
+            "商品名称和参考价来自商品库；价格不是实时价格，"
+            "系统匹配评分不是用户口碑或销量。",
+            "info",
         )
     with st.container(border=True):
         st.markdown(str(answer))
@@ -218,20 +273,6 @@ def _render_ai_failure(note: str) -> None:
     components.show_notice(note, "warn")
 
 
-def _render_price_guidance(query: str) -> None:
-    """价格类问题的引导，替代作答。"""
-    components.show_notice(
-        "这个问题涉及价格或预算，不适合用问答回答——"
-        "问答依据的是资料文本，不理解价格范围，很容易给出与预算不符的商品。",
-        "warn",
-    )
-    components.caption("价格和参数请走商品筛选，那边按结构化数据计算，结论准确。")
-    if st.button("带着这个问题去筛选商品", type="primary"):
-        from src.ui.pages.home import go_to_analysis
-
-        go_to_analysis(query)
-
-
 def _render_examples() -> None:
     components.section_title("示例问题")
     components.caption("点一下就能试：")
@@ -250,12 +291,13 @@ def render(catalog: Catalog) -> None:
     pending = st.session_state.pop(_PENDING_KEY, None)
     if pending is not None:
         st.session_state[_INPUT_KEY] = pending
-        _run_query(str(pending))
+        _run_query(str(pending), catalog)
 
     components.page_header(
         "AI 问答",
-        "问一个商品选购问题，系统优先检索知识库；没有直接资料时由 AI 用通用知识补充，"
-        "并明确标注。价格与参数请用「智能分析」按条件筛选。",
+        "问一个商品选购问题，系统优先检索知识库；涉及具体商品或预算时，"
+        "会从商品库挑出真实候选并结合数据回答；资料不足时由 AI 用通用知识补充，"
+        "并明确标注。商品库价格是参考价，不是实时价格。",
         right=components.runtime_chip(),
     )
 
@@ -264,7 +306,7 @@ def render(catalog: Catalog) -> None:
             '<div class="zg-card-title">问一个选购问题</div>'
             '<div class="zg-card-sub" style="margin-bottom:10px">'
             "比如「笔记本多重适合带出门」「手机拍照怎么看」。"
-            "回答优先依据知识库；资料未覆盖时由 AI 用通用知识补充。"
+            "回答会结合知识库与商品库；通用知识会明确标注。"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -282,7 +324,7 @@ def render(catalog: Catalog) -> None:
         with columns[1]:
             st.markdown(
                 '<div class="zg-caption" style="padding-top:9px">'
-                "回答优先依据知识库；资料未覆盖时会标注为 AI 通用知识。</div>",
+                "具体商品推荐会结合商品库真实候选；通用知识会明确标注。</div>",
                 unsafe_allow_html=True,
             )
 
@@ -292,14 +334,9 @@ def render(catalog: Catalog) -> None:
             _clear_results()
             components.show_notice("请先输入一个问题。", "warn")
             return
-        _run_query(query)
+        _run_query(query, catalog)
 
     st.write("")
-
-    price_query = st.session_state.get(_PRICE_KEY)
-    if price_query:
-        _render_price_guidance(str(price_query))
-        return
 
     if st.session_state.get(_NEED_KEY_KEY):
         _render_need_key()
@@ -323,7 +360,11 @@ def render(catalog: Catalog) -> None:
     else:
         _render_empty()
 
-    if st.session_state.get(_SOURCE_KEY) == "general":
+    source = st.session_state.get(_SOURCE_KEY)
+    if source == "products":
+        count = st.session_state.get(_PRODUCT_COUNT_KEY, 0)
+        components.caption(f"本次使用：知识库 + 商品库（{count} 件候选）。")
+    elif source == "general":
         components.caption("本次使用：AI 通用知识（非实时联网，未引用知识库）。")
     else:
         mode = st.session_state.get(_MODE_KEY)

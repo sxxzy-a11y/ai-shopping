@@ -790,22 +790,22 @@ def test_ai_qa_reports_failure_without_partial_output(monkeypatch):
     assert "找到的资料" not in body, "不应回退成片段展示"
 
 
-def test_ai_qa_refuses_price_questions():
-    """价格类问题不给问答答案，改为引导去筛选。"""
-    at = _ask_ai_qa(_run(), "500 元以内有什么手机")
+def test_ai_qa_answers_price_questions_with_product_data(enable_ai):
+    """有预算的具体商品问题：用商品库候选回答，不再直接拒绝。"""
+    enable_ai(
+        lambda request: _answer_reply(
+            "推荐红米 Turbo 4，参考价 1499 元，适合预算有限的日常使用。"
+        )
+    )
+
+    at = _ask_ai_qa(_run(), "2000 元以内手机推荐")
     _assert_clean(at)
 
     body = _all_text(at)
-    assert "价格" in body and "筛选" in body
-    assert "找到的资料" not in body
-
-
-def test_ai_qa_guides_to_analysis_on_click():
-    at = _ask_ai_qa(_run(), "预算 2000 的手机推荐")
-    _button(at, "带着这个问题去筛选商品").click().run()
-    _assert_clean(at)
-
-    assert _state(at, "zg_current_page") == "智能分析"
+    assert "红米 Turbo 4" in body, "应说出具体手机"
+    assert "1499" in body, "应引用商品库参考价"
+    assert "商品库" in body, "应标明数据来自商品库"
+    assert "不适合用问答回答" not in body, "不应再显示旧的拒绝提示"
 
 
 def test_ai_qa_empty_input_is_rejected():

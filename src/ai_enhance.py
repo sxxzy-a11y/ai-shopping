@@ -753,6 +753,84 @@ def answer_from_general_knowledge(query: str, *, service: AIService) -> str:
     return answer
 
 
+_PRODUCT_ANSWER_SYSTEM = """你是「智购参谋」的消费决策助手。\
+请同时参考「知识库片段」和「商品库候选」回答用户的问题。
+
+严格遵守：
+1. **必须推荐 2–3 款具体商品，且只能从候选商品里选。**\
+写清商品名称、参考价，以及 1–2 个与用户需求相关的匹配理由。
+2. 商品库里的价格是参考价，不是实时价格；系统匹配评分是需求匹配度，\
+不是用户口碑、销量或专业评测。
+3. 知识库片段只用于选购原则；不要把片段里的价格当成当前价格。
+4. 不要编造候选列表之外的商品、价格、库存或参数；\
+不要使用「销量第一」「口碑最好」「全网最低」这类排他性说法。
+5. 用中文回答，控制在 250 字以内，直接给建议。
+6. 不要输出 JSON 之外的任何文字。
+
+输出格式：
+{"answer": "……"}"""
+
+
+def answer_with_products(
+    query: str,
+    passages: Sequence[Any],
+    items: Sequence[Any],
+    *,
+    service: AIService,
+) -> str:
+    """知识库原则 + 商品库真实候选，回答具体选哪几款。"""
+    product_context = [
+        {
+            "name": item.product.name,
+            "brand": item.product.brand,
+            "category": item.product.category_label,
+            "price": item.product.price,
+            "price_label": item.product.price_label,
+            "specs": item.product.specs,
+            "use_cases": item.product.use_cases,
+            "pros": item.product.pros[:4],
+            "cons": item.product.cons[:3],
+            "score": item.score.total,
+            "match_level": item.score.match_level,
+            "budget": item.budget_label,
+            "data_source": item.product.data_source,
+        }
+        for item in items
+    ]
+    fragments = [
+        {
+            "title": passage.title,
+            "content": passage.excerpt,
+        }
+        for passage in passages[:3]
+    ]
+    user = (
+        f"用户的问题：{query}\n\n"
+        f"知识库片段：\n{json.dumps(fragments, ensure_ascii=False, indent=1)}\n\n"
+        f"商品库候选：\n{json.dumps(product_context, ensure_ascii=False, indent=1)}\n\n"
+        f"请按要求输出 JSON。"
+    )
+    payload = service.complete_json(_PRODUCT_ANSWER_SYSTEM, user)
+    answer = " ".join(str(payload.get("answer") or "").split()).strip()
+    if not answer:
+        raise UpstreamResponseError("模型没有给出商品推荐回答。")
+
+    allowed_prices = set(_prices_in(query))
+    for item in items:
+        if item.product.price is not None:
+            allowed_prices.add(float(item.product.price))
+    for passage in passages:
+        allowed_prices |= _prices_in(passage.excerpt)
+    invented = find_invented_prices(answer, allowed_prices)
+    if invented:
+        raise UpstreamResponseError(f"回答里出现了商品库/资料中没有的价格：{invented}")
+
+    logger.info(
+        "商品问答作答完成：%d 个候选，回答 %d 字", len(items), len(answer)
+    )
+    return answer
+
+
 #: 给界面用的数据共享说明。调用外部服务前必须展示。
 def data_sharing_notice(demand: Demand, item_count: int) -> str:
     """说明启用 AI 后会把哪些数据发出去。"""
