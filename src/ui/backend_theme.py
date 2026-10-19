@@ -39,6 +39,7 @@ _STYLES = f"""
       radial-gradient(900px 650px at 62% 16%, rgba(231, 201, 143, .32), transparent 68%),
       radial-gradient(850px 620px at 48% 10%, rgba(231, 201, 143, .30), transparent 68%),
       radial-gradient(600px 500px at 58% 52%, rgba(201, 154, 74, .14), transparent 70%),
+      radial-gradient(520px 700px at 2% 45%, rgba(201, 154, 74, .34), transparent 70%),
       radial-gradient(820px 620px at 78% 86%, rgba(201, 154, 74, .26), transparent 70%),
       radial-gradient(700px 560px at 20% 102%, rgba(231, 201, 143, .30), transparent 70%),
       {PAPER} !important;
@@ -671,7 +672,7 @@ _STYLES = f"""
   {_SCOPE} {_SIDEBAR} .stButton > button p,
   {_SCOPE} {_SIDEBAR} .stButton > button span {{ color: inherit !important; }}
   {_SCOPE} {_SIDEBAR} .stButton > button:hover {{
-    background: rgba(255, 250, 242, .62) !important;
+    background: rgba(255, 250, 242, .34) !important;
     border-color: rgba(201, 154, 74, .28) !important;
     color: {BROWN} !important;
   }}
@@ -759,10 +760,16 @@ _STYLES = f"""
     height: calc(100vh - 28px) !important;
     border: 1px solid rgba(201, 154, 74, .30) !important;
     border-radius: 24px !important;
-    background: linear-gradient(180deg, rgba(255, 250, 242, .82), rgba(245, 237, 224, .62)) !important;
-    backdrop-filter: blur(30px) saturate(140%) !important;
-    -webkit-backdrop-filter: blur(30px) saturate(140%) !important;
-    box-shadow: 0 26px 60px rgba(120, 100, 75, .18), inset 0 1px 0 rgba(255,255,255,.80) !important;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 24%),
+      linear-gradient(180deg, rgba(255, 250, 242, .38), rgba(245, 237, 224, .18)) !important;
+    backdrop-filter: blur(40px) saturate(165%) !important;
+    -webkit-backdrop-filter: blur(40px) saturate(165%) !important;
+    border-color: rgba(255, 252, 244, .42) !important;
+    box-shadow:
+      0 26px 64px rgba(120, 100, 75, .18),
+      inset 0 1px 0 rgba(255, 255, 255, .92),
+      inset 0 0 0 1px rgba(255, 255, 255, .14) !important;
     overflow: hidden !important;
   }}
   {_SIDEBAR} > div:first-child {{
