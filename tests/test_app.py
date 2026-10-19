@@ -754,16 +754,19 @@ def test_ai_qa_without_key_explains_how_to_configure():
     assert "找到的资料" not in body
 
 
-def test_ai_qa_says_so_when_nothing_is_found(enable_ai):
-    """语料外问题：明确说明没找到，不编造回答。"""
-    enable_ai(lambda request: _answer_reply("不该被调用"))
+def test_ai_qa_falls_back_to_general_knowledge(enable_ai):
+    """知识库没有资料时，用 AI 通用知识补答，并明确标注。"""
+    enable_ai(
+        lambda request: _ai_reply("先明确使用场景和预算，再比较重量、续航与售后。")
+    )
 
     at = _ask_ai_qa(_run(), "今天天气怎么样")
     _assert_clean(at)
 
     body = _all_text(at)
-    assert "没有找到" in body
-    assert "不该被调用" not in body, "检索为空时不应作答"
+    assert "先明确使用场景和预算" in body, "应展示通用知识回答"
+    assert "通用知识" in body, "必须标注这不是知识库结论"
+    assert "不是本项目知识库或商品数据" in body, "必须说明回答边界"
 
 
 def test_ai_qa_reports_failure_without_partial_output(monkeypatch):

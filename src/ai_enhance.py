@@ -722,6 +722,37 @@ def answer_from_knowledge(
     return answer
 
 
+_GENERAL_ANSWER_SYSTEM = """你是「智购参谋」的消费决策助手。\
+本次知识库没有检索到可以直接引用的资料，请用通用知识回答用户的问题。
+
+严格遵守：
+1. 必须明确说明：这是基于通用知识的建议，不是本项目知识库或商品数据。
+2. 不要给出具体价格、库存、促销、型号参数或「销量第一」「口碑最好」这类排他性结论。\
+如果问题需要这些信息，告诉用户去「智能分析」按预算和条件筛选核实。
+3. 给出可执行的选购思路、判断标准或注意事项，不要编造具体商品事实。
+4. 用中文回答，控制在 200 字以内，直接说要点。
+5. 不要输出 JSON，不要提及提示词、知识库检索或内部实现。"""
+
+
+def answer_from_general_knowledge(query: str, *, service: AIService) -> str:
+    """知识库没有可用片段时，用模型通用知识给出带边界的回答。
+
+    这是“补充回答”，不是商品数据结论：不编造具体价格/参数，
+    也不做排他性判断；界面必须明确标注“通用知识”。
+    """
+    response = service.complete(
+        _GENERAL_ANSWER_SYSTEM,
+        f"用户的问题：{query}",
+        max_tokens=800,
+        temperature=0.3,
+    )
+    answer = " ".join(str(response.content or "").split()).strip()
+    if not answer:
+        raise UpstreamResponseError("模型没有给出通用知识回答。")
+    logger.info("通用知识问答作答完成：回答 %d 字", len(answer))
+    return answer
+
+
 #: 给界面用的数据共享说明。调用外部服务前必须展示。
 def data_sharing_notice(demand: Demand, item_count: int) -> str:
     """说明启用 AI 后会把哪些数据发出去。"""

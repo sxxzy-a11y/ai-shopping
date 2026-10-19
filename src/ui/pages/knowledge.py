@@ -1,8 +1,8 @@
 """AI 问答页：问一个选购问题，系统检索知识库并组织成回答。
 
-形态是**一问一答**：AI 恒开，回答由模型依据检索到的片段组织；
-检索片段**不在界面上展示**，它只是作答的依据（提示词限定只依据片段，
-价格与排他性结论由 `ai_enhance` 的强制校验兜底）。
+形态是**一问一答**：AI 恒开。回答优先由模型依据检索到的片段组织；
+检索片段**不在界面上展示**。知识库没有直接资料时，回退到 AI 通用知识，
+界面必须明确标注「通用知识」并提示价格/参数去智能分析核实。
 
 失败与未配置都不静默：未配密钥时明确说明怎么配，调用失败时说明原因。
 **任何情况下都不展示未通过校验的半成品。**
@@ -35,8 +35,19 @@ _PENDING_KEY = "zg_knowledge_pending"
 _ANSWER_KEY = "zg_knowledge_answer"
 _AI_NOTE_KEY = "zg_knowledge_notes"
 _MODE_KEY = "zg_knowledge_mode"
+_SOURCE_KEY = "zg_knowledge_source"
 _NEED_KEY_KEY = "zg_knowledge_need_key"
 _DISABLED_KEY = "zg_knowledge_disabled"
+
+#: 模型在“只依据片段”模式下也可能给出这类拒答；命中后改用通用知识补答。
+_REFUSAL_MARKERS = (
+    "暂时无法回答",
+    "无法回答",
+    "暂时答不了",
+    "没有足够",
+    "资料不足",
+    "无法给出",
+)
 
 EXAMPLE_QUESTIONS: tuple[str, ...] = (
     "笔记本多重适合带出门",
@@ -84,8 +95,27 @@ def _clear_results() -> None:
         _RESULT_KEY,
         _PRICE_KEY,
         _MODE_KEY,
+        _SOURCE_KEY,
     ):
         st.session_state.pop(key, None)
+
+
+def _remember_general_answer(query: str) -> None:
+    """知识库不足时的通用知识补答；失败仍按原逻辑如实说明。"""
+    try:
+        st.session_state[_ANSWER_KEY] = ai_enhance.answer_from_general_knowledge(
+            query, service=ai_service.get_service()
+        )
+        st.session_state[_SOURCE_KEY] = "general"
+    except ZhigouError as exc:
+        st.session_state[_AI_NOTE_KEY] = (
+            f"这次没能生成回答：{to_user_message(exc)}可以稍后重试，"
+            "或到「智能分析」页按条件筛选商品。"
+        )
+    except Exception:  # noqa: BLE001 —— 任何意外都不该让页面崩掉
+        st.session_state[_AI_NOTE_KEY] = (
+            "这次没能生成回答，请稍后重试，或到「智能分析」页按条件筛选商品。"
+        )
 
 
 def _run_query(query: str) -> None:
@@ -111,13 +141,22 @@ def _run_query(query: str) -> None:
     passages = result.passages
     st.session_state[_RESULT_KEY] = passages
     st.session_state[_MODE_KEY] = (result.mode_label, result.note)
+
+    # 知识库没有直接资料：用 AI 通用知识补答，界面会明确标注。
     if not passages:
+        _remember_general_answer(query)
         return
 
     try:
-        st.session_state[_ANSWER_KEY] = ai_enhance.answer_from_knowledge(
+        answer = ai_enhance.answer_from_knowledge(
             query, passages, service=ai_service.get_service()
         )
+        # 极少情况下模型仍会拒答；这时也补一次通用知识回答。
+        if any(marker in answer for marker in _REFUSAL_MARKERS):
+            _remember_general_answer(query)
+            return
+        st.session_state[_ANSWER_KEY] = answer
+        st.session_state[_SOURCE_KEY] = "knowledge"
     except ZhigouError as exc:
         st.session_state[_AI_NOTE_KEY] = (
             f"这次没能生成回答：{to_user_message(exc)}可以稍后重试，"
@@ -133,14 +172,20 @@ def _render_answer() -> None:
     answer = st.session_state.get(_ANSWER_KEY)
     if not answer:
         return
+    if st.session_state.get(_SOURCE_KEY) == "general":
+        components.show_notice(
+            "知识库没有检索到直接依据。以下为 AI 通用知识建议，"
+            "不是本项目知识库或商品数据；具体价格、库存和参数请到"
+            "「智能分析」按条件筛选核实。",
+            "warn",
+        )
     with st.container(border=True):
         st.markdown(str(answer))
 
 
 def _render_empty() -> None:
     components.show_notice(
-        "知识库里没有找到与这个问题相关的资料。"
-        "系统不会在没有依据的情况下作答——换个说法再试，或者到「智能分析」页"
+        "这次暂时没有生成回答。可以换个说法再试，或者到「智能分析」页"
         "按条件筛选商品。",
         "warn",
     )
@@ -149,8 +194,8 @@ def _render_empty() -> None:
 def _render_need_key() -> None:
     """未配置密钥时的可行动提示——告诉用户怎么配，而不是报错。"""
     components.show_notice(
-        "「AI 问答」需要配置模型密钥后才能使用——这一页的回答由模型依据"
-        "知识库资料组织，没有密钥时不会有可用形态。",
+        "「AI 问答」需要配置模型密钥后才能使用——回答优先依据知识库，"
+        "资料未覆盖时由模型用通用知识补充；没有密钥时不会有可用形态。",
         "warn",
     )
     st.markdown(
@@ -209,8 +254,8 @@ def render(catalog: Catalog) -> None:
 
     components.page_header(
         "AI 问答",
-        "问一个商品选购问题，系统检索知识库资料并由 AI 组织成回答。"
-        "价格与参数请用「智能分析」按条件筛选。",
+        "问一个商品选购问题，系统优先检索知识库；没有直接资料时由 AI 用通用知识补充，"
+        "并明确标注。价格与参数请用「智能分析」按条件筛选。",
         right=components.runtime_chip(),
     )
 
@@ -219,7 +264,7 @@ def render(catalog: Catalog) -> None:
             '<div class="zg-card-title">问一个选购问题</div>'
             '<div class="zg-card-sub" style="margin-bottom:10px">'
             "比如「笔记本多重适合带出门」「手机拍照怎么看」。"
-            "回答由 AI 依据知识库资料组织。"
+            "回答优先依据知识库；资料未覆盖时由 AI 用通用知识补充。"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -237,7 +282,7 @@ def render(catalog: Catalog) -> None:
         with columns[1]:
             st.markdown(
                 '<div class="zg-caption" style="padding-top:9px">'
-                "回答只依据知识库资料，资料未覆盖时会直接说明。</div>",
+                "回答优先依据知识库；资料未覆盖时会标注为 AI 通用知识。</div>",
                 unsafe_allow_html=True,
             )
 
@@ -278,17 +323,20 @@ def render(catalog: Catalog) -> None:
     else:
         _render_empty()
 
-    mode = st.session_state.get(_MODE_KEY)
-    if mode:
-        label, note = mode
-        if note:
-            components.show_notice(str(note), "warn")
-        components.caption(
-            f"本次使用：{label}（{'向量检索' if label == '语义检索' else 'BM25 关键词检索'}）。"
-        )
+    if st.session_state.get(_SOURCE_KEY) == "general":
+        components.caption("本次使用：AI 通用知识（非实时联网，未引用知识库）。")
+    else:
+        mode = st.session_state.get(_MODE_KEY)
+        if mode:
+            label, note = mode
+            if note:
+                components.show_notice(str(note), "warn")
+            components.caption(
+                f"本次使用：{label}（{'向量检索' if label == '语义检索' else 'BM25 关键词检索'}）。"
+            )
 
     st.write("")
     components.caption(
-        "知识库内容由本项目整理，不是厂商资料；商品数据同样来自公开资料整理，"
+        "知识库内容由本项目整理，不是厂商资料；AI 通用知识不能替代商品数据。"
         "价格不是实时价格、参数未逐条核验。"
     )
