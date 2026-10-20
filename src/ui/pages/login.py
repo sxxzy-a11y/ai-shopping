@@ -751,18 +751,18 @@ _LOGIN_EDITORIAL = """
 <div class="zg-editorial">
   <div class="zg-ed-meta">
     <span><b>SmartBuy</b> — 01</span>
-    <span>AI Consumer Intelligence</span>
+    <span>消费决策工作台</span>
   </div>
-  <div class="zg-ed-kicker">基于 AI 的消费决策助手</div>
+  <div class="zg-ed-kicker">预算与用途，先想清楚</div>
   <h1 class="zg-ed-title">智购参谋</h1>
   <p class="zg-ed-sub">
     登录后使用。没有账号可以直接注册一个，注册得到的都是普通用户。
-    我们把<em>预算与真实需求</em>放在第一位，每个结论都能追溯到具体数据。
+    我们先把<em>预算与真实用途</em>说清楚，再给建议；商品结论尽量回到具体数据。
   </p>
   <div class="zg-ed-facts">
     <div><b>可解释</b><small>评分逐项摊开</small></div>
     <div><b>可追溯</b><small>来源与更新时间</small></div>
-    <div><b>本地运行</b><small>数据不出本机</small></div>
+    <div><b>规则排序</b><small>AI 不参与打分</small></div>
   </div>
   <div class="zg-ed-foot">SmartBuy · 消费决策，不卖货</div>
 </div>
@@ -785,7 +785,7 @@ _LOGIN_INDEX = """
     </div>
     <div class="zg-login-index-item">
       <span class="zg-login-index-num">03</span>
-      <div><h3>AI 问答</h3><p>基于知识库继续追问，结论不离开数据。</p></div>
+      <div><h3>AI 问答</h3><p>先查知识库和商品库，资料不足时会明确标注。</p></div>
     </div>
   </div>
 </section>

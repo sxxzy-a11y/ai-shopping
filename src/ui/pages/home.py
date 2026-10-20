@@ -52,8 +52,8 @@ def render(catalog: Catalog) -> None:
     st.markdown(
         components.home_masthead(
             "智购参谋",
-            "基于 AI 的消费决策助手 —— 帮你在预算内买到真正适合自己的商品，"
-            "并且告诉你这个结论是怎么得出来的。",
+            "先说清楚买什么、花多少，再看哪几件更合适。"
+            "推荐会按你的用途排序，分数和依据都能展开。",
             enter_class=enter_cls,
         ),
         unsafe_allow_html=True,
