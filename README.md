@@ -362,7 +362,7 @@ copy .env.example .env
 
 | 文档 | 内容 |
 |---|---|
-| [docs/competition-brief.md](docs/competition-brief.md) | 一页式项目说明，适合提交或放在演示 PPT 前 |
+| [docs/competition-brief.md](docs/competition-brief.md) | 比赛用项目说明，适合提交或放在演示 PPT 前 |
 | [docs/demo_script.md](docs/demo_script.md) | 8 分钟演示流程、实测数字和答辩问题 |
 | [docs/requirements.md](docs/requirements.md) | 当前版本的需求范围、用户场景和验收标准 |
 | [docs/architecture.md](docs/architecture.md) | 分层、数据流、检索、Agent 和抗幻觉设计 |
