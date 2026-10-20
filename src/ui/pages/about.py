@@ -57,7 +57,10 @@ def render(catalog: Catalog) -> None:
 
     # --- 数据限制 ---------------------------------------------------------
     components.section_title("数据来源与限制")
-    components.show_notice(catalog.disclaimer or "当前数据集未附带说明。", "warn")
+    # show_notice 按纯文本渲染；数据集说明里保留了 Markdown 强调，
+    # 在界面上去掉标记，避免把 ** 原样显示出来。
+    disclaimer = (catalog.disclaimer or "当前数据集未附带说明。").replace("**", "")
+    components.show_notice(disclaimer, "warn")
     st.write("")
     st.markdown(
         bullet_list(
