@@ -27,12 +27,15 @@ _KEY_TRANSITION = "zg_login_transition"
 
 def render() -> None:
     """渲染登录页。**不接受 catalog**——未登录时不该有任何数据可查。"""
-    # 入场动效只在本次会话第一次渲染时播放；提交表单的重跑不再重复
+    # 入场动效只在本次会话第一次渲染时播放；提交表单的重跑不再重复。
+    #
+    # 注意：幕布元素**每次都要发**，不是首帧才发。上一次渲染多一个元素、这次少一个，
+    # Streamlit 按序号对不齐，会把整块内容错位复用——云上重连触发重跑时，
+    # 页面上就会冒出第二份登录页，而且是从页脚开始、顺序还错了一位。
     fresh = not st.session_state.get("zg_login_entered")
     st.session_state["zg_login_entered"] = True
 
-    if fresh:
-        st.markdown(_LOGIN_VEIL, unsafe_allow_html=True)
+    st.markdown(_LOGIN_VEIL if fresh else _LOGIN_VEIL_OFF, unsafe_allow_html=True)
     st.markdown(_LOGIN_FX, unsafe_allow_html=True)
     st.markdown(
         '<div class="zg-login-fx zg-login-enter"></div>' if fresh
@@ -230,6 +233,7 @@ _LOGIN_FX = """
   [data-testid="stAppViewContainer"]:has(.zg-login-fx) [data-testid="InputInstructions"] {
     display: none;
   }
+
   .zg-login-bg::before {
     content: ""; position: absolute; inset: 0; pointer-events: none;
     opacity: .05; mix-blend-mode: overlay;
@@ -725,6 +729,11 @@ _LOGIN_VEIL = """
   <span class="zg-login-veil-bar"></span>
 </div>
 """
+
+#: 重跑时用的空幕布：元素还在（保证每次渲染的元素个数一样），只是不显示。
+_LOGIN_VEIL_OFF = (
+    '<div class="zg-login-veil" style="display:none" aria-hidden="true"></div>'
+)
 
 _LOGIN_GLOW = """
 <div class="zg-login-bg" aria-hidden="true"><span></span><span></span></div>

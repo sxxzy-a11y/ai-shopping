@@ -114,6 +114,10 @@ _STYLES = f"""
     border: 0; border-top: 1px solid {LINE}; margin: 18px 0;
   }}
 
+  /* Streamlit 会在输入框右下角渲染「Press Enter to apply / submit form」。
+     密码框那里它正好压在显示密码的眼睛图标上，两行字叠在一起。 */
+  [data-testid="InputInstructions"] {{ display: none; }}
+
   /* ===================================================================
      侧栏（唯一使用 data-testid 的地方，见模块 docstring）
      =================================================================== */
