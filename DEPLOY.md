@@ -4,7 +4,7 @@
 
 ## 当前演示部署
 
-- 地址：<https://ai-shopping-muofh8jcwgc3weydpvmagc.streamlit.app/>
+- 地址：<https://ai-shopping-10.streamlit.app/>
 - 平台：Streamlit Community Cloud
 - 代码仓库：<https://github.com/sxxzy-a11y/ai-shopping>
 

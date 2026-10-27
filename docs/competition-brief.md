@@ -11,7 +11,7 @@
 | 项目名称 | 智购参谋 |
 | 项目形态 | Web 应用（Streamlit + SQLite） |
 | 面向场景 | 笔记本电脑、手机的选购决策 |
-| 在线演示 | <https://ai-shopping-muofh8jcwgc3weydpvmagc.streamlit.app/> |
+| 在线演示 | <https://ai-shopping-10.streamlit.app/> |
 | 代码仓库 | <https://github.com/sxxzy-a11y/ai-shopping> |
 | 核心能力 | 需求解析、商品筛选、匹配评分、多商品比较、知识问答、受控 Agent |
 | 当前数据 | 20 件商品、2 个品类、13 个品牌 |

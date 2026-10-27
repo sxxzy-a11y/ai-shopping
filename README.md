@@ -6,7 +6,7 @@
 
 它不替用户下单，也不假装自己是实时比价平台。它解决的是买之前的那个问题：**在有限预算里，哪件商品更适合这次的具体用途，为什么。**
 
-- 在线演示：<https://ai-shopping-muofh8jcwgc3weydpvmagc.streamlit.app/>
+- 在线演示：<https://ai-shopping-10.streamlit.app/>
 - 代码仓库：<https://github.com/sxxzy-a11y/ai-shopping>
 - 技术栈：Python、Streamlit、SQLite、pandas、pydantic、httpx
 - 当前数据：20 件商品，2 个品类（笔记本电脑、手机），13 个品牌
