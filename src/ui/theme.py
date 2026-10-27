@@ -104,6 +104,16 @@ _STYLES = f"""
   }}
   [data-testid="stAppViewContainer"] a {{ color: {BRAND}; }}
 
+  /* Streamlit 会往每个标题后面挂一个 16px 的锚点图标。这里的标题是大字号自定义
+     排版，图标会贴着标题右下角悬空，看起来像凭空多出一个错位的小方块——隐藏。 */
+  [data-testid="stMarkdownContainer"] a[href^="#"] {{ display: none; }}
+
+  /* 分隔线：默认的 #EFEAE0 放在暖纸底上几乎看不见，页面上只剩一大段空白。
+     给它一点对比度，并把 32px 的上下留白收到 18px。 */
+  [data-testid="stMain"] hr {{
+    border: 0; border-top: 1px solid {LINE}; margin: 18px 0;
+  }}
+
   /* ===================================================================
      侧栏（唯一使用 data-testid 的地方，见模块 docstring）
      =================================================================== */

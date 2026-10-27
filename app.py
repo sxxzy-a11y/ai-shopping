@@ -288,7 +288,9 @@ def main() -> None:
         page_title="智购参谋 · AI 消费决策助手",
         page_icon="◆",
         layout="wide",
-        initial_sidebar_state="expanded",
+        # auto：桌面端展开、窄屏自动收起。之前固定 expanded，手机上打开先被
+        # 一屏侧栏挡住，得先手动折叠才看得到内容。
+        initial_sidebar_state="auto",
     )
 
     # 云端 Secrets → 环境变量；本地没有 secrets 时静默跳过。

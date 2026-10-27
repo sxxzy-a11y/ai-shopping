@@ -42,3 +42,9 @@ _scratch_*
 
 # --- 本机 API 覆盖配置（含密钥） ---
 storage/api_config.json
+
+# --- Streamlit local secrets (never commit) ---
+.streamlit/secrets.toml
+
+# --- ?????pytest / ?????---
+.tmp/

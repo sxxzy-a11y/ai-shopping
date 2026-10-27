@@ -104,7 +104,7 @@ def _render_picker(catalog: Catalog) -> list:
     if st.session_state.get(_CATEGORY_KEY) not in label_by_category:
         st.session_state.pop(_CATEGORY_KEY, None)
 
-    col_category, col_items, col_action = st.columns([1.4, 2.6, 1.1])
+    col_category, col_items, col_action = st.columns([1.4, 2.3, 1.7])
     with col_category:
         st.write("")
         category_label = st.selectbox(

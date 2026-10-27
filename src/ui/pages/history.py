@@ -65,15 +65,22 @@ def _render_entry_row(entry: database.HistoryEntry) -> None:
         else ("brand" if entry.top_score is not None else "neutral")
     )
 
-    # 按钮列要给足宽度：中文四个字在窄列里会被竖着折成四行
-    col_main, col_score, col_open, col_delete = st.columns([5, 1, 2, 2])
+    # 按钮列要给足宽度：中文四个字在窄列里会被竖着折成四行。
+    # 得分标签并进标题那一行——单独占一列时它既贴不到标题、又和按钮对不齐。
+    # 操作区用横向容器排成一行（确认 / 查看 / 删除）：拆成并排的列时，
+    # 「确认删除」会被顶到行首，和按钮错开大半行。
+    col_main, col_actions = st.columns([7, 3], vertical_alignment="center")
 
     with col_main:
         st.markdown(
             f'<div class="zg-row" style="align-items:center">'
             f'  <div class="zg-thumb">{icons.icon("file", size=22)}</div>'
             f'  <div class="zg-row-main">'
-            f'    <div class="zg-row-name" style="font-size:14.5px">{esc(entry.demand_summary)}</div>'
+            f'    <div class="zg-row-name" style="font-size:14.5px">'
+            f"      {esc(entry.demand_summary)}"
+            f'      <span style="display:inline-block;margin-left:8px;vertical-align:1px">'
+            f"{chip(entry.score_label, tone)}</span>"
+            f"    </div>"
             f'    <div class="zg-row-spec" style="margin-bottom:0">'
             f"      {esc(entry.created_at_label)}　·　"
             f"      {entry.result_count} 件推荐"
@@ -83,22 +90,21 @@ def _render_entry_row(entry: database.HistoryEntry) -> None:
             f"</div>",
             unsafe_allow_html=True,
         )
-    with col_score:
-        st.markdown(
-            f'<div style="padding-top:10px;text-align:center">'
-            f"{chip(entry.score_label, tone)}</div>",
-            unsafe_allow_html=True,
-        )
-    with col_open:
-        if st.button("查看详情", key=f"open_{entry.id}", width="stretch"):
-            st.session_state[_SELECTED_KEY] = entry.id
-            st.rerun()
-    with col_delete:
-        confirmed = st.checkbox(
-            "确认删除", key=f"del_ok_{entry.id}", help="勾选后才能删除这条记录"
-        )
-        if st.button("删除", key=f"del_{entry.id}", width="stretch"):
-            _delete_entry(entry.id, confirmed)
+    with col_actions:
+        with st.container(
+            horizontal=True,
+            horizontal_alignment="right",
+            vertical_alignment="center",
+            gap="small",
+        ):
+            confirmed = st.checkbox(
+                "确认删除", key=f"del_ok_{entry.id}", help="勾选后才能删除这条记录"
+            )
+            if st.button("查看详情", key=f"open_{entry.id}"):
+                st.session_state[_SELECTED_KEY] = entry.id
+                st.rerun()
+            if st.button("删除", key=f"del_{entry.id}"):
+                _delete_entry(entry.id, confirmed)
 
 
 def _render_report_detail(entry_id: int) -> None:

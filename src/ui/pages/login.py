@@ -225,6 +225,11 @@ _LOGIN_FX = """
   [data-testid="stAppViewContainer"]:has(.zg-login-fx) .block-container {
     max-width: 1120px; padding-top: 4.2rem;
   }
+  /* Streamlit 会在 form 输入框里挂一句 "Press Enter to submit form"。
+     深色输入框上它是黑字，还正好压在输入框中间，看起来像一层重影。 */
+  [data-testid="stAppViewContainer"]:has(.zg-login-fx) [data-testid="InputInstructions"] {
+    display: none;
+  }
   .zg-login-bg::before {
     content: ""; position: absolute; inset: 0; pointer-events: none;
     opacity: .05; mix-blend-mode: overlay;
@@ -241,7 +246,7 @@ _LOGIN_FX = """
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 18px; background: #161511;
     pointer-events: none;
-    animation: zgVeilOut .45s ease 1.55s forwards;
+    animation: zgVeilOut .16s ease 1.02s forwards;
   }
   .zg-login-veil-mark {
     display: flex; gap: 16px; padding-left: 16px;
@@ -251,17 +256,17 @@ _LOGIN_FX = """
   }
   .zg-login-veil-mark span {
     display: inline-block; color: #35312A; opacity: .32;
-    animation: zgCharLit .5s ease forwards;
+    animation: zgCharLit .32s ease forwards;
   }
   .zg-login-veil-mark span:nth-child(1) { animation-delay: 0s; }
-  .zg-login-veil-mark span:nth-child(2) { animation-delay: .29s; }
-  .zg-login-veil-mark span:nth-child(3) { animation-delay: .58s; }
-  .zg-login-veil-mark span:nth-child(4) { animation-delay: .87s; }
+  .zg-login-veil-mark span:nth-child(2) { animation-delay: .16s; }
+  .zg-login-veil-mark span:nth-child(3) { animation-delay: .32s; }
+  .zg-login-veil-mark span:nth-child(4) { animation-delay: .48s; }
   .zg-login-veil-bar {
     width: 200px; height: 2px; border-radius: 2px;
     background: linear-gradient(90deg, #D3923C, #F0B35E);
     transform-origin: left;
-    animation: zgBar 1.16s linear both;
+    animation: zgBar .8s linear both;
   }
 
   /* ---------- 背景光斑 ---------- */
