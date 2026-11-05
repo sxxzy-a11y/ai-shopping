@@ -366,6 +366,7 @@ copy .env.example .env
 | [docs/demo_script.md](docs/demo_script.md) | 8 分钟演示流程、实测数字和答辩问题 |
 | [docs/requirements.md](docs/requirements.md) | 当前版本的需求范围、用户场景和验收标准 |
 | [docs/architecture.md](docs/architecture.md) | 分层、数据流、检索、Agent 和抗幻觉设计 |
+| [docs/technical-introduction.md](docs/technical-introduction.md) | 面向开发者的详细技术介绍：算法、数据结构、AI 校验、存储与限制 |
 | [docs/testing.md](docs/testing.md) | 测试结构、评测方法和已知边界 |
 | [docs/eval-report.md](docs/eval-report.md) | 41 条评测用例的结果与解读 |
 | [docs/data-disclaimer.md](docs/data-disclaimer.md) | 商品数据的来源、口径和使用限制 |
