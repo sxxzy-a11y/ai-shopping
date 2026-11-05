@@ -16,7 +16,7 @@
 - [x] 2.4 记录实际检索模式（当前为 BM25 本地关键词检索）与逐条/总耗时
 - [x] 2.5 实现 `--output-dir DIR`：一次运行同时写 `report.json` 与 `report.md`，两者由同一 `EvaluationReport` 渲染
 - [x] 2.6 在 `src/config.py` 增加 `eval_report_path()`，默认指向 `data/evaluation/report.json`
-- [x] 2.7 在 `.gitignore` 忽略生成的 `data/evaluation/report.json` 与 `report.md`
+- [x] 2.7 在 `.gitignore` 忽略本地生成的 `data/evaluation/report.md`，并将 `report.json` 作为线上演示快照提交
 - [x] 2.8 在 `eval/report.py` 实现 `load_report(path)`：处理缺失、坏 JSON、未知 schema、指纹不匹配，返回可直接渲染的加载结果
 
 ## 3. 评测页面
@@ -51,4 +51,4 @@
 - [x] 5.5 实测重跑评测，按实际输出核对 README、`docs/eval-report.md`、`docs/testing.md`、`docs/technical-introduction.md`、`docs/competition-brief.md`、`docs/roadmap.md`、`docs/demo_script.md` 中重复的用例数与指标数字；不一致处按实测更新，不手填
 - [x] 5.6 运行完整 `pytest`，确认全绿且没有新增警告
 - [x] 5.7 手动验收：生成报告后打开「效果评测」页，逐一验证正常、缺失、坏文件、未知 schema、指纹不匹配五种状态
-- [x] 5.8 检查 `git status`：只包含预期文件，确认生成的 `report.json` / `report.md` 未被提交
+- [x] 5.8 检查 `git status`：只包含预期文件，确认 `report.md` 未被提交、`report.json` 快照已提交

@@ -278,7 +278,7 @@ python scripts/evaluate.py --only 知识检索          # 只跑某一类
 python -m eval.runner --output-dir data/evaluation  # 同时写 report.json / report.md
 ```
 
-`report.json` 是机器可读版本，带 schema 版本、生成时间、输入指纹、逐条耗时与检索模式；`report.md` 与它同源生成。管理员登录后可在「效果评测」页直接查看。报告是本地生成物，不提交到仓库。
+`report.json` 是机器可读版本，带 schema 版本、生成时间、输入指纹、逐条耗时与检索模式；`report.md` 与它同源生成。管理员登录后可在「效果评测」页直接查看。仓库保留一份 `report.json` 快照供线上演示；本地重跑会更新它，数据变化时页面会提示「报告可能已过期」。`report.md` 仍作为本地生成物，不入库。
 
 当前自动指标：
 

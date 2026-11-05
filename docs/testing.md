@@ -104,7 +104,7 @@ python scripts/evaluate.py --only 知识检索
 python -m eval.runner --output-dir data/evaluation
 ```
 
-前两条输出终端 / Markdown 报告；最后一条同时生成 `data/evaluation/report.json` 与 `report.md`，管理员可在应用内「效果评测」页查看。报告是本地生成物，不提交到仓库；输入数据变化后，页面会提示报告可能已过期。
+前两条输出终端 / Markdown 报告；最后一条同时生成 `data/evaluation/report.json` 与 `report.md`，管理员可在应用内「效果评测」页查看。仓库保留一份 `report.json` 快照供线上演示；`report.md` 是本地生成物，不入库。输入数据变化后，页面会提示报告可能已过期。
 
 ### 2.1 自动指标
 

@@ -11,7 +11,7 @@
 - 报告新增机器可读的 `report.json`：包含生成时间、用例数、通过/失败、逐条耗时、分类汇总、自动指标与检索模式；`report.md` 与之同源生成，避免两份数字不一致。
 - 新增管理端「效果评测」页，读取 `data/evaluation/report.json`，展示总通过率、分类通过情况、失败明细与检索模式；报告不存在或格式过期时给出明确的生成命令，不展示任何推算数字。
 - 新增 `tests/test_eval_runner.py` 与 `tests/test_eval_dashboard.py`：覆盖 runner 可执行、单条失败不中断、输出结构、可复现性、报告缺失时的页面行为。
-- `.gitignore` 忽略生成的报告文件；README「测试与评估」补充生成命令与报告位置；`docs/eval-report.md` 用新渲染器重新生成。
+- `.gitignore` 忽略本地生成的 `report.md`，并保留一份 `report.json` 快照供线上演示；README「测试与评估」补充生成命令与报告位置；`docs/eval-report.md` 用新渲染器重新生成。
 
 **不做**：不改 `src/scoring.py` / `src/recommender.py` / 知识检索的核心逻辑；不新增运行时依赖；不联网；不引入第三方基准，评测仍是自评。
 

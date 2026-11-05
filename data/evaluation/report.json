@@ -1,0 +1,1155 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-05T21:48:35+08:00",
+  "dataset": {
+    "name": "智购参谋效果评测集",
+    "version": "2.0",
+    "updated_at": "2026-10-15",
+    "case_count": 41,
+    "cases_sha256": "7c65f6f65d153c6e5ba613d668888d5e25a3e6eaf9165d0ce97a52c0bed25333",
+    "products_sha256": "f615a6bbe4bb655b0b256efa81096a2696b5db80e27a31663b00c7cba8faf7c6"
+  },
+  "retrieval": {
+    "mode": "bm25",
+    "label": "BM25 本地关键词检索",
+    "detail": "未启用向量检索"
+  },
+  "summary": {
+    "total": 41,
+    "passed": 41,
+    "failed": 0,
+    "duration_ms": 306
+  },
+  "metrics": [
+    {
+      "key": "demand_understanding",
+      "label": "需求理解准确率",
+      "definition": "分母＝标注了预期的字段数；分子＝解析结果与预期一致的字段数",
+      "numerator": 25,
+      "denominator": 25,
+      "display": "25/25（100.0%）"
+    },
+    {
+      "key": "hard_constraints",
+      "label": "硬性条件满足率",
+      "definition": "分母＝设置了预算的用例数；分子＝推荐商品价格全部在预算内的用例数",
+      "numerator": 9,
+      "denominator": 9,
+      "display": "9/9（100.0%）"
+    },
+    {
+      "key": "retrieval_quality",
+      "label": "检索质量",
+      "definition": "分母＝全部知识检索用例的检查项数；分子＝通过的检查项数",
+      "numerator": 17,
+      "denominator": 17,
+      "display": "17/17（100.0%）"
+    },
+    {
+      "key": "hallucination",
+      "label": "幻觉场景通过率",
+      "definition": "分母＝幻觉场景用例数；分子＝行为符合预期（拒绝或说明）的用例数",
+      "numerator": 6,
+      "denominator": 6,
+      "display": "6/6（100.0%）"
+    },
+    {
+      "key": "recommendation_relevance",
+      "label": "推荐相关性",
+      "definition": "分母＝标注的必含与必排项数；分子＝实际结果与标注一致的项数",
+      "numerator": 9,
+      "denominator": 9,
+      "display": "9/9（100.0%）"
+    }
+  ],
+  "manual_metrics": [
+    {
+      "name": "任务完成率",
+      "definition": "用户能否通过系统完成预定的选购任务",
+      "status": "尚未测量（需人工复核）"
+    },
+    {
+      "name": "证据支持率",
+      "definition": "推荐理由中能由商品资料支持的事实占比",
+      "status": "尚未测量（需人工复核）"
+    }
+  ],
+  "categories": [
+    {
+      "category": "不支持的类别",
+      "total": 7,
+      "passed": 7,
+      "failed": 0
+    },
+    {
+      "category": "多商品比较",
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "category": "工具调用",
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "category": "幻觉场景1_不存在的商品",
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "category": "幻觉场景2_商品缺参数",
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "category": "幻觉场景3_预算低于全部候选",
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "category": "幻觉场景4_知识库无资料",
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "category": "幻觉场景5_资料自相矛盾",
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "category": "幻觉场景6_无依据的性能结论",
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "category": "知识检索",
+      "total": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "category": "语料外反例",
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "category": "需求理解",
+      "total": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "category": "预算边界",
+      "total": 6,
+      "passed": 6,
+      "failed": 0
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "demand_001",
+      "category": "需求理解",
+      "passed": true,
+      "duration_ms": 10,
+      "checks": [
+        {
+          "name": "类别=laptop",
+          "ok": true,
+          "detail": "实际 laptop"
+        },
+        {
+          "name": "预算=3000",
+          "ok": true,
+          "detail": "实际 3000.0"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "0 件中越界 0 件 []"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "0+10=10 vs 候选 10"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "demand_002",
+      "category": "需求理解",
+      "passed": true,
+      "duration_ms": 10,
+      "checks": [
+        {
+          "name": "类别=phone",
+          "ok": true,
+          "detail": "实际 phone"
+        },
+        {
+          "name": "预算=2000",
+          "ok": true,
+          "detail": "实际 2000.0"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "5 件中越界 0 件 []"
+        },
+        {
+          "name": "排除 PH006",
+          "ok": true,
+          "detail": "超预算商品不应混进预算内推荐"
+        },
+        {
+          "name": "排除 PH007",
+          "ok": true,
+          "detail": "超预算商品不应混进预算内推荐"
+        },
+        {
+          "name": "排除 PH008",
+          "ok": true,
+          "detail": "超预算商品不应混进预算内推荐"
+        },
+        {
+          "name": "排除 PH009",
+          "ok": true,
+          "detail": "超预算商品不应混进预算内推荐"
+        },
+        {
+          "name": "排除 PH010",
+          "ok": true,
+          "detail": "超预算商品不应混进预算内推荐"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "5+5=10 vs 候选 10"
+        }
+      ],
+      "review": [
+        "真我 GT Neo6 SE 1899 元 （较为匹配）—— 参考价 1899 元，占预算 95%，在预算范围内；用途命中 1/1（游戏）；核心需求命中 1/1（性能）"
+      ],
+      "error": ""
+    },
+    {
+      "id": "demand_003",
+      "category": "需求理解",
+      "passed": true,
+      "duration_ms": 9,
+      "checks": [
+        {
+          "name": "类别=phone",
+          "ok": true,
+          "detail": "实际 phone"
+        },
+        {
+          "name": "预算=3000",
+          "ok": true,
+          "detail": "实际 3000.0"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "5 件中越界 0 件 []"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "5+5=10 vs 候选 10"
+        }
+      ],
+      "review": [
+        "真我 GT Neo6 SE 1899 元 （较为匹配）—— 参考价 1899 元，占预算 63%，在预算范围内；用途命中 1/1（拍照）；核心需求命中 1/1（拍照）"
+      ],
+      "error": ""
+    },
+    {
+      "id": "demand_004",
+      "category": "需求理解",
+      "passed": true,
+      "duration_ms": 8,
+      "checks": [
+        {
+          "name": "类别=laptop",
+          "ok": true,
+          "detail": "实际 laptop"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "未设预算，不适用"
+        }
+      ],
+      "review": [
+        "联想 小新Pro14 2024 锐龙版 5199 元 （较为匹配）—— 同类别性能排位 100%、价格排位 50%，性价比偏高；用途命中 1/1（办公）；核心需求命中 1/1（便携）"
+      ],
+      "error": ""
+    },
+    {
+      "id": "demand_005",
+      "category": "不支持的类别",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "识别为「冰箱」",
+          "ok": true,
+          "detail": "实际 冰箱"
+        },
+        {
+          "name": "提示里列出了支持的类别",
+          "ok": true,
+          "detail": "目前还不支持「冰箱」这一类商品，商品数据里只包含：笔记本电脑、手机。换个类别试试？"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "demand_006",
+      "category": "不支持的类别",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "识别为「床垫」",
+          "ok": true,
+          "detail": "实际 床垫"
+        },
+        {
+          "name": "提示里列出了支持的类别",
+          "ok": true,
+          "detail": "目前还不支持「床垫」这一类商品，商品数据里只包含：笔记本电脑、手机。换个类别试试？"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "demand_007",
+      "category": "不支持的类别",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "识别为「微波炉」",
+          "ok": true,
+          "detail": "实际 微波炉"
+        },
+        {
+          "name": "提示里列出了支持的类别",
+          "ok": true,
+          "detail": "目前还不支持「微波炉」这一类商品，商品数据里只包含：笔记本电脑、手机。换个类别试试？"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "demand_008",
+      "category": "不支持的类别",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "识别为「外套」",
+          "ok": true,
+          "detail": "实际 外套"
+        },
+        {
+          "name": "提示里列出了支持的类别",
+          "ok": true,
+          "detail": "目前还不支持「外套」这一类商品，商品数据里只包含：笔记本电脑、手机。换个类别试试？"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "demand_009",
+      "category": "不支持的类别",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "识别为「吹风机」",
+          "ok": true,
+          "detail": "实际 吹风机"
+        },
+        {
+          "name": "提示里列出了支持的类别",
+          "ok": true,
+          "detail": "目前还不支持「吹风机」这一类商品，商品数据里只包含：笔记本电脑、手机。换个类别试试？"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "demand_010",
+      "category": "不支持的类别",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "识别为「婴儿车」",
+          "ok": true,
+          "detail": "实际 婴儿车"
+        },
+        {
+          "name": "提示里列出了支持的类别",
+          "ok": true,
+          "detail": "目前还不支持「婴儿车」这一类商品，商品数据里只包含：笔记本电脑、手机。换个类别试试？"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "boundary_001",
+      "category": "预算边界",
+      "passed": true,
+      "duration_ms": 8,
+      "checks": [
+        {
+          "name": "类别=laptop",
+          "ok": true,
+          "detail": "实际 laptop"
+        },
+        {
+          "name": "预算=3519",
+          "ok": true,
+          "detail": "实际 3519.0"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "1 件中越界 0 件 []"
+        },
+        {
+          "name": "包含 LP001",
+          "ok": true,
+          "detail": "应当出现在预算内推荐里"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "1+9=10 vs 候选 10"
+        }
+      ],
+      "review": [
+        "红米 REDMI Book 14 2025 3519 元 （较为匹配）—— 参考价 3519 元，占预算 100%，在预算范围内；同类别性能排位 70%、价格排位 10%，性价比偏高"
+      ],
+      "error": ""
+    },
+    {
+      "id": "boundary_002",
+      "category": "预算边界",
+      "passed": true,
+      "duration_ms": 7,
+      "checks": [
+        {
+          "name": "类别=laptop",
+          "ok": true,
+          "detail": "实际 laptop"
+        },
+        {
+          "name": "预算=3518",
+          "ok": true,
+          "detail": "实际 3518.0"
+        },
+        {
+          "name": "无预算内商品",
+          "ok": true,
+          "detail": "实际 0 件"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "0+10=10 vs 候选 10"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "boundary_003",
+      "category": "预算边界",
+      "passed": true,
+      "duration_ms": 8,
+      "checks": [
+        {
+          "name": "类别=laptop",
+          "ok": true,
+          "detail": "实际 laptop"
+        },
+        {
+          "name": "预算=11199",
+          "ok": true,
+          "detail": "实际 11199.0"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "6 件中越界 0 件 []"
+        },
+        {
+          "name": "无超预算商品",
+          "ok": true,
+          "detail": "实际 0 件"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "10+0=10 vs 候选 10"
+        }
+      ],
+      "review": [
+        "联想 小新Pro14 2024 锐龙版 5199 元 （较为匹配）—— 同类别性能排位 100%、价格排位 50%，性价比偏高；参考价 5199 元，占预算 46%，在预算范围内"
+      ],
+      "error": ""
+    },
+    {
+      "id": "boundary_004",
+      "category": "预算边界",
+      "passed": true,
+      "duration_ms": 8,
+      "checks": [
+        {
+          "name": "类别=laptop",
+          "ok": true,
+          "detail": "实际 laptop"
+        },
+        {
+          "name": "预算=300",
+          "ok": true,
+          "detail": "实际 300.0"
+        },
+        {
+          "name": "无预算内商品",
+          "ok": true,
+          "detail": "实际 0 件"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "0+10=10 vs 候选 10"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "boundary_005",
+      "category": "预算边界",
+      "passed": true,
+      "duration_ms": 9,
+      "checks": [
+        {
+          "name": "类别=phone",
+          "ok": true,
+          "detail": "实际 phone"
+        },
+        {
+          "name": "预算=1850",
+          "ok": true,
+          "detail": "实际 1850.0"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "3 件中越界 0 件 []"
+        },
+        {
+          "name": "包含 PH001",
+          "ok": true,
+          "detail": "应当出现在预算内推荐里"
+        },
+        {
+          "name": "包含 PH002",
+          "ok": true,
+          "detail": "应当出现在预算内推荐里"
+        },
+        {
+          "name": "包含 PH003",
+          "ok": true,
+          "detail": "应当出现在预算内推荐里"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "3+7=10 vs 候选 10"
+        }
+      ],
+      "review": [
+        "iQOO Z9 Turbo 1799 元 （较为匹配）—— 参考价 1799 元，占预算 97%，在预算范围内；同类别性能排位 50%、价格排位 30%，性价比偏高"
+      ],
+      "error": ""
+    },
+    {
+      "id": "boundary_006",
+      "category": "预算边界",
+      "passed": true,
+      "duration_ms": 9,
+      "checks": [
+        {
+          "name": "类别=phone",
+          "ok": true,
+          "detail": "实际 phone"
+        },
+        {
+          "name": "预算=10",
+          "ok": true,
+          "detail": "实际 10.0"
+        },
+        {
+          "name": "无预算内商品",
+          "ok": true,
+          "detail": "实际 0 件"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "0+10=10 vs 候选 10"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "knowledge_001",
+      "category": "知识检索",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "检索到资料",
+          "ok": true,
+          "detail": "实际 2 条"
+        },
+        {
+          "name": "排第一的是 服务级",
+          "ok": true,
+          "detail": "实际 服务级：常见问题与术语说明"
+        },
+        {
+          "name": "结果带来源",
+          "ok": true,
+          "detail": "来源与更新时间都要有"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "knowledge_002",
+      "category": "知识检索",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "检索到资料",
+          "ok": true,
+          "detail": "实际 1 条"
+        },
+        {
+          "name": "排第一的是 品类级",
+          "ok": true,
+          "detail": "实际 品类级：笔记本电脑选购指南"
+        },
+        {
+          "name": "结果带来源",
+          "ok": true,
+          "detail": "来源与更新时间都要有"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "knowledge_003",
+      "category": "知识检索",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "检索到资料",
+          "ok": true,
+          "detail": "实际 2 条"
+        },
+        {
+          "name": "排第一的是 品类级",
+          "ok": true,
+          "detail": "实际 品类级：笔记本电脑选购指南"
+        },
+        {
+          "name": "结果带来源",
+          "ok": true,
+          "detail": "来源与更新时间都要有"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "knowledge_004",
+      "category": "知识检索",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "检索到资料",
+          "ok": true,
+          "detail": "实际 1 条"
+        },
+        {
+          "name": "排第一的是 品类级",
+          "ok": true,
+          "detail": "实际 品类级：手机选购指南"
+        },
+        {
+          "name": "结果带来源",
+          "ok": true,
+          "detail": "来源与更新时间都要有"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "knowledge_005",
+      "category": "知识检索",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "检索到资料",
+          "ok": true,
+          "detail": "实际 1 条"
+        },
+        {
+          "name": "排第一的是 服务级/品类级",
+          "ok": true,
+          "detail": "实际 服务级：常见问题与术语说明"
+        },
+        {
+          "name": "结果带来源",
+          "ok": true,
+          "detail": "来源与更新时间都要有"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "knowledge_006",
+      "category": "知识检索",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "检索到资料",
+          "ok": true,
+          "detail": "实际 1 条"
+        },
+        {
+          "name": "排第一的是 服务级",
+          "ok": true,
+          "detail": "实际 服务级：常见问题与术语说明"
+        },
+        {
+          "name": "结果带来源",
+          "ok": true,
+          "detail": "来源与更新时间都要有"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "nocorpus_001",
+      "category": "语料外反例",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "判定为检索不到",
+          "ok": true,
+          "detail": "实际返回 0 条"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "nocorpus_002",
+      "category": "语料外反例",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "判定为检索不到",
+          "ok": true,
+          "detail": "实际返回 0 条"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "nocorpus_003",
+      "category": "语料外反例",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "判定为检索不到",
+          "ok": true,
+          "detail": "实际返回 0 条"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "nocorpus_004",
+      "category": "语料外反例",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "判定为检索不到",
+          "ok": true,
+          "detail": "实际返回 0 条"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "compare_001",
+      "category": "多商品比较",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "比较成功",
+          "ok": true,
+          "detail": "15 个维度"
+        },
+        {
+          "name": "有差异维度",
+          "ok": true,
+          "detail": "至少一维有差异"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "compare_002",
+      "category": "多商品比较",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "按预期被拒绝",
+          "ok": true,
+          "detail": "MixedCategoryComparison"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "compare_003",
+      "category": "多商品比较",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "按预期被拒绝",
+          "ok": true,
+          "detail": "TooFewForComparison"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "halluc_001",
+      "category": "幻觉场景1_不存在的商品",
+      "passed": true,
+      "duration_ms": 13,
+      "checks": [
+        {
+          "name": "无匹配时如实说明",
+          "ok": true,
+          "detail": "不应伪造结果"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "0+10=10 vs 候选 10"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "halluc_002",
+      "category": "幻觉场景2_商品缺参数",
+      "passed": true,
+      "duration_ms": 8,
+      "checks": [
+        {
+          "name": "类别=laptop",
+          "ok": true,
+          "detail": "实际 laptop"
+        },
+        {
+          "name": "预算=6000",
+          "ok": true,
+          "detail": "实际 6000.0"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "5 件中越界 0 件 []"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "5+5=10 vs 候选 10"
+        }
+      ],
+      "review": [
+        "联想 小新Pro14 2024 锐龙版 5199 元 （较为匹配）—— 参考价 5199 元，占预算 87%，在预算范围内；同类别性能排位 100%、价格排位 50%，性价比偏高"
+      ],
+      "error": ""
+    },
+    {
+      "id": "halluc_003",
+      "category": "幻觉场景3_预算低于全部候选",
+      "passed": true,
+      "duration_ms": 9,
+      "checks": [
+        {
+          "name": "类别=laptop",
+          "ok": true,
+          "detail": "实际 laptop"
+        },
+        {
+          "name": "预算=100",
+          "ok": true,
+          "detail": "实际 100.0"
+        },
+        {
+          "name": "无预算内商品",
+          "ok": true,
+          "detail": "实际 0 件"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "0+10=10 vs 候选 10"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "halluc_004",
+      "category": "幻觉场景4_知识库无资料",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "判定为检索不到",
+          "ok": true,
+          "detail": "实际返回 0 条"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "halluc_005",
+      "category": "幻觉场景5_资料自相矛盾",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "矛盾被识别",
+          "ok": true,
+          "detail": "命中 ['has_dedicated_gpu']"
+        },
+        {
+          "name": "一致记录不误报",
+          "ok": true,
+          "detail": "否定式陈述不算矛盾"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "halluc_006",
+      "category": "幻觉场景6_无依据的性能结论",
+      "passed": true,
+      "duration_ms": 163,
+      "checks": [
+        {
+          "name": "编造断言被丢弃",
+          "ok": true,
+          "detail": "断言原文：这款续航长达 20 小时"
+        },
+        {
+          "name": "规则结果保留",
+          "ok": true,
+          "detail": "解读被丢不影响评分与排序"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "tool_001",
+      "category": "工具调用",
+      "passed": true,
+      "duration_ms": 9,
+      "checks": [
+        {
+          "name": "按预期成功",
+          "ok": true,
+          "detail": "筛选出 3 件候选（共 10 件参与评估）"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "tool_002",
+      "category": "工具调用",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "按预期被拒绝",
+          "ok": true,
+          "detail": "没有「平板」这个类别。可用类别：laptop、phone"
+        },
+        {
+          "name": "拒绝时给出原因",
+          "ok": true,
+          "detail": "没有「平板」这个类别。可用类别：laptop、phone"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "tool_003",
+      "category": "工具调用",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "按预期被拒绝",
+          "ok": true,
+          "detail": "商品 ID「不存在的商品」不存在"
+        },
+        {
+          "name": "拒绝时给出原因",
+          "ok": true,
+          "detail": "商品 ID「不存在的商品」不存在"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "tool_004",
+      "category": "工具调用",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "按预期被拒绝",
+          "ok": true,
+          "detail": "没有名为「drop_table」的工具。可用的工具：search_products、get_product_detail、compare_products、se"
+        },
+        {
+          "name": "拒绝时给出原因",
+          "ok": true,
+          "detail": "没有名为「drop_table」的工具。可用的工具：search_products、get_product_detail、compare_products、se"
+        }
+      ],
+      "review": [],
+      "error": ""
+    },
+    {
+      "id": "demand_011",
+      "category": "需求理解",
+      "passed": true,
+      "duration_ms": 9,
+      "checks": [
+        {
+          "name": "类别=phone",
+          "ok": true,
+          "detail": "实际 phone"
+        },
+        {
+          "name": "预算=3000",
+          "ok": true,
+          "detail": "实际 3000.0"
+        },
+        {
+          "name": "全部满足预算",
+          "ok": true,
+          "detail": "5 件中越界 0 件 []"
+        },
+        {
+          "name": "条数账面闭合",
+          "ok": true,
+          "detail": "5+5=10 vs 候选 10"
+        }
+      ],
+      "review": [
+        "真我 GT Neo6 SE 1899 元 （较为匹配）—— 参考价 1899 元，占预算 63%，在预算范围内；用途命中 2/2（拍照、日常）；核心需求命中 1/1（拍照）"
+      ],
+      "error": ""
+    },
+    {
+      "id": "demand_012",
+      "category": "不支持的类别",
+      "passed": true,
+      "duration_ms": 0,
+      "checks": [
+        {
+          "name": "识别为「耳机」",
+          "ok": true,
+          "detail": "实际 耳机"
+        },
+        {
+          "name": "提示里列出了支持的类别",
+          "ok": true,
+          "detail": "目前还不支持「耳机」这一类商品，商品数据里只包含：笔记本电脑、手机。换个类别试试？"
+        }
+      ],
+      "review": [],
+      "error": ""
+    }
+  ]
+}

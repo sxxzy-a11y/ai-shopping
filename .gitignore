@@ -46,8 +46,9 @@ _scratch_*
 # --- 本机 API 覆盖配置（含密钥） ---
 storage/api_config.json
 
-# --- 评测报告（本地生成物，页面按需读取） ---
-data/evaluation/report.json
+# --- 评测报告 ---
+# report.json 提交一份快照供线上演示；本地重跑会更新它
+# report.md 是本地生成物，不入库
 data/evaluation/report.md
 
 # --- Streamlit local secrets (never commit) ---
