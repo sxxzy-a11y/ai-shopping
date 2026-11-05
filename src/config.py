@@ -174,6 +174,20 @@ def knowledge_dir() -> Path:
     return Path(override) if override else PROJECT_ROOT / "data" / "knowledge"
 
 
+def eval_report_path() -> Path:
+    """效果评测报告路径。
+
+    这是**本地生成物**，默认不提交（见 `.gitignore`）。页面只读它，
+    不负责生成；报告不存在时页面给出生成命令。
+    """
+    override = _env_str("ZHIGOU_EVAL_REPORT_PATH")
+    return (
+        Path(override)
+        if override
+        else PROJECT_ROOT / "data" / "evaluation" / "report.json"
+    )
+
+
 # --------------------------------------------------------------------------
 # 账号
 # --------------------------------------------------------------------------

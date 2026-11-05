@@ -204,6 +204,7 @@ def test_navigation_lists_every_page():
         "商品维护",
         "知识库管理",
         "全站概览",
+        "效果评测",
         "用户管理",
         "个人设置",
         "关于",
@@ -223,11 +224,28 @@ def test_navigation_lists_every_page():
 
 
 def test_admin_pages_are_marked_admin_only():
-    """三个管理页必须挂上 `admin_only`，否则普通用户的侧边栏会露出它们。"""
+    """管理页必须挂上 `admin_only`，否则普通用户的侧边栏会露出它们。"""
     from app import NAV_ITEMS
 
     admin_only = {item.name for item in NAV_ITEMS if item.admin_only}
-    assert admin_only == {"用户管理", "全站概览", "商品维护", "知识库管理"}
+    assert admin_only == {
+        "用户管理",
+        "全站概览",
+        "商品维护",
+        "知识库管理",
+        "效果评测",
+    }
+
+
+def test_eval_dashboard_page_renders_through_real_navigation():
+    """效果评测页要能从真实侧栏打开。
+
+    报告存在时展示指标，报告缺失时展示空状态；两种情况都不该落到
+    app.py 的兜底错误。这条用例守的是页面与导航的接线，不是报告内容。
+    """
+    at = _run(user=ADMIN_USER)
+    _go_to_page(at, "效果评测")
+    _assert_clean(at)
 
 
 def test_knowledge_admin_page_renders_without_embedding_config():

@@ -5,7 +5,7 @@
 - 自动化测试：代码有没有按预期工作；
 - 效果评测：推荐结果是否和需求对得上。
 
-两者不能互相替代。1037 条测试通过，不代表推荐一定符合用户预期；41 条评测用例全通过，也不代表系统在真实用户身上同样有效。
+两者不能互相替代。1084 条测试通过，不代表推荐一定符合用户预期；41 条评测用例全通过，也不代表系统在真实用户身上同样有效。
 
 ## 1. 自动化测试
 
@@ -15,7 +15,7 @@
 pytest
 ```
 
-当前收集到 **1037 条测试，分布在 34 个测试文件**。测试不需要网络，也不需要 API 密钥。
+当前收集到 **1084 条测试，分布在 38 个测试文件**。测试不需要网络，也不需要 API 密钥。
 
 测试隔离由 `tests/conftest.py` 的 autouse 夹具完成：
 
@@ -101,7 +101,10 @@ python -c "from src import ai_service; print(ai_service.probe())"
 ```bash
 python scripts/evaluate.py
 python scripts/evaluate.py --only 知识检索
+python -m eval.runner --output-dir data/evaluation
 ```
+
+前两条输出终端 / Markdown 报告；最后一条同时生成 `data/evaluation/report.json` 与 `report.md`，管理员可在应用内「效果评测」页查看。报告是本地生成物，不提交到仓库；输入数据变化后，页面会提示报告可能已过期。
 
 ### 2.1 自动指标
 

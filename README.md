@@ -262,13 +262,23 @@ AI 可以写解释，但不参与商品数据和排序。当前实际校验分�
 pytest
 ```
 
-当前收集到 **1037 条测试，分布在 34 个测试文件中**。测试不需要网络，也不需要 API 密钥。
+当前收集到 **1084 条测试，分布在 38 个测试文件中**。测试不需要网络，也不需要 API 密钥。
 
 覆盖范围包括：需求解析、预算边界、筛选排序、评分权重、商品比较、SQLite 读写、按用户隔离、权限边界、知识检索、Agent 工具校验、AI 失败降级、Streamlit 页面渲染和端到端验收。
 
 ### 效果评测
 
 评测集在 `data/evaluation/cases.json`，共 41 条用例，覆盖需求理解、预算边界、不支持的品类、知识检索、语料外反例、多商品比较、幻觉场景和工具调用。
+
+生成报告：
+
+```bash
+python scripts/evaluate.py                          # 终端 Markdown 报告
+python scripts/evaluate.py --only 知识检索          # 只跑某一类
+python -m eval.runner --output-dir data/evaluation  # 同时写 report.json / report.md
+```
+
+`report.json` 是机器可读版本，带 schema 版本、生成时间、输入指纹、逐条耗时与检索模式；`report.md` 与它同源生成。管理员登录后可在「效果评测」页直接查看。报告是本地生成物，不提交到仓库。
 
 当前自动指标：
 
@@ -350,7 +360,8 @@ copy .env.example .env
 │   ├── database.py        SQLite
 │   └── ui/                Streamlit 页面
 ├── storage/               运行时数据库（不提交）
-├── scripts/               数据接入、迁移、评测脚本
+├── scripts/               数据接入、迁移、评测入口
+├── eval/                  评测 runner、场景检查与报告渲染
 ├── tests/                 自动化测试
 ├── docs/                  项目文档
 └── openspec/              需求规格与变更记录

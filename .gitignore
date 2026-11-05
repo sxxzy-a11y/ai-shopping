@@ -46,6 +46,10 @@ _scratch_*
 # --- 本机 API 覆盖配置（含密钥） ---
 storage/api_config.json
 
+# --- 评测报告（本地生成物，页面按需读取） ---
+data/evaluation/report.json
+data/evaluation/report.md
+
 # --- Streamlit local secrets (never commit) ---
 .streamlit/secrets.toml
 

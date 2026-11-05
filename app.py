@@ -25,6 +25,7 @@ from src.ui.pages import (
     analysis,
     catalog_admin,
     compare,
+    eval_dashboard,
     history,
     home,
     knowledge,
@@ -64,6 +65,10 @@ NAV_ITEMS: list[NavItem] = [
         "知识库管理", ":material/library_books:", knowledge_admin.render, admin_only=True
     ),
     NavItem("全站概览", ":material/analytics:", admin.render_overview, admin_only=True),
+    # 评测结果是管理员视角的「系统测得怎么样」，放在全站概览旁边。
+    NavItem(
+        "效果评测", ":material/fact_check:", eval_dashboard.render, admin_only=True
+    ),
     NavItem("用户管理", ":material/group:", admin.render_users, admin_only=True),
     # 「个人设置」紧挨「项目说明」放在最末两位：它是低频操作，
     # 且对两种角色都稳定地出现在同一个位置（管理项只影响中间段）。
