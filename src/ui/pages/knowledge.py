@@ -18,6 +18,8 @@ from src.demand_parser import parse_demand
 from src.errors import ZhigouError, to_user_message
 from src.recommender import recommend
 from src.ui import components, state
+from src.ui.hover_button import hover_button
+from src.ui.loader import loading
 
 _INPUT_KEY = "zg_knowledge_query"
 _RESULT_KEY = "zg_knowledge_results"
@@ -320,7 +322,7 @@ def render(catalog: Catalog) -> None:
 
         columns = st.columns([1, 3])
         with columns[0]:
-            asked = st.button("提问", type="primary", width="stretch")
+            asked = hover_button("提问", key="knowledge_ask")
         with columns[1]:
             st.markdown(
                 '<div class="zg-caption" style="padding-top:9px">'
@@ -334,7 +336,8 @@ def render(catalog: Catalog) -> None:
             _clear_results()
             components.show_notice("请先输入一个问题。", "warn")
             return
-        _run_query(query, catalog)
+        with loading("正在检索知识库并组织回答…"):
+            _run_query(query, catalog)
 
     st.write("")
 

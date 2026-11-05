@@ -7,6 +7,7 @@ import streamlit as st
 from src import config
 from src.data_loader import Catalog
 from src.ui import components, state
+from src.ui.hover_button import hover_button
 from src.ui.pages.analysis import EXAMPLE_DEMAND
 from src.ui.theme import bullet_list
 
@@ -82,7 +83,7 @@ def render(catalog: Catalog) -> None:
 
             col_action, col_hint = st.columns([1, 3])
             with col_action:
-                if st.button("开始分析", type="primary", width="stretch"):
+                if hover_button("开始分析", key="home_cta"):
                     text = st.session_state.get("zg_home_input", "").strip()
                     if text:
                         go_to_analysis(text)

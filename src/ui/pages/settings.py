@@ -15,6 +15,7 @@ from src.knowledge import embeddings
 from src.data_loader import Catalog
 from src.errors import ZhigouError, to_user_message
 from src.ui import components, state
+from src.ui.hover_button import hover_button
 from src.ui.theme import bullet_list, facts
 
 # 控件键。带上前缀避免与其它页面重名。
@@ -135,7 +136,7 @@ def render(catalog: Catalog) -> None:
         st.write("")
         col_save, col_reset = st.columns([1, 1])
         with col_save:
-            if st.button("保存设置", type="primary", width="stretch"):
+            if hover_button("保存设置", key="settings_save"):
                 try:
                     settings.save_preferences(user, _collect())
                 except ZhigouError as exc:
@@ -148,7 +149,7 @@ def render(catalog: Catalog) -> None:
                         "ok",
                     )
         with col_reset:
-            if st.button("恢复默认", width="stretch"):
+            if hover_button("恢复默认", key="settings_reset", variant="secondary"):
                 # 只记请求——控件此刻已经创建，不能就地改它们的键
                 st.session_state[_KEY_RESET] = True
                 st.rerun()

@@ -18,6 +18,7 @@ from src import accounts, config, settings
 from src.auth import User, is_admin
 from src.errors import ZhigouError, to_user_message
 from src.ui import backend_theme, components, icons, state, theme
+from src.ui.hover_button import nav_button
 from src.ui.pages import (
     about,
     admin,
@@ -135,12 +136,11 @@ def _render_sidebar(user: User) -> str:
 
         for item in _visible_nav(user):
             is_active = item.name == active
-            if st.button(
+            if nav_button(
                 item.name,
                 key=f"nav_{item.name}",
                 icon=item.icon,
-                type="primary" if is_active else "secondary",
-                width="stretch",
+                active=is_active,
             ):
                 state.request_page(item.name)
                 st.rerun()
@@ -159,7 +159,7 @@ def _render_sidebar(user: User) -> str:
             unsafe_allow_html=True,
         )
         st.write("")
-        if st.button("登出", icon=":material/logout:", width="stretch"):
+        if nav_button("登出", key="nav_logout", icon=":material/logout:"):
             state.sign_out()
             st.rerun()
 

@@ -19,6 +19,8 @@ from src.demand_parser import (
 from src.errors import EmptyDemand, ZhigouError, to_user_message
 from src.recommender import recommend
 from src.ui import components, state
+from src.ui.hover_button import hover_button
+from src.ui.loader import loading
 from src.ui.theme import bullet_list, esc, facts
 
 #: 首页「快速开始」与输入框占位符共用的示例句。
@@ -693,9 +695,9 @@ def render(catalog: Catalog) -> None:
     st.write("")
     left, mid, right = st.columns([1, 1, 4])
     with left:
-        clicked = st.button("开始分析", type="primary", width="stretch")
+        clicked = hover_button("开始分析", key="analysis_run")
     with mid:
-        if st.button("清空条件", width="stretch"):
+        if hover_button("清空条件", key="analysis_reset", variant="secondary"):
             # 只记请求——此刻输入控件都已创建，就地清空会抛异常
             st.session_state[state.KEY_RESET] = True
             state.clear_analysis()
@@ -710,7 +712,7 @@ def render(catalog: Catalog) -> None:
 
     if clicked or autorun:
         # 处理中给个明确反馈，避免用户以为点了没反应而反复点击
-        with st.spinner("正在解析需求、筛选商品并计算匹配度…"):
+        with loading("正在解析需求、筛选商品并计算匹配度…"):
             _run_analysis(catalog)
 
     # 控件都已渲染完，此刻的值就是用户当前所见，记进镜像备下次切页恢复
