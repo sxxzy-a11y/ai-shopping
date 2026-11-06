@@ -3,8 +3,8 @@
 # 安装：pip install -r requirements.txt
 #
 # 锁定依据：开发机 Windows / Python 3.13.9 实测通过；已逐一核对各包的
-# Requires-Python，全部覆盖 CI 的 3.11 / 3.12 与 Docker 的 python:3.12-slim。
-# numpy 2.3.5 要求 >=3.11，因此本项目最低 Python 版本为 3.11（见 README 第 8 节）。
+# Requires-Python，全部覆盖 CI 的 3.12 / 3.13 与 Docker 的 python:3.12-slim。
+# 本项目最低 Python 版本为 3.12（3.11 的测试尚未验证通过，见 README 第 8 节）。
 #
 # 升级依赖时请同步更新：本文件 → requirements-dev.txt → CI 矩阵 → README 版本声明。
 # 本机未安装、无法实测版本的工具不在此文件，见 requirements-dev.txt。

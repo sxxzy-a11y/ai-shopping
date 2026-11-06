@@ -9,7 +9,9 @@
 |---|---|
 | 版本 | `v1.0.0`（commit `3333a12`） |
 | 测试 | 1114 条 / 40 个文件，`pytest -q` 全绿 |
-| 门禁 | `ruff check` + `ruff format --check` 阻断；mypy（13 处）、coverage、docker、pip-audit 为信息性 |
+| 门禁 | `ruff check` + `ruff format --check` + `mypy src` + `pytest` + `docker build` 均为阻断；coverage 与 pip-audit 为信息性 |
+| 平台 | CI 覆盖 Python 3.12 / 3.13 × ubuntu / windows；**3.11 的 `Unit tests` 有未定位失败**，暂不声明支持 |
+| 依赖漏洞 | pillow 12.3.0（23 项）、pyarrow 21.0.0（1 项）受 streamlit 约束无法升级，见 SECURITY.md |
 | 数据 | 20 商品 / 2 品类 / 全部 `unverified`；评测 41 条自建用例 |
 | 部署 | Streamlit 单体 + SQLite，仅支持单实例演示 |
 

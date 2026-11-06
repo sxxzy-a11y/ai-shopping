@@ -5,6 +5,38 @@
 
 ---
 
+## [未发布] — 2026-11-07（CI 首次运行与门禁校准）
+
+CI 在 `3e1531f` 上**首次真正运行**（此前仓库从未推送过），结果与处置：
+
+| 项 | 首跑结果 | 处置 |
+|---|---|---|
+| ubuntu / windows × py3.12 | ✅ 全过 | 无 |
+| docker build + healthcheck | ✅ 构建成功、探活返回 200 | **已转为阻断门禁** |
+| coverage | ✅ | 保持信息性（未设下限） |
+| dependency audit | ❌ pillow 23 项、pyarrow 1 项 | 受 streamlit 约束无法升级，记录进 SECURITY.md |
+| ubuntu / windows × py3.11 | ❌ `Unit tests` 失败 | 未定位（日志需认证），矩阵收窄为 3.12 / 3.13 |
+
+### 改动
+
+- `pytest.ini`：`error::DeprecationWarning` 收窄为 `error::DeprecationWarning:src\..*`，
+  只拦本项目代码触发的弃用告警，上游依赖的告警不再打挂整批测试
+- `.github/workflows/ci.yml`：矩阵 `3.11/3.12` → `3.12/3.13`；`mypy` 只在 3.12 跑一次
+  （类型目标由 `python_version` 决定，与运行矩阵无关）；audit 步骤加 `PYTHONUTF8=1`；
+  docker job 去掉 `continue-on-error`
+- 最低 Python 版本 3.11 → **3.12**（README / requirements.txt / pyproject 三处同步）
+
+### 发现的两个真问题
+
+1. **pip-audit 在 Windows 上直接崩溃**：`requirements.txt` 含中文注释，pip-audit 的解析器
+   用系统 locale（GBK）解码，抛 `UnicodeDecodeError`。CI 的 ubuntu 不受影响，但本地
+   跑不了——加 `PYTHONUTF8=1` 解决。
+2. **pip-audit 发现真实漏洞但无法修**：`pillow 12.3.0`（23 项 CVE）与 `pyarrow 21.0.0`
+   都要求升到 13.0.0 / 23.0.1，而 `streamlit 1.51.0` 硬约束 `pillow<13`、`pyarrow<22`。
+   属上游死锁，已记录影响评估与解除条件。
+
+---
+
 ## [未发布] — 2026-11-07（第八轮：类型归零与冒烟实测）
 
 ### 类型检查

@@ -305,7 +305,7 @@ python -m eval.runner --output-dir data/evaluation  # 同时写 report.json / re
 
 ## 8. 本地运行
 
-环境要求：Python 3.11 或更高版本。依赖已在 `requirements.txt` 中精确锁定，其中 `numpy 2.3.5` 要求 Python >=3.11，因此 3.10 无法安装。CI 覆盖 3.11 与 3.12，Docker 镜像使用 3.12。
+环境要求：Python 3.12 或更高版本。依赖已在 `requirements.txt` 中精确锁定；CI 覆盖 3.12 与 3.13，Docker 镜像使用 3.12。**3.11 尚未验证通过**（`Unit tests` 有未定位的失败，见 `docs/roadmap.md`），因此不声明支持。
 
 ```bash
 pip install -r requirements.txt

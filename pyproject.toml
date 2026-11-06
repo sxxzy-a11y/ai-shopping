@@ -6,7 +6,7 @@
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 extend-exclude = [
     ".tmp",
     "pytest-of-*",
@@ -26,7 +26,7 @@ select = ["E4", "E7", "E9", "F"]
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 ignore_missing_imports = true
 # 已零错误并作为 CI 阻断门禁。`warn_unused_ignores` 暂关：项目里有少量
 # 针对 mypy 无法跟随布尔标志的局部 ignore，开启后会产生噪声。
