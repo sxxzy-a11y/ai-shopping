@@ -190,7 +190,9 @@ def _render_history_tab(catalog: Catalog) -> None:
             _render_entry_row(entry)
             st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
 
-    if right is not None:
+    # `right` 只在 selected 非空时才不是 None，这里一并判断让类型收窄，
+    # 行为不变（多一次显式检查而已）。
+    if right is not None and selected is not None:
         with right:
             _render_report_detail(selected)
 

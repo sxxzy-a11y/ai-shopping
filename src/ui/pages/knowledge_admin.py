@@ -14,7 +14,7 @@ from src.auth import require_admin
 from src.errors import ZhigouError, to_user_message
 from src.knowledge import admin as knowledge_docs
 from src.knowledge import chunking, embeddings
-from src.knowledge.retrieval import retrieve
+from src.knowledge.retrieval import RetrievalResult, retrieve
 from src.ui import components, state
 from src.ui.theme import facts
 
@@ -292,9 +292,12 @@ def _render_debug(service: embeddings.EmbeddingService) -> None:
         result = retrieve(query, index=state.get_knowledge_index())
         st.session_state[_KEY_RESULT] = result
 
-    result = st.session_state.get(_KEY_RESULT)
-    if result is None:
+    # 加显式注解：session_state 取出来是 Any，不加的话会与上面赋值的
+    # `RetrievalResult` 冲突（运行时行为不变）。
+    cached: RetrievalResult | None = st.session_state.get(_KEY_RESULT)
+    if cached is None:
         return
+    result = cached
 
     components.caption(f"检索方式：{result.mode_label}")
     if result.note:

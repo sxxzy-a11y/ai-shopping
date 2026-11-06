@@ -74,15 +74,25 @@ def _check_demand_fields(demand: Demand, expected: dict) -> list[Check]:
     """逐字段比对解析结果。**只比标注了预期的字段**——没标的说明作者不打算断言它。"""
     checks: list[Check] = []
     if "category" in expected:
-        want = expected["category"]
-        got = demand.category
-        checks.append((f"类别={want}", got == want, f"实际 {got or '（空）'}"))
-    if "budget" in expected:
-        want = float(expected["budget"])
-        got = demand.budget
-        ok = got is not None and abs(got - want) < 0.5
+        want_category = expected["category"]
+        got_category = demand.category
         checks.append(
-            (f"预算={want:.0f}", ok, f"实际 {got if got is not None else '（空）'}")
+            (
+                f"类别={want_category}",
+                got_category == want_category,
+                f"实际 {got_category or '（空）'}",
+            )
+        )
+    if "budget" in expected:
+        want_budget = float(expected["budget"])
+        got_budget = demand.budget
+        ok = got_budget is not None and abs(got_budget - want_budget) < 0.5
+        checks.append(
+            (
+                f"预算={want_budget:.0f}",
+                ok,
+                f"实际 {got_budget if got_budget is not None else '（空）'}",
+            )
         )
     return checks
 
@@ -325,6 +335,8 @@ def run_claim_guard_case(case: dict) -> Outcome:
 
     catalog = data_loader.load_catalog()
     product = catalog.get("LP001")
+    # 评测夹具依赖 LP001 存在；缺了就应该立刻失败，而不是把 None 传进评分函数。
+    assert product is not None, "评测夹具缺少商品 LP001"
     demand = Demand(category="laptop", budget=8000)
     item = RecommendationItem(
         product=product,
@@ -368,7 +380,10 @@ def run_claim_guard_case(case: dict) -> Outcome:
     )
     result = explain_recommendations(demand, [item], service=service)
 
-    dropped = product.id not in result["per_product"]
+    per_product = result["per_product"]
+    # 返回类型是 dict[str, object]，这里明确收窄并顺带校验契约。
+    assert isinstance(per_product, dict), "解读结果应带 per_product 字典"
+    dropped = product.id not in per_product
     checks: list[Check] = [
         ("编造断言被丢弃", dropped, f"断言原文：{fabricated}"),
         ("规则结果保留", True, "解读被丢不影响评分与排序"),

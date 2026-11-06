@@ -38,6 +38,9 @@ jobs:
       - name: Format check
         run: ruff format --check .
 
+      - name: Type check
+        run: mypy src
+
       - name: Unit tests
         run: pytest -q
 
@@ -57,8 +60,8 @@ jobs:
   # 信息性：现状未收敛，先持续暴露差距，不阻断合并。
   # 收敛后删掉 continue-on-error，把三步提升为阻断门禁。
   # --------------------------------------------------------------------------
-  quality:
-    name: quality (informational)
+  coverage:
+    name: coverage (informational)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -68,10 +71,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      # 剩余 13 处均为可选值语义（eval 断言与页面的 Demand | None），
-      # 需逐个确认业务意图后才能改；收敛后再把本 job 转为阻断。
-      - name: Type check
-        run: mypy src
+      # 目前只输出报告、未设下限；补出基线后加 --cov-fail-under 并转为阻断。
       - name: Coverage report
         run: pytest --cov=src --cov-report=term-missing -q
 

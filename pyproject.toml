@@ -1,9 +1,8 @@
 # 智购参谋 —— 开发工具配置
 #
-# lint 与格式均已全量收敛（2026-11-06），CI 里的 `ruff check` 与
-# `ruff format --check` 都是阻断门禁。
-# mypy 仍有 13 处可选值语义错误（eval 断言与页面里的 `Demand | None`），
-# 需逐个确认业务意图才能改，故在 CI 里暂为信息性步骤。
+# lint、格式与类型检查均已全量收敛（2026-11-07），CI 里的 `ruff check`、
+# `ruff format --check` 与 `mypy src` 都是阻断门禁。
+# 仅覆盖率仍是信息性 job（尚未设下限）。
 
 [tool.ruff]
 line-length = 88
@@ -29,7 +28,8 @@ quote-style = "double"
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
-# 目前仍有十余处类型错误，CI 中作为信息性步骤运行；修完后逐步加严。
+# 已零错误并作为 CI 阻断门禁。`warn_unused_ignores` 暂关：项目里有少量
+# 针对 mypy 无法跟随布尔标志的局部 ignore，开启后会产生噪声。
 warn_unused_ignores = false
 
 [tool.coverage.run]

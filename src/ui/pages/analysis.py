@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 import streamlit as st
 
 from src import ai_enhance, ai_service, config, database, report_service, settings
@@ -520,7 +522,7 @@ def _render_right_column(result) -> None:
                 rank=index + 1,
                 highlight=index == 0,
                 expanded=index == 0,
-                extra_actions=lambda p=item.product: _favorite_actions(p),
+                extra_actions=partial(_favorite_actions, item.product),
                 ai_note=per_product.get(item.product.id, ""),
             )
     else:
@@ -566,7 +568,7 @@ def _render_right_column(result) -> None:
                 item.product,
                 item.score,
                 item.budget_label,
-                extra_actions=lambda p=item.product: _favorite_actions(p),
+                extra_actions=partial(_favorite_actions, item.product),
             )
 
     if result.relaxations:

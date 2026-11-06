@@ -170,6 +170,8 @@ def _run_query(query: str, catalog: Catalog) -> None:
 
     # 涉及具体商品/预算：用真实商品库候选，让 AI 说出具体型号与参考价。
     if product_intent:
+        # product_intent 的定义已保证 demand 非空，这里只是让类型检查也能看到。
+        assert demand is not None
         try:
             rec = recommend(catalog, demand, limit=5)
             items = rec.within_budget[:5] or rec.over_budget[:5]

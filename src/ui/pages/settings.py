@@ -224,7 +224,7 @@ def _seed_inputs() -> None:
     st.session_state.setdefault(_KEY_EMB_SECRET, "")
 
 
-def _save(values: dict[str, object]) -> None:
+def _save(values: dict[str, str | int | None]) -> None:
     try:
         api_config.save(values)
     except ZhigouError as exc:
