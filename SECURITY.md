@@ -42,7 +42,34 @@
 - 生产级数据库与审计、多实例并发写下的连接池与事务边界；
 - 依赖漏洞扫描结果确认后转为 CI 阻断门禁（当前为信息性）。
 
-## 5. 报告问题
+## 5. 已知依赖漏洞
+
+`pip-audit` 在 `v1.0.0` 上报告下列项，**目前无法修复**，原因是对上游约束：
+
+| 包 | 当前版本 | 建议修复版 | 无法升级的原因 |
+|---|---|---|---|
+| `pillow` | 12.3.0 | 13.0.0 | `streamlit 1.51.0` 要求 `pillow<13` |
+| `pyarrow` | 21.0.0 | 23.0.1 | `streamlit 1.51.0` 要求 `pyarrow<22` |
+
+两者都是 `streamlit` 的**传递依赖**（本项目只直接依赖 5 个包），强制升级会与 streamlit 冲突。
+
+**影响评估**
+
+- `pillow` 的相关 CVE 集中在图像解码与处理路径。本项目**不接收用户上传图片**，
+  商品图是外链（`image_url`），由浏览器直接加载，不经 Pillow 处理。
+- `pyarrow` 用于 Streamlit 的数据序列化，输入全部来自本地 SQLite 与项目自有 JSON，
+  没有不可信来源。
+
+**解除条件**
+
+`streamlit` 放宽上述两个上限后，升级 `pillow` / `pyarrow`，并把 CI 的 `security`
+job 从信息性转为阻断门禁。届时复查本节。
+
+> 复核命令：`PYTHONUTF8=1 pip-audit -r requirements.txt`
+> `PYTHONUTF8` 是必须的——`requirements.txt` 含中文注释，Windows 的 GBK locale 下
+> pip-audit 的解析器会抛 `UnicodeDecodeError`。
+
+## 6. 报告问题
 
 如果发现漏洞，请**不要**在公开 Issue 里贴可利用细节或真实密钥。
 
@@ -53,7 +80,7 @@
 这是个人比赛项目，没有专职安全团队，无法承诺响应时限；确认后会尽量在
 `CHANGELOG.md` 中记录修复。
 
-## 6. 数据免责
+## 7. 数据免责
 
 商品价格与参数来自公开资料整理，**不是实时价格**，且全部未逐条核验；
 项目输出不构成真实购买建议。详见 [docs/data-disclaimer.md](docs/data-disclaimer.md)。

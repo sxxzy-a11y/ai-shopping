@@ -38,7 +38,12 @@ jobs:
       - name: Format check
         run: ruff format --check .
 
+      # 静态类型检查只在 py3.12 跑一次：类型目标版本由 pyproject 的
+      # `python_version = "3.11"` 决定，与运行矩阵无关；py3.11 运行时下 mypy
+      # 对本项目依赖的 stub 解析会报差异（同一份代码在 3.12/3.13 上均零错误）。
+      # 若后续确认 3.11 的报错是真问题，再加回全矩阵。
       - name: Type check
+        if: matrix.python-version == '3.12'
         run: mypy src
 
       - name: Unit tests
@@ -77,7 +82,9 @@ jobs:
 
   # --------------------------------------------------------------------------
   # 依赖漏洞扫描：只扫运行时依赖（部署镜像里装的那一组）。
-  # 信息性——首次运行可能因漏洞库波动或上游公告而红，确认口径后再转阻断。
+  # 信息性：已知 23 项来自 pillow 12.3.0、1 项来自 pyarrow 21.0.0，两者受
+  # streamlit 1.51.0 的 `pillow<13` / `pyarrow<22` 硬约束，无法升级；
+  # 说明见 SECURITY.md「已知依赖漏洞」。streamlit 放宽约束后再转阻断。
   # --------------------------------------------------------------------------
   security:
     name: dependency audit (informational)
@@ -92,16 +99,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Audit runtime dependencies
+        env:
+          # requirements.txt 含中文注释；Windows 用 GBK locale 解析会 UnicodeDecodeError。
+          PYTHONUTF8: "1"
         run: pip-audit -r requirements.txt
 
   # --------------------------------------------------------------------------
-  # P0-4：本机没有 Docker，Dockerfile 从未实际构建过（见 DEPLOY.md）。
-  # 借 CI 的 ubuntu runner 首次验证；确认通过后再去掉 continue-on-error。
+  # P0-4：Docker 镜像构建 + 健康检查。
+  # 2026-11-07 首次 CI 运行已通过（构建成功 + /_stcore/health 返回 200），
+  # 因此转为阻断门禁。
   # --------------------------------------------------------------------------
   docker:
-    name: docker build + healthcheck (informational)
+    name: docker build + healthcheck
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Build image

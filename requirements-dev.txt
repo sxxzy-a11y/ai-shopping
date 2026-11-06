@@ -4,8 +4,8 @@
 # CI 与本地开发用；部署镜像只装 requirements.txt。
 #
 # 已在本机（Windows / Python 3.13.9）实测的工具锁 ==；
-# pytest-cov 与 pip-audit 本机未安装、无法实测，保留区间，
-# CI 首次运行会记录实际解析版本，之后再收紧。
+# pytest-cov 仍保留区间（本机未安装）。pip-audit 已实测 2.10.1，但仍保留区间——
+# 扫描工具的版本跟着漏洞库走比锁死更有价值，锁死会让扫描口径僵化。
 
 -r requirements.txt
 
