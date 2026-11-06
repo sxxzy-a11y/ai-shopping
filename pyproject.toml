@@ -1,0 +1,37 @@
+# 智购参谋 —— 开发工具配置
+#
+# 这里只放**当前就能通过**的规则，完整收敛前不要让 CI 一上来就全红。
+# 现状（2026-11-06 实测）：完整 ruff check 32 处、ruff format 75 个文件、
+# mypy 十余处类型错误。逐条修完后再开启对应规则，并把 CI 里的信息性
+# 步骤改成阻断门禁。
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = [
+    ".tmp",
+    "pytest-of-*",
+    "submission/node_modules",
+]
+
+[tool.ruff.lint]
+# E9 语法错误；F63/F7/F82 未定义名、断言写错等——这四类都属于「一定是 bug」。
+# F401（未使用导入）等现状仍有多处，暂不纳入，避免大面积噪音。
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+# 目前仍有十余处类型错误，CI 中作为信息性步骤运行；修完后逐步加严。
+warn_unused_ignores = false
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = ["*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true

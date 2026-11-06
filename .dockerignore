@@ -20,3 +20,13 @@ env/
 tests/
 docs/
 openspec/
+
+# --- 开发工具与比赛材料（不进运行镜像）---
+.github/
+.gitattributes
+pyproject.toml
+requirements-dev.txt
+submission/
+design/
+eval-smoke*.md
+data/evaluation/report.md

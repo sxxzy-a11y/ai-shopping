@@ -31,7 +31,7 @@
 
 ## 自动化测试
 
-当前 1084 条测试，分布在 38 个测试文件。测试覆盖业务规则、数据层、界面、知识库、AI 降级、Agent 参数校验、权限边界和端到端流程。
+当前 1095 条测试（以 `python -m pytest --collect-only` 为准），分布在 38 个测试文件。测试覆盖业务规则、数据层、界面、知识库、AI 降级、Agent 参数校验、权限边界和端到端流程。
 
 测试分布和运行方式见 [testing.md](testing.md)。效果评测见 [eval-report.md](eval-report.md)。
 

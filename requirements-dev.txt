@@ -1,0 +1,17 @@
+# 智购参谋 —— 开发与测试依赖
+#
+# 安装：pip install -r requirements-dev.txt
+# CI 与本地开发用；部署镜像只装 requirements.txt。
+#
+# 已在本机（Windows / Python 3.13.9）实测的工具锁 ==；
+# pytest-cov 与 pip-audit 本机未安装、无法实测，保留区间，
+# CI 首次运行会记录实际解析版本，之后再收紧。
+
+-r requirements.txt
+
+pytest==8.4.2
+ruff==0.12.0
+mypy==1.17.1
+
+pytest-cov>=6.0,<7.0
+pip-audit>=2.6,<3.0

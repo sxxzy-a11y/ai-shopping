@@ -101,6 +101,13 @@ def save(
         tmp.write_text(
             json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        # 密钥是明文：先收紧临时文件权限，再原子替换。`os.replace` 之后
+        # 目标文件继承的就是这份权限，旧文件残留的宽松权限不会留下来。
+        # Windows / 不支持 chmod 的文件系统上静默跳过——不能因此让配置保存失败。
+        try:
+            tmp.chmod(0o600)
+        except (OSError, NotImplementedError):
+            pass
         os.replace(tmp, target)
     except OSError as exc:
         raise ApiConfigError(

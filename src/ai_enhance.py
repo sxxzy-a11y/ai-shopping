@@ -22,6 +22,7 @@ import json
 import logging
 import re
 from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
 
 from src import config
 from src.ai_service import AIService, redact

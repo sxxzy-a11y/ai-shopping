@@ -121,3 +121,59 @@ def test_empty_vector_result_does_not_fall_back(tmp_path, monkeypatch):
 
     assert result.mode == "vector"
     assert result.passages == []
+    assert "语义检索" in result.note, "查无资料要说明原因，别让用户以为是页面坏了"
+
+
+# --------------------------------------------------------------------------
+# 边界输入与异常响应
+# --------------------------------------------------------------------------
+
+
+def test_blank_query_is_rejected_without_calling_service():
+    """空查询不该白花一次 embedding 调用。"""
+
+    class CountingService(FakeEmbedding):
+        def __init__(self):
+            super().__init__()
+            self.calls = 0
+
+        def embed(self, texts):
+            self.calls += 1
+            return super().embed(texts)
+
+    service = CountingService()
+    result = retrieval.retrieve("   ", index=_index(), store=None, service=service)
+
+    assert result.passages == []
+    assert "请输入" in result.note
+    assert service.calls == 0
+
+
+def test_overlong_query_is_rejected_with_chinese_hint(monkeypatch):
+    from src import config
+
+    monkeypatch.setattr(config, "KNOWLEDGE_MAX_QUERY_CHARS", 10)
+    service = FakeEmbedding()
+
+    result = retrieval.retrieve("重量" * 20, index=_index(), store=None, service=service)
+
+    assert result.passages == []
+    assert "过长" in result.note
+
+
+def test_empty_embedding_response_falls_back_with_reason(monkeypatch):
+    """空响应属于服务返回不完整，要如实降级并说明，不能说成「没有资料」。"""
+    from src import config
+
+    monkeypatch.setattr(config, "KNOWLEDGE_MIN_SCORE", 0.0)
+
+    class EmptyService(FakeEmbedding):
+        def embed(self, texts):
+            return []
+
+    result = retrieval.retrieve("重量", index=_index(), store=None, service=EmptyService())
+
+    assert result.mode == "keyword"
+    assert result.passages, "降级后关键词检索仍应可用"
+    assert "回退" in result.note
+    assert "向量" in result.note

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +31,26 @@ from src.knowledge.chunking import Slice
 from src.knowledge.embeddings import EmbeddingService
 
 logger = logging.getLogger("zhigou.knowledge.vector")
+
+
+@dataclass(frozen=True)
+class _MatrixEntry:
+    """进程内缓存的一份「切片行 + 向量矩阵」快照。
+
+    `VectorStore` 在界面层是每次新建的轻量对象（见 `state.get_vector_store`），
+    所以缓存必须挂在模块上才能跨请求复用。`stamp` 是库文件的纳秒级修改时间，
+    用来判断外部改动是否已让缓存过期。
+    """
+
+    rows: tuple[dict, ...]
+    matrix: np.ndarray
+    stamp: int
+
+
+#: key = (库文件路径, 模型, 维度)。不同模型/维度绝不共用同一份矩阵。
+#: 上限防止频繁切换配置时无限增长；淘汰最旧的一条即可，重建成本很低。
+_MATRIX_CACHE: dict[tuple[str, str, int], _MatrixEntry] = {}
+_MATRIX_CACHE_MAX_ENTRIES = 8
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS knowledge_vectors (
@@ -115,6 +136,79 @@ class VectorStore:
             cursor = connection.execute("SELECT * FROM knowledge_vectors")
             return [dict(row) for row in cursor.fetchall()]
 
+    def _db_path(self) -> Path:
+        """与 `database.connect` 用同一套路径解析，保证缓存键指向真实文件。"""
+        return Path(self._path) if self._path is not None else config.database_path()
+
+    @staticmethod
+    def _stamp(path: Path) -> int:
+        """库文件的纳秒级修改时间；读不到时返回 0（缓存键仍可用）。"""
+        try:
+            return path.stat().st_mtime_ns
+        except OSError:
+            return 0
+
+    def _invalidate(self) -> None:
+        """写库后主动丢弃本库的全部缓存条目。
+
+        只靠 mtime 不够：部分文件系统的时间精度较粗，一次 `build_index` 与紧随
+        其后的 `search` 可能落在同一个时间刻度上，只读 mtime 会拿到旧矩阵。
+        """
+        prefix = str(self._db_path())
+        for key in [key for key in _MATRIX_CACHE if key[0] == prefix]:
+            del _MATRIX_CACHE[key]
+
+    def _matrix(self, *, model: str, dim: int) -> tuple[tuple[dict, ...], np.ndarray]:
+        """取「行 + 向量矩阵」，按库文件 mtime 缓存。
+
+        原先每次 `search` 都要全表读出并逐行 `json.loads`；语料上到千级切片时
+        这是检索链路里最重的一步。缓存后同一次运行内只解析一次。
+
+        损坏行（非法 JSON、维度不符、含 NaN/inf）逐行跳过并记 warning，不让
+        单条坏数据把整条语义检索打回关键词模式。
+        """
+        path = self._db_path()
+        key = (str(path), model, dim)
+        cached = _MATRIX_CACHE.get(key)
+        if cached is not None and cached.stamp == self._stamp(path):
+            return cached.rows, cached.matrix
+
+        rows: list[dict] = []
+        vectors: list[list[float]] = []
+        for row in self._rows():
+            try:
+                if row["model"] != model or int(row["dim"]) != dim:
+                    continue
+                parsed = json.loads(row["embedding"])
+                if not isinstance(parsed, list) or len(parsed) != dim:
+                    raise ValueError(f"期望 {dim} 维，实际不是该长度的列表")
+                values = [float(value) for value in parsed]
+                if not all(math.isfinite(value) for value in values):
+                    raise ValueError("含 NaN 或无穷大")
+            except (ValueError, TypeError) as exc:
+                logger.warning(
+                    "跳过损坏的向量行 %s/%s：%s",
+                    row.get("doc_id", "?"),
+                    row.get("slice_id", "?"),
+                    exc,
+                )
+                continue
+            rows.append(row)
+            vectors.append(values)
+
+        matrix = (
+            np.asarray(vectors, dtype=np.float32)
+            if vectors
+            else np.empty((0, dim), dtype=np.float32)
+        )
+        # `_rows()` 里的 _ensure 可能刚创建库文件，戳要在读完之后重新取。
+        entry = _MatrixEntry(rows=tuple(rows), matrix=matrix, stamp=self._stamp(path))
+        if len(_MATRIX_CACHE) >= _MATRIX_CACHE_MAX_ENTRIES:
+            _MATRIX_CACHE.pop(next(iter(_MATRIX_CACHE)))
+        _MATRIX_CACHE[key] = entry
+        logger.debug("向量矩阵已重建：%d 行，model=%s dim=%d", len(rows), model, dim)
+        return entry.rows, entry.matrix
+
     # -- 索引 ------------------------------------------------------------
 
     def build_index(
@@ -193,6 +287,8 @@ class VectorStore:
                 )
                 connection.commit()
 
+        # 索引变了就主动清缓存：不能等下一次 search 靠 mtime 猜。
+        self._invalidate()
         logger.info(
             "向量索引完成：新增/更新 %d，跳过 %d，删除 %d",
             embedded,
@@ -247,17 +343,35 @@ class VectorStore:
         limit: int = 3,
         min_score: float | None = None,
     ) -> list[ScoredSlice]:
-        """按余弦相似度取 top-k。只使用与当前模型/维度一致的行。"""
-        rows = [
-            row
-            for row in self._rows()
-            if row["model"] == model and int(row["dim"]) == dim
-        ]
-        if not rows:
+        """按余弦相似度取 top-k。只使用与当前模型/维度一致的行。
+
+        边界输入（空向量、非一维、含 NaN/inf、全零、非正 limit）一律返回空列表
+        而不抛异常：检索是问答链路的一环，不该因为一次异常输入让整页不可用。
+        """
+        if limit <= 0:
+            logger.debug("检索 limit=%d，直接返回空结果", limit)
+            return []
+        if not query_vector:
+            logger.debug("查询向量为空，直接返回空结果")
+            return []
+        try:
+            query = np.asarray(query_vector, dtype=np.float32)
+        except (TypeError, ValueError):
+            logger.warning("查询向量无法转成数值数组，已跳过检索")
+            return []
+        if query.ndim != 1 or query.shape[0] == 0:
+            logger.warning("查询向量维度非法：%s", query.shape)
+            return []
+        if not np.isfinite(query).all():
+            logger.warning("查询向量含 NaN 或无穷大，已跳过检索")
+            return []
+        if not np.any(query):
+            logger.debug("查询向量全零，余弦无意义，直接返回空结果")
             return []
 
-        query = np.asarray(query_vector, dtype=np.float32)
-        matrix = np.asarray([json.loads(row["embedding"]) for row in rows], dtype=np.float32)
+        rows, matrix = self._matrix(model=model, dim=dim)
+        if not rows:
+            return []
         if matrix.shape[1] != query.shape[0]:
             logger.warning(
                 "向量维度不一致：查询 %d，索引 %d —— 已忽略索引",

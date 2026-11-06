@@ -156,6 +156,38 @@ def test_cli_unknown_category_returns_2(capsys):
     assert "没有匹配" in capsys.readouterr().err
 
 
+def test_cli_survives_narrow_encoding_console():
+    """Windows 默认 GBK 控制台曾因 ✅ 抛 UnicodeEncodeError，整次评测中断。
+
+    回归：终端编不了 emoji 时降级为 `[OK]`/`[FAIL]`，而不是让报告跑不出来。
+    """
+    env = {**os.environ, "PYTHONIOENCODING": "gbk"}
+    completed = subprocess.run(
+        [sys.executable, "-m", "eval.runner", "--only", "工具调用"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="gbk",
+        errors="replace",
+        env=env,
+        timeout=180,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "UnicodeEncodeError" not in completed.stderr
+    assert "[OK]" in completed.stdout, "窄编码终端应降级为 ASCII 标记"
+
+
+def test_written_markdown_keeps_emoji(tmp_path):
+    """降级只发生在终端；写出的报告文件仍是完整 UTF-8 内容。"""
+    target = tmp_path / "report.md"
+    assert main(["--only", "工具调用", "--write", str(target)]) == 0
+
+    text = target.read_text(encoding="utf-8")
+    assert "✅" in text, "文件里的通过标记不该被降级替换"
+
+
 def test_compat_script_still_runs():
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     completed = subprocess.run(

@@ -157,9 +157,9 @@ def _render_sidebar(user: User) -> str:
             f'  <div style="font-size:11.5px;color:{backend_theme.MUTED};'
             f'letter-spacing:.4px;margin-bottom:5px">当前账号</div>'
             f'  <div style="font-size:13.5px;font-weight:600;color:{backend_theme.BROWN};'
-            f'margin-bottom:4px">{user.username}</div>'
+            f'margin-bottom:4px">{components.esc(user.username)}</div>'
             f'  <div style="font-size:11.5px;color:{backend_theme.MUTED}">'
-            f"{user.role_label}</div>"
+            f"{components.esc(user.role_label)}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )

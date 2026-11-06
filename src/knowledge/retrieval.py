@@ -9,6 +9,12 @@
 - 语义检索抛领域异常 → 关键词，并带上降级说明
 - 语义检索成功但低于阈值 → 视为「没有相关资料」，**不**回退
   （回退会把「语义上确实不相关」变成「字面碰巧命中」，违背检索意图）
+
+边界处理：
+- 空白 / 超长查询 → 入口直接拒绝，不发起外部调用，`note` 说明原因；
+- 向量化服务返回空 → 按领域异常降级，不伪装成「没有资料」；
+- 损坏的向量行 → 在 `VectorStore._matrix` 逐行跳过并记 warning，
+  不让单条坏数据把整条语义检索打回关键词模式。
 """
 
 from __future__ import annotations
@@ -17,7 +23,7 @@ import logging
 from dataclasses import dataclass
 
 from src import config
-from src.errors import ZhigouError, to_user_message
+from src.errors import UpstreamResponseError, ZhigouError, to_user_message
 from src.knowledge import embeddings
 from src.knowledge.corpus import TYPE_CATEGORY, TYPE_PRODUCT, TYPE_SERVICE
 from src.knowledge.index import BM25Index
@@ -73,23 +79,46 @@ def retrieve(
     service: embeddings.EmbeddingService | None = None,
     limit: int | None = None,
 ) -> RetrievalResult:
-    """检索知识库：向量优先，失败回退关键词。"""
+    """检索知识库：向量优先，失败回退关键词。
+
+    空白与超长查询在入口直接拒绝，不发起外部调用；拒绝时 `mode` 记为
+    `keyword` 只是沿用现有枚举（实际没有执行任何检索），原因放在 `note` 里。
+    """
+    query = (query or "").strip()
+    if not query:
+        logger.debug("检索查询为空，直接返回空结果")
+        return RetrievalResult(passages=[], mode="keyword", note="请输入要查询的问题。")
+    if len(query) > config.KNOWLEDGE_MAX_QUERY_CHARS:
+        logger.warning("检索查询过长（%d 字符），已拒绝", len(query))
+        return RetrievalResult(
+            passages=[],
+            mode="keyword",
+            note=f"问题过长（超过 {config.KNOWLEDGE_MAX_QUERY_CHARS} 字），请精简后再试。",
+        )
+
     limit = limit or config.KNOWLEDGE_MAX_RESULTS
     service = service or embeddings.get_service()
 
     if service.configured:
         try:
             store = store or VectorStore()
-            query_vector = service.embed([query])[0]
+            vectors = service.embed([query])
+            if not vectors:
+                # 空响应不是「没有资料」，是服务返回了不完整结果：
+                # 按领域异常走回退，并在提示里说清原因，别让用户以为查无此物。
+                raise UpstreamResponseError("向量化服务没有返回查询向量。")
             hits = store.search(
-                query_vector,
+                vectors[0],
                 model=service.model,
                 dim=service.dim,
                 limit=limit,
             )
+            passages = [_to_passage(hit, query) for hit in hits]
+            logger.debug("语义检索完成：命中 %d 条", len(passages))
             return RetrievalResult(
-                passages=[_to_passage(hit, query) for hit in hits],
+                passages=passages,
                 mode="vector",
+                note="" if passages else "本次为语义检索，未找到足够相关的资料。",
             )
         except ZhigouError as exc:
             logger.warning("语义检索失败，回退关键词：%s", to_user_message(exc))
@@ -103,6 +132,8 @@ def retrieve(
         fallback_note = ""
 
     if index is None:
+        logger.debug("未提供关键词索引，返回空结果（降级说明：%s）", fallback_note or "无")
         return RetrievalResult(passages=[], mode="keyword", note=fallback_note)
     passages = search_knowledge(query, index=index, limit=limit)
+    logger.debug("关键词检索完成：命中 %d 条", len(passages))
     return RetrievalResult(passages=passages, mode="keyword", note=fallback_note)

@@ -1,14 +1,17 @@
-# 智购参谋 —— 运行依赖
+# 智购参谋 —— 运行依赖（精确锁定）
 #
 # 安装：pip install -r requirements.txt
 #
-# 版本下限按开发机实测版本设定（Windows / Python 3.13）：
-#   streamlit 1.51.0 · pandas 2.3.3 · pydantic 2.12.4 · httpx 0.28.1 · pytest 8.4.2
-# --- 运行时 ---
-streamlit>=1.40,<2.0      # Web 界面
-pandas>=2.0               # 商品数据整理与比较表
-pydantic>=2.0             # 结构化数据校验（商品模型、需求模型）
-httpx>=0.27               # 大模型 API 调用（可选功能，用标准 HTTP 直连，不依赖官方 SDK）
-# --- 开发与测试 ---
-pytest>=8.0               # 自动化测试
-numpy>=1.24
+# 锁定依据：开发机 Windows / Python 3.13.9 实测通过；已逐一核对各包的
+# Requires-Python，全部覆盖 CI 的 3.11 / 3.12 与 Docker 的 python:3.12-slim。
+# numpy 2.3.5 要求 >=3.11，因此本项目最低 Python 版本为 3.11（见 README 第 8 节）。
+#
+# 升级依赖时请同步更新：本文件 → requirements-dev.txt → CI 矩阵 → README 版本声明。
+# 本机未安装、无法实测版本的工具不在此文件，见 requirements-dev.txt。
+
+# --- 运行时（部署镜像只装这一段）---
+streamlit==1.51.0      # Web 界面                        Requires-Python >=3.10
+pandas==2.3.3          # 商品数据整理与比较表            >=3.9
+pydantic==2.12.4       # 结构化数据校验                  >=3.9
+httpx==0.28.1          # 大模型 API（OpenAI 兼容直连）    >=3.8
+numpy==2.3.5           # 向量检索余弦计算                >=3.11（决定最低版本）

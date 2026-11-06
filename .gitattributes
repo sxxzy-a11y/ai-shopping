@@ -1,0 +1,30 @@
+# 仓库内部统一存 LF，工作区换行交给各机器的 core.autocrlf 决定。
+# 刻意不写 `eol=lf`：本机 core.autocrlf=true 且已有大量 CRLF 工作区文件，
+# 强制 eol 会让它们在添加本规则的那一刻集体变成 modified。
+
+* text=auto
+
+# 二进制资源不做任何换行转换。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.db binary
+*.db-wal binary
+*.db-shm binary
+*.sqlite binary
+*.sqlite3 binary
+*.pyc binary
+*.b64 binary
+
+# 明确按文本处理，保证 diff 可读。
+*.py text
+*.md text
+*.toml text
+*.yml text
+*.yaml text
+*.json text
+*.ini text
+*.txt text
+*.css text

@@ -70,7 +70,7 @@ docker compose up -d --build
 
 打开 <http://localhost:8501>。
 
-当前开发机没有安装 Docker，Dockerfile 做过静态检查，但没有在本机实际构建。首次在服务器上部署时，建议先跑一次完整分析、比较和历史记录，再对外演示。
+当前开发机没有安装 Docker，Dockerfile 做过静态检查，但没有在本机实际构建。作为补充，`.github/workflows/ci.yml` 里的 `docker` job 会在 ubuntu runner 上执行 `docker build`、启动容器并轮询 `/_stcore/health`；首次 CI 运行结果确认通过后，把该 job 的 `continue-on-error` 去掉即可转为阻断门禁。首次在服务器上部署时，建议先跑一次完整分析、比较和历史记录，再对外演示。
 
 ## VPS + Docker + 反向代理
 

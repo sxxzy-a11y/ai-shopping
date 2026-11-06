@@ -19,7 +19,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from src import config, data_loader
-from src.auth import ROLE_ADMIN, ROLE_USER, User
+from src.auth import ROLE_ADMIN, ROLE_USER, User, validate_username
 from src.ui import icons, state, theme
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -2075,6 +2075,32 @@ def test_sidebar_shows_the_current_account():
 
     assert TEST_USERNAME in body
     assert "普通用户" in body
+
+
+def test_sidebar_escapes_html_in_username():
+    """用户名进 `unsafe_allow_html` 块前必须转义。
+
+    回归缺陷：`validate_username` 只排除空白、不限制字符集，所以
+    `<script>alert(1)</script>` 是合法用户名；侧栏曾把它当裸 HTML 插入，
+    管理员查看账号时脚本会在其会话里执行。安全责任在渲染层，不靠收紧用户名规则。
+    """
+    evil = "<script>alert(1)</script>"
+    assert validate_username(evil) == evil, "前提变了：用户名校验不再允许 HTML 元字符"
+
+    at = _run(user=User(username=evil, role=ROLE_USER))
+    _assert_clean(at)
+
+    account_html = next(
+        (
+            str(el.value)
+            for el in at.markdown
+            if "当前账号" in str(getattr(el, "value", ""))
+        ),
+        "",
+    )
+    assert account_html, "找不到侧栏的「当前账号」块"
+    assert "<script>" not in account_html, "用户名以裸标签进入了 HTML"
+    assert "&lt;script&gt;" in account_html, "用户名应被转义，而不是被丢弃"
 
 
 # --------------------------------------------------------------------------

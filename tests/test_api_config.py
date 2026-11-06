@@ -38,6 +38,27 @@ def test_empty_values_do_not_overwrite(tmp_path: Path):
     assert loaded["llm_model"] == "new-model"
 
 
+def test_save_tightens_file_permissions(tmp_path: Path, monkeypatch):
+    """密钥明文落盘，写入时必须尝试把文件权限收到 0600。
+
+    用打桩验证「确实调用了 chmod」而不是断言 POSIX 权限位——后者在 Windows
+    上恒为宽松值，跨平台测试会假失败。
+    """
+    called: list[int] = []
+    original_chmod = Path.chmod
+
+    def spy(self: Path, mode: int):
+        called.append(mode)
+        return original_chmod(self, mode)
+
+    monkeypatch.setattr(Path, "chmod", spy)
+    path = tmp_path / "api.json"
+    api_config.save({"llm_api_key": "sk-secret-value"}, path=path)
+
+    assert 0o600 in called, "写入含密钥的配置时没有收紧文件权限"
+    assert api_config.load(path)["llm_api_key"] == "sk-secret-value"
+
+
 def test_unknown_keys_are_ignored(tmp_path: Path):
     path = tmp_path / "api.json"
     api_config.save({"evil": "x", "llm_model": "m"}, path=path)

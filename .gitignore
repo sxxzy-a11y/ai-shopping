@@ -54,5 +54,12 @@ data/evaluation/report.md
 # --- Streamlit local secrets (never commit) ---
 .streamlit/secrets.toml
 
-# --- ?????pytest / ?????---
+# --- 测试临时目录与残留 ---
 .tmp/
+.pytest-tmp/
+pytest-of-*/
+*.db-wal
+*.db-shm
+
+# --- 编辑器本地配置（含本机偏好，不入库）---
+.codebuddy/

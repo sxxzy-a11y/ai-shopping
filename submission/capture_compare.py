@@ -1,17 +1,23 @@
 # -*- coding: utf-8 -*-
+import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 import re
 
-SHOTS = Path(r"C:\Users\suchen\Desktop\ai shopping") / "submission" / "screenshots"
+ROOT = Path(__file__).resolve().parents[1]
+SHOTS = ROOT / "submission" / "screenshots"
+
+# 演示账号：默认沿用原值以保持脚本行为不变；公开演示时用环境变量覆盖。
+DEMO_USER = os.environ.get("ZHIGOU_DEMO_USER", "admin")
+DEMO_PASSWORD = os.environ.get("ZHIGOU_DEMO_PASSWORD", "12345678")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, channel="msedge")
     page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
     page.goto("http://localhost:8501", wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(3000)
-    page.locator("input").nth(0).fill("admin")
-    page.locator("input").nth(1).fill("12345678")
+    page.locator("input").nth(0).fill(DEMO_USER)
+    page.locator("input").nth(1).fill(DEMO_PASSWORD)
     page.locator("button").nth(1).click()
     page.wait_for_timeout(3000)
 

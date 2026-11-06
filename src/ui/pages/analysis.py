@@ -154,7 +154,7 @@ def _render_ai_controls() -> None:
         else:
             hint = "AI 增强已在「个人设置」中关闭，本次分析由本地规则完成。"
         st.markdown(
-            f'<div class="zg-caption" style="margin-bottom:10px">{hint}</div>',
+            f'<div class="zg-caption" style="margin-bottom:10px">{esc(hint)}</div>',
             unsafe_allow_html=True,
         )
         return
@@ -166,8 +166,6 @@ def _render_ai_controls() -> None:
 
 def esc_multi(text: str) -> str:
     """把多行文本转成 HTML（换行变 <br>），逐段转义。"""
-    from src.ui.theme import esc
-
     return "<br>".join(esc(line) if line else "&nbsp;" for line in text.splitlines())
 
 

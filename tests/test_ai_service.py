@@ -24,6 +24,7 @@ from src.errors import (
     UpstreamUnavailable,
     ZhigouError,
 )
+from src.knowledge.search import Passage
 
 FAKE_KEY = "sk-test-not-a-real-key-000000"
 
@@ -1079,8 +1080,6 @@ def test_plain_answer_still_has_no_tool_calls():
 
 
 def _passage(excerpt: str, *, title: str = "手机选购指南") -> "Passage":
-    from src.knowledge.search import Passage
-
     return Passage(
         doc_id="category:phone",
         title=title,

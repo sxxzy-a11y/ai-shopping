@@ -26,7 +26,7 @@ SQLite：商品库 + 历史库（两个文件）+ 知识语料（Markdown）
 
 | 维度 | 当前事实 |
 |---|---|
-| 语言与框架 | Python 3.10+，Streamlit 1.51（界面） |
+| 语言与框架 | Python 3.11+，Streamlit 1.51（界面） |
 | 数据 | SQLite（stdlib `sqlite3`）、`data/products.json` 仅作种子 |
 | 结构化校验 | pydantic 2.x（商品、需求、账号、工具参数） |
 | 模型调用 | `httpx` 直连 OpenAI 兼容接口，不依赖厂商 SDK |

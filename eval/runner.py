@@ -145,7 +145,39 @@ def evaluate(payload: dict | None = None, cases: list[dict] | None = None) -> Ev
     return build_evaluation(payload, cases if cases is not None else payload["cases"])
 
 
+def _configure_stdout() -> None:
+    """窄编码终端兜底：不让一个符号把整次评测掀掉。
+
+    Windows 默认控制台是 cp936/GBK，`render_markdown` 用 ✅/❌ 作通过标记，
+    这两个字符编不出来时 `print` 会抛 `UnicodeEncodeError`，整次评测中断。
+    这里只把错误策略放宽到 `replace`，**不改编码**——中文仍按本地编码显示，
+    标记本身由 `_print` 换成 ASCII，可读性比变成问号好。
+    """
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is None:
+        return
+    try:
+        reconfigure(errors="replace")
+    except (TypeError, ValueError, OSError):
+        pass
+
+
+def _print(text: str) -> None:
+    """把报告打到终端；控制台编不了 ✅/❌ 时降级为 ASCII 标记。
+
+    写文件走 `write_text(encoding="utf-8")`，报告内容里的 emoji 保持不变，
+    所以这里只处理终端输出，不改变任何评测结果。
+    """
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        "✅❌".encode(encoding)
+    except (LookupError, UnicodeEncodeError):
+        text = text.replace("✅", "[OK]").replace("❌", "[FAIL]")
+    print(text)
+
+
 def main(argv: list[str] | None = None) -> int:
+    _configure_stdout()
     parser = argparse.ArgumentParser(description="跑一遍效果评测")
     parser.add_argument("--only", help="只跑某个场景类别")
     parser.add_argument("--json", action="store_true", help="输出机器可读结果")
@@ -167,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     report = build_evaluation(payload, cases)
 
     if args.json:
-        print(report.to_json())
+        _print(report.to_json())
         return 0
 
     markdown = render_markdown(report)
@@ -176,18 +208,18 @@ def main(argv: list[str] | None = None) -> int:
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "report.json").write_text(report.to_json(), encoding="utf-8")
         (output_dir / "report.md").write_text(markdown, encoding="utf-8")
-        print(f"报告已写入 {output_dir}")
-        print(render_terminal(report))
+        _print(f"报告已写入 {output_dir}")
+        _print(render_terminal(report))
         return 0
 
     if args.write:
         Path(args.write).write_text(markdown, encoding="utf-8")
-        print(f"报告已写入 {args.write}")
+        _print(f"报告已写入 {args.write}")
         return 0
 
-    print(markdown)
+    _print(markdown)
     summary = report.summary
-    print(
+    _print(
         f"\n共 {summary['total']} 条，通过 {summary['passed']}，"
         f"失败 {summary['failed']}"
     )
