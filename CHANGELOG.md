@@ -5,6 +5,33 @@
 
 ---
 
+## [未发布] — 2026-11-07（第八轮：类型归零与冒烟实测）
+
+### 类型检查
+
+mypy 从 13 处降到 **0 处**，`mypy src` 提升为 CI 阻断门禁：
+
+- `eval/checks.py`：类别/预算分支改用独立变量名；补 `LP001` 夹具断言；
+  `per_product` 收窄为 dict 并校验返回契约
+- `settings.py`：`_save` 签名对齐 `api_config.save` 的字段类型
+- `knowledge_admin.py`：会话缓存加 `RetrievalResult` 注解
+- `history.py`：报告详情补 `selected` 非空判断
+- `knowledge.py`：补 `demand` 不变量断言
+- `analysis.py`：零参回调由默认参数 lambda 改为 `functools.partial`（行为一致）
+
+CI 结构同步：`mypy` 移入阻断 job，原 `quality` job 改名 `coverage`，只留覆盖率报告。
+
+### 浏览器验证
+
+`submission/smoke_test.py` **首次实际运行并通过**（桌面 + 375px，各 4 项断言）：
+
+- 新增 `--channel` 参数，默认 `msedge` 复用系统 Edge，无需下载 chromium
+- 固定 8 秒等待改为 45 秒**条件等待**：实测分析耗时约 14 秒，原写法会假失败
+- 断言失败也保存全页截图（原实现只在异常分支截图，漏掉「判断错了」这类失败）
+- `.gitignore` 忽略 `submission/screenshots/smoke-*.png`
+
+---
+
 ## [未发布] — 2026-11-06（第七轮：全量收尾）
 
 在 `d32382c` 之后继续，把剩余待办逐项补齐。

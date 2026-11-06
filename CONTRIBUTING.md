@@ -31,17 +31,20 @@ python scripts/init.py --check     # 只看现状：商品数、账号数、语�
 真实浏览器冒烟（可选，需另开终端 `streamlit run app.py`）：
 
 ```bash
-playwright install chromium        # 首次
-python submission/smoke_test.py    # 登录 → 分析 → 首选方案出现
+python submission/smoke_test.py            # 默认 --channel msedge，复用系统 Edge
 python submission/smoke_test.py --mobile   # 375px 视口
+# 非 Windows 或没有 Edge：playwright install chromium，再传 --channel ""
 ```
+
+实测（2026-11-07）：桌面与手机视口各 4 项断言全部通过。本地规则模式下「分析」
+约 14 秒，脚本用 45 秒条件等待；断言失败会在 `submission/screenshots/` 留全页截图。
 
 `tests/` 全部跑在 Streamlit AppTest 里，不渲染真实 DOM；登录页重影、
 `:has()` 兼容性这类问题只能靠上面这个脚本发现。
 
 CI（`.github/workflows/ci.yml`）会在 ubuntu + windows、Python 3.11 / 3.12
-上跑测试、lint 与格式检查。`mypy`、覆盖率、`pip-audit`、Docker 构建目前是
-**信息性** job，不阻断合并，但结果值得看一眼。
+上跑测试，以及 `ruff check`、`ruff format --check`、`mypy src` 三项**阻断**门禁。
+覆盖率、`pip-audit`、Docker 构建目前是**信息性** job，不阻断合并，但结果值得看一眼。
 
 ## 3. 配置与密钥
 

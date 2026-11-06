@@ -18,8 +18,12 @@
     python submission/smoke_test.py --url http://localhost:8501 --mobile
     python submission/smoke_test.py --user admin --password <你的密码>
 
-注意：**本脚本未在本次开发环境中运行过**（本机未安装 Playwright 浏览器）。
-首次使用请先跑一遍，确认三条断言都过；失败时截图会落在 submission/screenshots/。
+实测（2026-11-07，Windows + 系统 Edge 通道 `msedge`）：桌面与 375px 视口各 4 项断言
+全部通过。本地规则模式下「分析」实测约 14 秒，脚本用 45 秒**条件等待**，不赌固定 sleep。
+
+首次使用：优先 `--channel msedge`（Windows 自带 Edge，无需下载）；非 Windows，或想用
+Playwright 自带 chromium 时，先 `playwright install chromium`，再传 `--channel ""`。
+断言失败也会在 `submission/screenshots/` 留一张全页截图（已 gitignore）。
 """
 
 from __future__ import annotations
@@ -54,13 +58,19 @@ def _check(condition: bool, message: str, failures: list[str]) -> None:
         failures.append(message)
 
 
-def run(url: str, user: str, password: str, mobile: bool) -> int:
+def run(url: str, user: str, password: str, mobile: bool, channel: str | None) -> int:
     failures: list[str] = []
     console_errors: list[str] = []
     SHOTS.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        try:
+            browser = playwright.chromium.launch(headless=True, channel=channel)
+        except Exception as exc:  # noqa: BLE001 - 启动失败要给出可操作的提示
+            print(f"启动浏览器失败（channel={channel or '自带 chromium'}）：{exc}")
+            print("提示：Windows 可用 --channel msedge 复用系统 Edge；")
+            print("      或先执行 playwright install chromium 再留空 --channel。")
+            return 2
         viewport = (
             {"width": 375, "height": 812} if mobile else {"width": 1440, "height": 900}
         )
@@ -99,12 +109,15 @@ def run(url: str, user: str, password: str, mobile: bool) -> int:
                 page.wait_for_timeout(1_500)
                 page.locator("textarea").first.fill("2000 元以内的手机，主要拍照")
                 page.get_by_role("button", name="开始分析", exact=True).click()
-                page.wait_for_timeout(8_000)
-                _check(
-                    page.get_by_text("首选方案").count() > 0,
-                    "分析完成并渲染出首选方案",
-                    failures,
-                )
+                # 本地规则模式下分析实测约 14 秒；用条件等待，不用固定 sleep 赌时间。
+                rendered = True
+                try:
+                    page.get_by_text("首选方案").first.wait_for(
+                        state="visible", timeout=45_000
+                    )
+                except Exception:  # noqa: BLE001 - 超时即视为未渲染
+                    rendered = False
+                _check(rendered, "分析完成并渲染出首选方案", failures)
             else:
                 # 手机视口只验证不塌：正文容器有宽度、没有横向溢出。
                 width = page.evaluate("document.body.scrollWidth")
@@ -121,6 +134,14 @@ def run(url: str, user: str, password: str, mobile: bool) -> int:
             if console_errors:
                 for text in console_errors[:3]:
                     print(f"       {text[:160]}")
+            if failures:
+                # 断言失败也要留证据；只在异常分支截图会漏掉「判断错了」这类失败。
+                try:
+                    shot = SHOTS / "smoke-failure.png"
+                    page.screenshot(path=str(shot), full_page=True)
+                    print(f"       失败截图：{shot}")
+                except Exception:  # noqa: BLE001 - 截图失败不该盖掉真正的失败
+                    pass
             browser.close()
 
     if failures:
@@ -141,9 +162,14 @@ def main(argv: list[str] | None = None) -> int:
         "--password", default=os.environ.get("ZHIGOU_DEMO_PASSWORD", "12345678")
     )
     parser.add_argument("--mobile", action="store_true", help="按 375px 手机视口跑")
+    parser.add_argument(
+        "--channel",
+        default="msedge",
+        help="浏览器通道：msedge（默认，复用系统 Edge）/ chrome / 留空用自带 chromium",
+    )
     args = parser.parse_args(argv)
 
-    return run(args.url, args.user, args.password, args.mobile)
+    return run(args.url, args.user, args.password, args.mobile, args.channel or None)
 
 
 if __name__ == "__main__":

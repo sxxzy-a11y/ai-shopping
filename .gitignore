@@ -63,3 +63,6 @@ pytest-of-*/
 
 # --- 编辑器本地配置（含本机偏好，不入库）---
 .codebuddy/
+
+# --- 冒烟测试运行产物（每次跑都会变，不入库）---
+submission/screenshots/smoke-*.png
