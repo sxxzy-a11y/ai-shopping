@@ -51,7 +51,9 @@ def _vector_rows(service: embeddings.EmbeddingService) -> dict[tuple[str, str], 
 
 
 def _slice_status(
-    slice_: chunking.Slice, rows: dict[tuple[str, str], dict], service: embeddings.EmbeddingService
+    slice_: chunking.Slice,
+    rows: dict[tuple[str, str], dict],
+    service: embeddings.EmbeddingService,
 ) -> str:
     row = rows.get((slice_.doc_id, slice_.slice_id))
     if row is None:
@@ -78,9 +80,7 @@ def _content_hash(slice_: chunking.Slice) -> str:
 
 def _render_overview(service: embeddings.EmbeddingService) -> None:
     slices = _slices()
-    stats = state.get_vector_store().stats(
-        slices, model=service.model, dim=service.dim
-    )
+    stats = state.get_vector_store().stats(slices, model=service.model, dim=service.dim)
     components.stat_row(
         [
             ("book", str(len({s.doc_id for s in slices})), "篇资料"),
@@ -114,9 +114,7 @@ def _render_index_action(service: embeddings.EmbeddingService) -> None:
         return
 
     slices = _slices()
-    stats = state.get_vector_store().stats(
-        slices, model=service.model, dim=service.dim
-    )
+    stats = state.get_vector_store().stats(slices, model=service.model, dim=service.dim)
     components.caption(
         f"当前 {stats.total_slices} 个切片，待生成 {stats.generation_needed} 个。"
         "已是最新的切片会被跳过，不重复调用向量服务。"
@@ -218,7 +216,9 @@ def _render_slices(service: embeddings.EmbeddingService) -> None:
     doc_titles = sorted({s.title for s in slices})
     col_doc, col_type, col_status = st.columns([2, 1, 1])
     with col_doc:
-        doc_filter = st.selectbox("资料", options=[_ALL, *doc_titles], key=_KEY_SLICE_DOC)
+        doc_filter = st.selectbox(
+            "资料", options=[_ALL, *doc_titles], key=_KEY_SLICE_DOC
+        )
     with col_type:
         type_filter = st.selectbox(
             "知识类型",
@@ -309,7 +309,8 @@ def _render_debug(service: embeddings.EmbeddingService) -> None:
         [
             {
                 "标题": passage.title,
-                "片段": passage.excerpt[:80] + ("…" if len(passage.excerpt) > 80 else ""),
+                "片段": passage.excerpt[:80]
+                + ("…" if len(passage.excerpt) > 80 else ""),
                 "类型": passage.type_label,
                 "分数": round(passage.score, 3),
                 "来源": passage.source,
@@ -350,6 +351,7 @@ def render(catalog=None) -> None:
         "向量化会把切片正文发送给所配置的 Embedding 服务；不会发送账号、历史或收藏。"
     )
 
+
 # --------------------------------------------------------------------------
 # 新增 / 删除资料
 # --------------------------------------------------------------------------
@@ -376,13 +378,17 @@ def _render_new_document() -> None:
             doc_type = st.selectbox(
                 "知识类型",
                 options=["service", "category"],
-                format_func=lambda value: {"service": "服务级", "category": "品类级"}[value],
+                format_func=lambda value: {"service": "服务级", "category": "品类级"}[
+                    value
+                ],
                 key=_KEY_NEW_TYPE,
             )
             category = st.selectbox(
                 "商品分类（品类级必填）",
                 options=["", *config.CATEGORY_LABELS],
-                format_func=lambda value: config.category_label(value) if value else "（服务级资料无需选择）",
+                format_func=lambda value: config.category_label(value)
+                if value
+                else "（服务级资料无需选择）",
                 key=_KEY_NEW_CATEGORY,
             )
             source = st.text_input(
@@ -423,11 +429,11 @@ def _render_delete_document(documents) -> None:
             "只能删除文件型资料（品类级 / 服务级）。商品级资料由商品数据自动生成，"
             "请到「商品维护」中编辑商品。"
         )
-        options = {f"{document.title} · {document.doc_id}": document for document in deletable}
+        options = {
+            f"{document.title} · {document.doc_id}": document for document in deletable
+        }
         pick = st.selectbox("选择要删除的资料", options=list(options), key=_KEY_DELETE)
-        confirmed = st.checkbox(
-            "我确认删除这份资料（不可撤销）", key=_KEY_CONFIRM
-        )
+        confirmed = st.checkbox("我确认删除这份资料（不可撤销）", key=_KEY_CONFIRM)
         if st.button("删除资料", disabled=not confirmed):
             try:
                 knowledge_docs.delete_document(options[pick].doc_id)
@@ -440,4 +446,3 @@ def _render_delete_document(documents) -> None:
                     "ok",
                 )
             st.rerun()
-

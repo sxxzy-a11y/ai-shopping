@@ -119,7 +119,9 @@ def split_document(document: Document, *, limit: int = MAX_SLICE_CHARS) -> list[
     return slices
 
 
-def split_corpus(documents: list[Document], *, limit: int = MAX_SLICE_CHARS) -> list[Slice]:
+def split_corpus(
+    documents: list[Document], *, limit: int = MAX_SLICE_CHARS
+) -> list[Slice]:
     """把整个语料切成切片，保持文档顺序。"""
     slices: list[Slice] = []
     for document in documents:

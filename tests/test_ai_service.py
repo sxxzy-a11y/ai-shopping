@@ -12,7 +12,7 @@ import json
 import httpx
 import pytest
 
-from src import ai_enhance, ai_service, config
+from src import ai_enhance, config
 from src.ai_service import AIService, extract_json_object, redact
 from src.data_loader import Product
 from src.demand_parser import Demand
@@ -50,8 +50,13 @@ def ok_body(content: str = "你好", **extra) -> dict:
     message.update(extra.pop("message", {}))
     body = {
         "model": "test-model",
-        "choices": [{"message": message, "finish_reason": extra.pop("finish_reason", "stop")}],
-        "usage": {"total_tokens": 42, "completion_tokens_details": {"reasoning_tokens": 7}},
+        "choices": [
+            {"message": message, "finish_reason": extra.pop("finish_reason", "stop")}
+        ],
+        "usage": {
+            "total_tokens": 42,
+            "completion_tokens_details": {"reasoning_tokens": 7},
+        },
     }
     body.update(extra)
     return body
@@ -161,6 +166,7 @@ def test_truncated_empty_content_explains_the_token_limit():
     这不是「模型没话说」，而是 token 不够——当成成功返回空串会让上层
     误以为「AI 认为没有可提取的信息」，所以必须报错并给出可操作的提示。
     """
+
     def handler(request):
         return httpx.Response(
             200,
@@ -177,13 +183,19 @@ def test_truncated_empty_content_explains_the_token_limit():
     with pytest.raises(UpstreamResponseError) as excinfo:
         make_service(handler).complete("s", "u")
 
-    assert "token" in excinfo.value.user_message.lower() or "额度" in excinfo.value.user_message
+    assert (
+        "token" in excinfo.value.user_message.lower()
+        or "额度" in excinfo.value.user_message
+    )
 
 
 def test_error_body_never_leaks_the_key_into_the_message():
     """4xx 的响应体可能回显请求头，异常信息必须脱敏。"""
+
     def handler(request):
-        return httpx.Response(400, text=f"bad request with Authorization: Bearer {FAKE_KEY}")
+        return httpx.Response(
+            400, text=f"bad request with Authorization: Bearer {FAKE_KEY}"
+        )
 
     with pytest.raises(UpstreamUnavailable) as excinfo:
         make_service(handler).complete("s", "u")
@@ -231,6 +243,7 @@ def test_request_uses_openai_compatible_shape():
 
 def test_reasoning_content_is_not_surfaced():
     """推理过程不给用户看：可能是英文、可能复述提示词。"""
+
     def handler(request):
         return httpx.Response(
             200,
@@ -256,7 +269,9 @@ def test_endpoint_is_replaceable_without_code_changes():
         seen["model"] = json.loads(request.content)["model"]
         return httpx.Response(200, json=ok_body())
 
-    service = make_service(handler, base_url="https://other.example.com/v2/", model="别的模型")
+    service = make_service(
+        handler, base_url="https://other.example.com/v2/", model="别的模型"
+    )
     service.complete("s", "u")
 
     assert seen["url"].startswith("https://other.example.com/v2/")
@@ -321,10 +336,10 @@ def test_complete_json_raises_when_the_model_will_not_cooperate():
 
 def test_payload_outside_allowed_values_is_dropped(monkeypatch):
     payload = {
-        "category": "tablet",              # 不在枚举里
-        "budget": -100,                    # 负数
+        "category": "tablet",  # 不在枚举里
+        "budget": -100,  # 负数
         "use_cases": ["编程", "写代码", "旅游"],  # 最后一个不在词表里
-        "core_needs": ["性能", "玄学"],     # 最后一个不在词表里
+        "core_needs": ["性能", "玄学"],  # 最后一个不在词表里
         "compromises": [" 可以重一点 ", ""],
         "brand_preferences": ["轻羽"],
         "hard_constraints": ["降噪", "必须有钱"],  # 最后一个不在表里
@@ -377,16 +392,24 @@ def test_parse_with_ai_goes_through_the_service():
             200,
             json=ok_body(
                 content=json.dumps(
-                    {"category": "laptop", "budget": 3000, "use_cases": ["编程"],
-                     "core_needs": ["性能"], "compromises": [],
-                     "brand_preferences": [], "hard_constraints": []},
+                    {
+                        "category": "laptop",
+                        "budget": 3000,
+                        "use_cases": ["编程"],
+                        "core_needs": ["性能"],
+                        "compromises": [],
+                        "brand_preferences": [],
+                        "hard_constraints": [],
+                    },
                     ensure_ascii=False,
                 )
             ),
         )
 
     demand = ai_enhance.parse_demand_with_ai(
-        "预算 3000 买笔记本写代码", service=make_service(handler), known_brands=["轻羽", "墨砚"]
+        "预算 3000 买笔记本写代码",
+        service=make_service(handler),
+        known_brands=["轻羽", "墨砚"],
     )
 
     assert demand.category == "laptop"
@@ -405,7 +428,7 @@ def test_parse_with_ai_goes_through_the_service():
         ("参考价 3299 元，性价比不错", {3299.0}, []),
         ("价格 ¥3,299 元", {3299.0}, []),
         ("参考价 2599 元，性价比不错", {3299.0}, [2599.0]),
-        ("价格 3,299 元", {}, [3299.0]),      # 千分位要正确解析，不能被逗号切断
+        ("价格 3,299 元", {}, [3299.0]),  # 千分位要正确解析，不能被逗号切断
         ("续航 10 小时，整机 1.28kg", {3299.0}, []),
     ],
 )
@@ -425,7 +448,10 @@ def test_explanation_with_a_wrong_price_is_dropped(catalog):
                     {
                         "overview": "总结",
                         "per_product": [
-                            {"product_id": "LP001", "why": f"只要 {real_price:.0f} 元，很划算"},
+                            {
+                                "product_id": "LP001",
+                                "why": f"只要 {real_price:.0f} 元，很划算",
+                            },
                             {"product_id": "LP002", "why": "只要 1234 元，非常便宜"},
                         ],
                     },
@@ -482,7 +508,10 @@ def test_invented_spec_values_are_caught(catalog):
     allowed = ai_enhance.spec_claim_values([catalog.get("LP001")])
 
     cases = [
-        (f"续航长达 {real['battery'] * 2:.0f} 小时", [f"{real['battery'] * 2:.0f} 小时"]),
+        (
+            f"续航长达 {real['battery'] * 2:.0f} 小时",
+            [f"{real['battery'] * 2:.0f} 小时"],
+        ),
         (f"重量只有 {real['weight'] / 2:.1f} 千克", [f"{real['weight'] / 2:.1f} 千克"]),
         (f"{real['ram'] * 2:.0f}GB 内存够用", [f"{real['ram'] * 2:.0f}GB"]),
     ]
@@ -505,9 +534,9 @@ def test_integer_claims_get_no_rounding_allowance(catalog):
     assert ai_enhance.find_unsupported_spec_claims(f"{exact} 固态", allowed) == []
 
     halved = f"{storage / 2:.0f}GB"
-    assert ai_enhance.find_unsupported_spec_claims(
-        f"{halved} 固态", allowed
-    ) == [halved], "容量砍半属于量级级差异，不该被取整半径放过"
+    assert ai_enhance.find_unsupported_spec_claims(f"{halved} 固态", allowed) == [
+        halved
+    ], "容量砍半属于量级级差异，不该被取整半径放过"
 
 
 def test_explanation_with_an_unsupported_spec_value_is_dropped(catalog):
@@ -756,8 +785,12 @@ def test_product_brief_carries_data_issues():
     """传给模型的商品摘要里要带上存疑说明，让它主动避开。"""
     product = _flagged_product()
     brief = ai_enhance._product_brief(
-        product, rank=1, score_total=80.0, match_level="较为匹配",
-        dimensions=[], budget_label="预算内",
+        product,
+        rank=1,
+        score_total=80.0,
+        match_level="较为匹配",
+        dimensions=[],
+        budget_label="预算内",
     )
 
     assert brief["data_issues"], "存疑说明没有传给模型"
@@ -829,11 +862,11 @@ def test_claim_about_a_clean_attribute_survives():
 @pytest.mark.parametrize(
     "field, expected_has_keyword",
     [
-        ("has_dedicated_gpu", True),   # 有 SPEC_LABELS
-        ("camera_tier", True),        # 标签「拍照档位」剥后缀 → 「拍照」
-        ("cpu_tier", True),            # 标签「处理器档位」剥后缀 → 「处理器」
-        ("price", True),               # 手工补的关键词
-        ("pros", False),               # 无可靠文字特征，交提示词约束
+        ("has_dedicated_gpu", True),  # 有 SPEC_LABELS
+        ("camera_tier", True),  # 标签「拍照档位」剥后缀 → 「拍照」
+        ("cpu_tier", True),  # 标签「处理器档位」剥后缀 → 「处理器」
+        ("price", True),  # 手工补的关键词
+        ("pros", False),  # 无可靠文字特征，交提示词约束
     ],
 )
 def test_issue_keyword_derivation(field, expected_has_keyword):
@@ -949,7 +982,9 @@ def test_empty_content_with_tool_calls_is_not_a_failure():
     这一条如果写反了，工具调用永远走不通：模型每请求一次工具就被当成
     「返回了空内容」而报错降级。
     """
-    service = _tool_response([_tool_call("get_product_detail", '{"product_id": "LP001"}')])
+    service = _tool_response(
+        [_tool_call("get_product_detail", '{"product_id": "LP001"}')]
+    )
     response = service.complete("sys", "usr", tools=TOOL_DECL)
 
     assert response.content == ""
@@ -1037,8 +1072,8 @@ def test_malformed_tool_arguments_raise_instead_of_half_parsing(bad_arguments):
 @pytest.mark.parametrize(
     "entry",
     [
-        {"id": "c1"},                                  # 缺 function
-        {"id": "c1", "function": {}},                  # 缺 name
+        {"id": "c1"},  # 缺 function
+        {"id": "c1", "function": {}},  # 缺 name
         {"function": {"name": "x", "arguments": "{}"}},  # 缺 id
         "不是对象",
     ],
@@ -1096,9 +1131,7 @@ def _answer_service(answer: str):
     def handler(request):
         return httpx.Response(
             200,
-            json=ok_body(
-                content=json.dumps({"answer": answer}, ensure_ascii=False)
-            ),
+            json=ok_body(content=json.dumps({"answer": answer}, ensure_ascii=False)),
         )
 
     return make_service(handler)
@@ -1157,9 +1190,7 @@ def test_no_fragments_is_rejected_without_calling_the_model():
         raise AssertionError("没有片段时不应发起模型调用")
 
     with pytest.raises(UpstreamResponseError):
-        ai_enhance.answer_from_knowledge(
-            "怎么选", [], service=make_service(handler)
-        )
+        ai_enhance.answer_from_knowledge("怎么选", [], service=make_service(handler))
 
 
 @pytest.mark.parametrize(
@@ -1198,14 +1229,19 @@ def test_explanation_for_an_unknown_product_is_dropped(catalog):
             200,
             json=ok_body(
                 content=json.dumps(
-                    {"overview": "", "per_product": [{"product_id": "不存在的ID", "why": "很好"}]},
+                    {
+                        "overview": "",
+                        "per_product": [{"product_id": "不存在的ID", "why": "很好"}],
+                    },
                     ensure_ascii=False,
                 )
             ),
         )
 
     result = ai_enhance.explain_recommendations(
-        Demand(category="laptop"), [_item(catalog.get("LP001"))], service=make_service(handler)
+        Demand(category="laptop"),
+        [_item(catalog.get("LP001"))],
+        service=make_service(handler),
     )
     assert result["per_product"] == {}
 
@@ -1223,7 +1259,9 @@ def test_overview_with_an_invented_price_is_dropped(catalog):
         )
 
     result = ai_enhance.explain_recommendations(
-        Demand(category="laptop"), [_item(catalog.get("LP001"))], service=make_service(handler)
+        Demand(category="laptop"),
+        [_item(catalog.get("LP001"))],
+        service=make_service(handler),
     )
     assert result["overview"] == ""
 
@@ -1242,7 +1280,9 @@ def test_clean_explanations_survive(catalog):
         )
 
     result = ai_enhance.explain_recommendations(
-        Demand(category="laptop"), [_item(catalog.get("LP001"))], service=make_service(handler)
+        Demand(category="laptop"),
+        [_item(catalog.get("LP001"))],
+        service=make_service(handler),
     )
     assert result["per_product"]["LP001"] == why
     assert result["overview"]
@@ -1251,7 +1291,9 @@ def test_clean_explanations_survive(catalog):
 def test_explain_with_no_items_raises_instead_of_faking_output():
     with pytest.raises(UpstreamResponseError):
         ai_enhance.explain_recommendations(
-            Demand(category="laptop"), [], service=make_service(lambda r: httpx.Response(200, json=ok_body()))
+            Demand(category="laptop"),
+            [],
+            service=make_service(lambda r: httpx.Response(200, json=ok_body())),
         )
 
 
@@ -1262,7 +1304,8 @@ def test_explain_with_no_items_raises_instead_of_faking_output():
 
 def test_data_sharing_notice_lists_what_is_sent():
     notice = ai_enhance.data_sharing_notice(
-        Demand(category="laptop", budget=3000, raw_text="预算 3000 买笔记本"), item_count=5
+        Demand(category="laptop", budget=3000, raw_text="预算 3000 买笔记本"),
+        item_count=5,
     )
 
     assert "需求原文" in notice

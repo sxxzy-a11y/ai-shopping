@@ -107,11 +107,19 @@ def validate_specs(category: str, specs: Any) -> dict[str, Any]:
             continue
 
         if key in ingest.TIER_KEYS:
-            if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 5:
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or not 1 <= value <= 5
+            ):
                 raise InvalidSpec(f"档位「{key}」应为 1–5 的整数，实际是 {value!r}。")
         else:
             bounds = scoring.spec_bounds(category, key)
-            if bounds and isinstance(value, (int, float)) and not isinstance(value, bool):
+            if (
+                bounds
+                and isinstance(value, (int, float))
+                and not isinstance(value, bool)
+            ):
                 low, high = bounds
                 # 区间两端可能反着写（重量越小越好），所以两种方向都接受
                 lower, upper = min(low, high), max(low, high)
@@ -175,7 +183,9 @@ def _consistency_issues(record: Mapping[str, Any]) -> list[str]:
         updated_at=str(record.get("updated_at") or ""),
         model=str(record.get("model") or ""),
     )
-    return [f"{product.id}：{issue.reason}" for issue in consistency.check_product(product)]
+    return [
+        f"{product.id}：{issue.reason}" for issue in consistency.check_product(product)
+    ]
 
 
 def _find(product_id: str) -> dict[str, Any]:
@@ -262,6 +272,7 @@ def list_products(path: Path | None = None) -> list[dict[str, Any]]:
     """商品维护页要的商品清单（含在售状态与录入者）。"""
     return product_store.load_product_records(path)
 
+
 # --------------------------------------------------------------------------
 # 界面文本 ↔ 结构化字段（两个管理页共用）
 # --------------------------------------------------------------------------
@@ -295,4 +306,3 @@ def text_to_specs(text: str) -> dict[str, Any]:
 def lines_to_list(text: str) -> list[str]:
     """一行一条 → 字符串列表。"""
     return [line.strip() for line in (text or "").splitlines() if line.strip()]
-

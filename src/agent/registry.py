@@ -101,7 +101,9 @@ class Tool:
     name: str
     description: str
     params_model: type[BaseModel]
-    run: Callable[[BaseModel, ToolContext], ToolResult]
+    # 各工具的参数模型互不相同（SearchProductsParams / CompareParams…），
+    # 用 Any 接收才能让具体签名的函数赋值进来；形状校验由 params_model 负责。
+    run: Callable[[Any, ToolContext], ToolResult]
 
     def declaration(self) -> dict[str, Any]:
         """OpenAI 兼容的工具声明。"""

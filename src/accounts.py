@@ -150,7 +150,9 @@ def ensure_initial_admin() -> tuple[User, str] | None:
             # 配置的密码太短：**不静默放行**。生一个合规的并明说。
             password = secrets.token_urlsafe(config.ADMIN_RANDOM_PASSWORD_BYTES)
             generated = True
-            lines.append(f"配置的管理员密码不合规（{exc.user_message}），已改为随机生成。")
+            lines.append(
+                f"配置的管理员密码不合规（{exc.user_message}），已改为随机生成。"
+            )
 
     user = database.create_user(username, password, role=ROLE_ADMIN)
 

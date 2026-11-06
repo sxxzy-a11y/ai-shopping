@@ -18,7 +18,7 @@ import httpx
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from src import config, data_loader
+from src import config
 from src.auth import ROLE_ADMIN, ROLE_USER, User, validate_username
 from src.ui import icons, state, theme
 
@@ -97,7 +97,16 @@ def _all_text(at: AppTest) -> str:
     """
     chunks: list[str] = []
 
-    for attr in ("markdown", "caption", "title", "header", "subheader", "text", "info", "warning"):
+    for attr in (
+        "markdown",
+        "caption",
+        "title",
+        "header",
+        "subheader",
+        "text",
+        "info",
+        "warning",
+    ):
         for element in getattr(at, attr, []):
             chunks.append(str(getattr(element, "value", "")))
 
@@ -108,8 +117,17 @@ def _all_text(at: AppTest) -> str:
     # 显示着，但不在上面那些集合里。漏收它的代价是实测过的——管理页
     # 「已停用」与分类展示名两处断言都因此误判成「没生效」。
     for attr in (
-        "selectbox", "multiselect", "text_input", "text_area", "toggle",
-        "radio", "checkbox", "button", "slider", "number_input", "expander",
+        "selectbox",
+        "multiselect",
+        "text_input",
+        "text_area",
+        "toggle",
+        "radio",
+        "checkbox",
+        "button",
+        "slider",
+        "number_input",
+        "expander",
     ):
         for element in getattr(at, attr, []):
             label = getattr(element, "label", "")
@@ -281,7 +299,9 @@ def test_catalog_detail_tab_edits_product_fields():
 
     product_id = target.split(" · ")[1].split("（")[0]
 
-    at.text_area(f"zg_cat_detail_specs_{product_id}").set_value("cpu_tier: 4\nram_gb: 16")
+    at.text_area(f"zg_cat_detail_specs_{product_id}").set_value(
+        "cpu_tier: 4\nram_gb: 16"
+    )
     at.text_area(f"zg_cat_detail_use_{product_id}").set_value("办公\n学习")
     at.text_area(f"zg_cat_detail_pros_{product_id}").set_value("测试亮点")
     at.text_area(f"zg_cat_detail_cons_{product_id}").set_value("测试不足")
@@ -485,9 +505,7 @@ def test_filling_comparison_from_analysis_does_not_blow_up(catalog):
     assert "横向比较" in _all_text(at)
 
     # 预填必须是一组**同类**商品：比较只在同类之间有意义
-    category_by_label = {
-        _label_of(p): p.category for p in catalog.products
-    }
+    category_by_label = {_label_of(p): p.category for p in catalog.products}
     categories = {category_by_label[label] for label in picked}
     assert len(categories) == 1, f"预填混选了多个类别：{categories}"
 
@@ -741,12 +759,16 @@ def _answer_reply(text: str) -> httpx.Response:
     """打桩一条知识问答作答（模型输出 JSON）。"""
     import json
 
-    return _ai_reply(json.dumps({"answer": text, "used_fragment_indexes": [1]}, ensure_ascii=False))
+    return _ai_reply(
+        json.dumps({"answer": text, "used_fragment_indexes": [1]}, ensure_ascii=False)
+    )
 
 
 def test_ai_qa_shows_answer_without_passages(enable_ai):
     """恒开 AI：只展示回答，**不展示片段与来源**，页面上也没有 AI 开关。"""
-    enable_ai(lambda request: _answer_reply("先看内存和整机重量，这两项每天都在影响体验。"))
+    enable_ai(
+        lambda request: _answer_reply("先看内存和整机重量，这两项每天都在影响体验。")
+    )
 
     at = _ask_ai_qa(_run(), "笔记本多重适合带出门")
     _assert_clean(at)
@@ -854,6 +876,7 @@ def test_ai_qa_example_buttons_work(enable_ai):
 
     assert "示例回答" in _all_text(at)
 
+
 # --------------------------------------------------------------------------
 # Agent 执行轨迹（界面）
 # --------------------------------------------------------------------------
@@ -877,7 +900,9 @@ def _agent_reply_with_tools(calls: list[dict], answer: str = "好了") -> httpx.
                                 "type": "function",
                                 "function": {
                                     "name": call["name"],
-                                    "arguments": json.dumps(call["args"], ensure_ascii=False),
+                                    "arguments": json.dumps(
+                                        call["args"], ensure_ascii=False
+                                    ),
                                 },
                             }
                             for call in calls
@@ -912,8 +937,13 @@ def test_trace_shows_real_tool_calls(enable_ai):
             state["n"] += 1
             if state["n"] == 1:
                 return _agent_reply_with_tools(
-                    [{"id": "c1", "name": "search_products",
-                      "args": {"category": "laptop", "budget_max": 3000}}]
+                    [
+                        {
+                            "id": "c1",
+                            "name": "search_products",
+                            "args": {"category": "laptop", "budget_max": 3000},
+                        }
+                    ]
                 )
             return _agent_reply("综合筛选结果给出建议。")
         return _ai_reply("{}")
@@ -942,7 +972,13 @@ def test_rejected_call_is_marked_in_the_trace(enable_ai):
             if state["n"] == 1:
                 # 编造一个不存在的品类
                 return _agent_reply_with_tools(
-                    [{"id": "c1", "name": "search_products", "args": {"category": "平板"}}]
+                    [
+                        {
+                            "id": "c1",
+                            "name": "search_products",
+                            "args": {"category": "平板"},
+                        }
+                    ]
                 )
             return _agent_reply("换个说法再试。")
         return _ai_reply("{}")
@@ -1007,8 +1043,6 @@ def test_local_mode_does_not_show_any_ai_section():
     assert "AI 的分析结论" not in body
 
 
-
-
 # --------------------------------------------------------------------------
 # 超预算条数如实展示（变更 fix-over-budget-count）
 # --------------------------------------------------------------------------
@@ -1032,7 +1066,9 @@ def test_over_budget_count_shown_is_the_real_total(catalog):
     # 统计行与小节标题都用真实总数
     assert f"{result.over_budget_total} 件" in body
     # 预算内 + 超预算真实总数 == 候选总数（账面要闭合）
-    assert len(result.within_budget) + result.over_budget_total == result.candidate_count
+    assert (
+        len(result.within_budget) + result.over_budget_total == result.candidate_count
+    )
 
 
 def test_no_extra_note_when_all_over_budget_shown(catalog):
@@ -1091,8 +1127,11 @@ def _fake_laptops(count: int) -> list:
             price=800.0 + index * 100,
             brand="测试品牌",
             specs={
-                "cpu_tier": 3, "ram_gb": 16, "battery_h": 8,
-                "weight_kg": 1.4, "storage_gb": 512,
+                "cpu_tier": 3,
+                "ram_gb": 16,
+                "battery_h": 8,
+                "weight_kg": 1.4,
+                "storage_gb": 512,
             },
             use_cases=["办公"],
             pros=["测试用"],
@@ -1137,8 +1176,7 @@ def _assert_only_negated(body: str, terms: tuple[str, ...], where: str) -> None:
             if term not in segment:
                 continue
             assert any(neg in segment for neg in _NEGATIONS), (
-                f"{where} 页出现肯定语境的「{term}」，所在分句："
-                f"{segment.strip()[:120]}"
+                f"{where} 页出现肯定语境的「{term}」，所在分句：{segment.strip()[:120]}"
             )
 
 
@@ -1509,7 +1547,10 @@ def _ai_reply(content: str) -> httpx.Response:
         json={
             "model": "stub-model",
             "choices": [
-                {"message": {"role": "assistant", "content": content}, "finish_reason": "stop"}
+                {
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop",
+                }
             ],
             "usage": {"total_tokens": 10},
         },
@@ -1611,7 +1652,9 @@ def test_ai_parse_is_used_when_enabled(enable_ai):
 
     def handler(request):
         seen.append(request)
-        return _ai_reply(_parse_payload(category="phone", budget=4000, core_needs=["拍照"]))
+        return _ai_reply(
+            _parse_payload(category="phone", budget=4000, core_needs=["拍照"])
+        )
 
     enable_ai(handler)
 
@@ -1664,6 +1707,7 @@ def test_ai_timeout_degrades_gracefully(enable_ai):
 
 def test_ai_agent_answer_and_trace_are_shown(enable_ai):
     """AI 路径展示「分析结论」与「执行过程」，且都标明来自 AI。"""
+
     def handler(request):
         if _is_parse_request(request):
             return _ai_reply(_parse_payload())
@@ -1735,7 +1779,10 @@ def test_ai_explanations_never_reach_the_stored_report(enable_ai, catalog):
             return _ai_reply(_parse_payload())
         return _ai_reply(
             json.dumps(
-                {"overview": "总述", "per_product": [{"product_id": i, "why": "理由"} for i in every_id]},
+                {
+                    "overview": "总述",
+                    "per_product": [{"product_id": i, "why": "理由"} for i in every_id],
+                },
                 ensure_ascii=False,
             )
         )
@@ -2342,9 +2389,7 @@ def test_a_deleted_account_loses_its_session():
     from src import database
 
     at = _run()
-    database.delete_user(
-        TEST_USERNAME, viewer=User(username="root", role=ROLE_ADMIN)
-    )
+    database.delete_user(TEST_USERNAME, viewer=User(username="root", role=ROLE_ADMIN))
     at.run()
 
     assert _state(at, state.KEY_USER) is None
@@ -2623,7 +2668,9 @@ def test_admin_adds_a_category_and_a_brand_through_the_ui():
         at.text_input("zg_cat_newbrand_display").set_value("测试品牌")
         _button(at, "新增品牌").click().run()
         _assert_clean(at)
-        assert "测试品牌" in [entry.brand_name for entry in catalog_meta.brand_entries()]
+        assert "测试品牌" in [
+            entry.brand_name for entry in catalog_meta.brand_entries()
+        ]
     finally:
         config.CATEGORY_LABELS.clear()
         config.CATEGORY_LABELS.update(snapshot)

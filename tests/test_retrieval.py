@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from src.errors import UpstreamUnavailable
 from src.knowledge import retrieval
@@ -155,7 +154,9 @@ def test_overlong_query_is_rejected_with_chinese_hint(monkeypatch):
     monkeypatch.setattr(config, "KNOWLEDGE_MAX_QUERY_CHARS", 10)
     service = FakeEmbedding()
 
-    result = retrieval.retrieve("重量" * 20, index=_index(), store=None, service=service)
+    result = retrieval.retrieve(
+        "重量" * 20, index=_index(), store=None, service=service
+    )
 
     assert result.passages == []
     assert "过长" in result.note
@@ -171,7 +172,9 @@ def test_empty_embedding_response_falls_back_with_reason(monkeypatch):
         def embed(self, texts):
             return []
 
-    result = retrieval.retrieve("重量", index=_index(), store=None, service=EmptyService())
+    result = retrieval.retrieve(
+        "重量", index=_index(), store=None, service=EmptyService()
+    )
 
     assert result.mode == "keyword"
     assert result.passages, "降级后关键词检索仍应可用"

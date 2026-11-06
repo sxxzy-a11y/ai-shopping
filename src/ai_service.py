@@ -31,7 +31,7 @@ from typing import Any
 
 import httpx
 
-from src import config
+from src import config, http_client
 from src.errors import (
     AINotConfigured,
     UpstreamAuthError,
@@ -141,9 +141,14 @@ class AIService:
     # --- 调用 -------------------------------------------------------------
 
     def _build_client(self) -> httpx.Client:
+        """注入的客户端优先（测试用 MockTransport），否则复用进程内共享客户端。
+
+        共享客户端只设连接超时，读超时每次请求单独传——否则第一个实例的
+        配置会锁死后续所有调用。
+        """
         if self._client is not None:
             return self._client
-        return httpx.Client(timeout=self._timeout)
+        return http_client.get_client()
 
     def complete(
         self,
@@ -217,16 +222,16 @@ class AIService:
             if tool_choice:
                 payload["tool_choice"] = tool_choice
 
-        client = self._build_client()
-        owned = self._client is None
         try:
-            response = client.post(
+            response = http_client.post_with_retry(
                 f"{self._base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
                 },
                 json=payload,
+                timeout_s=self._timeout,
+                client=self._build_client(),
             )
         except httpx.TimeoutException as exc:
             raise UpstreamTimeout(
@@ -239,9 +244,6 @@ class AIService:
                 "AI 服务暂时不可用，已切换到本地规则模式完成本次分析。",
                 detail=redact(f"{type(exc).__name__}: {exc}"),
             ) from exc
-        finally:
-            if owned:
-                client.close()
 
         return self._parse_response(response)
 
@@ -382,9 +384,7 @@ class AIService:
                     detail=f"arguments 类型：{type(arguments).__name__}",
                 )
 
-            calls.append(
-                ToolCall(call_id=call_id, name=name, arguments=arguments)
-            )
+            calls.append(ToolCall(call_id=call_id, name=name, arguments=arguments))
         return tuple(calls)
 
     # --- JSON 便捷方法 ----------------------------------------------------

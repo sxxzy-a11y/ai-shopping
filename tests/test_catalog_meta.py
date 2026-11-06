@@ -198,7 +198,9 @@ def test_deactivating_a_brand_hides_its_products(seeded_products):
     from src.demand_parser import Demand
     from src.recommender import recommend
 
-    brand = "轻羽" if "轻羽" in seeded_products.brands() else seeded_products.brands()[0]
+    brand = (
+        "轻羽" if "轻羽" in seeded_products.brands() else seeded_products.brands()[0]
+    )
     catalog_meta.brand_entries(seeded_products.products)  # 先同步
     catalog_meta.set_brand_meta(ADMIN, brand, is_active=False)
 
@@ -213,13 +215,15 @@ def test_deactivating_a_brand_leaves_product_records_alone(seeded_products):
     brand = seeded_products.brands()[0]
     catalog_meta.brand_entries(seeded_products.products)
     before = [
-        (record["id"], record["brand"]) for record in product_store.load_product_records()
+        (record["id"], record["brand"])
+        for record in product_store.load_product_records()
     ]
 
     catalog_meta.set_brand_meta(ADMIN, brand, is_active=False)
 
     after = [
-        (record["id"], record["brand"]) for record in product_store.load_product_records()
+        (record["id"], record["brand"])
+        for record in product_store.load_product_records()
     ]
     assert before == after
 
@@ -285,7 +289,9 @@ def test_existing_category_invariants_still_hold(seeded_products):
     """
     from src import ingest, scoring
 
-    catalog_meta.set_category_meta(ADMIN, "laptop", is_active=False, display_label="改过")
+    catalog_meta.set_category_meta(
+        ADMIN, "laptop", is_active=False, display_label="改过"
+    )
 
     assert set(scoring._SPEC_RANGES) <= set(config.CATEGORY_LABELS)
     assert set(config.SCORING_WEIGHTS) == set(config.CATEGORY_LABELS)

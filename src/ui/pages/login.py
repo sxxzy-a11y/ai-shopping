@@ -27,7 +27,9 @@ _KEY_TRANSITION = "zg_login_transition"
 
 #: 卡片里的两行标题（原组件 "Welcome, sign in to continue" 的位置）
 _HEAD_LOGIN = '<div class="zg-form-head"><b>欢迎回来</b><span>登录以继续</span></div>'
-_HEAD_REGISTER = '<div class="zg-form-head"><b>创建账号</b><span>注册后即可使用</span></div>'
+_HEAD_REGISTER = (
+    '<div class="zg-form-head"><b>创建账号</b><span>注册后即可使用</span></div>'
+)
 
 
 def render() -> None:
@@ -43,7 +45,8 @@ def render() -> None:
     st.markdown(_LOGIN_VEIL if fresh else _LOGIN_VEIL_OFF, unsafe_allow_html=True)
     st.markdown(_LOGIN_FX, unsafe_allow_html=True)
     st.markdown(
-        '<div class="zg-login-fx zg-login-enter"></div>' if fresh
+        '<div class="zg-login-fx zg-login-enter"></div>'
+        if fresh
         else '<div class="zg-login-fx"></div>',
         unsafe_allow_html=True,
     )

@@ -76,9 +76,7 @@ def _render_metrics(report: dict) -> None:
         for metric in metrics
     ]
     st.dataframe(rows, width="stretch", hide_index=True)
-    components.caption(
-        "每个指标的分母不同，不能相加成一个总分；报告也不提供综合得分。"
-    )
+    components.caption("每个指标的分母不同，不能相加成一个总分；报告也不提供综合得分。")
 
 
 def _render_categories(report: dict) -> None:
@@ -144,7 +142,10 @@ def _render_manual(report: dict) -> None:
     if reviews:
         with st.expander("人工复核材料：首选商品与推荐理由", expanded=False):
             st.dataframe(
-                [{"用例": case_id, "首选商品与推荐理由": row} for case_id, row in reviews],
+                [
+                    {"用例": case_id, "首选商品与推荐理由": row}
+                    for case_id, row in reviews
+                ],
                 width="stretch",
                 hide_index=True,
             )
@@ -181,6 +182,11 @@ def render(catalog=None) -> None:
         return
 
     report = loaded.report
+    if report is None:
+        # `ok` 为真时正常不会为空；这里兜一层，避免畸形报告让页面抛错。
+        _render_missing(loaded)
+        return
+
     components.show_notice(
         "这是自评：评测集由本项目自行构造并标注，结论只在所声明口径下成立，"
         "不是第三方基准。",

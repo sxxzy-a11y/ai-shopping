@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src import config
@@ -186,9 +186,7 @@ def run_agent(
         )
 
         if not response.wants_tools:
-            logger.info(
-                "编排结束：%d 轮，%d 次工具调用", round_number, len(trace)
-            )
+            logger.info("编排结束：%d 轮，%d 次工具调用", round_number, len(trace))
             return AgentRun(
                 answer=response.content.strip(),
                 trace=tuple(trace),

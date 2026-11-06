@@ -31,7 +31,9 @@ def registry() -> ToolRegistry:
     return build_registry()
 
 
-def _call(registry: ToolRegistry, context: ToolContext, name: str, **args) -> ToolResult:
+def _call(
+    registry: ToolRegistry, context: ToolContext, name: str, **args
+) -> ToolResult:
     return registry.invoke(name, args, context=context)
 
 
@@ -61,8 +63,7 @@ def test_declarations_use_openai_shape(registry: ToolRegistry):
 def test_declaration_schema_derives_from_the_param_model(registry: ToolRegistry):
     """声明与校验**同源**——不会出现「声明说可选、校验说必填」的漂移。"""
     declaration = next(
-        d for d in registry.declarations()
-        if d["function"]["name"] == "search_products"
+        d for d in registry.declarations() if d["function"]["name"] == "search_products"
     )
     properties = declaration["function"]["parameters"]["properties"]
     assert "category" in properties
@@ -121,8 +122,12 @@ def test_tool_modules_do_not_import_network_libraries():
 
 def test_search_products_executes(registry, context):
     result = _call(
-        registry, context, "search_products",
-        category="phone", budget_max=2000, use_cases=["游戏"],
+        registry,
+        context,
+        "search_products",
+        category="phone",
+        budget_max=2000,
+        use_cases=["游戏"],
     )
     assert result.ok
     assert result.payload["products"], "应当有候选"
@@ -202,7 +207,9 @@ def test_get_product_detail_rejects_unknown_id(registry, context, fake_id):
 
 
 def test_compare_products_executes(registry, context):
-    result = _call(registry, context, "compare_products", product_ids=["LP001", "LP002"])
+    result = _call(
+        registry, context, "compare_products", product_ids=["LP001", "LP002"]
+    )
     assert result.ok
     assert len(result.payload["products"]) == 2
     assert result.payload["differing_dimensions"], "跨两档配置应当有差异维度"
@@ -220,7 +227,9 @@ def test_compare_products_rejects_too_many(registry, context):
 
 
 def test_compare_products_rejects_duplicates(registry, context):
-    result = _call(registry, context, "compare_products", product_ids=["LP001", "LP001"])
+    result = _call(
+        registry, context, "compare_products", product_ids=["LP001", "LP001"]
+    )
     assert result.ok is False
     assert "重复" in result.error
 
@@ -235,7 +244,9 @@ def test_compare_products_rejects_unknown_id(registry, context):
 
 def test_compare_products_rejects_mixed_categories(registry, context):
     """跨类别比较由业务层拒绝，工具如实转述原因。"""
-    result = _call(registry, context, "compare_products", product_ids=["LP001", "PH001"])
+    result = _call(
+        registry, context, "compare_products", product_ids=["LP001", "PH001"]
+    )
     assert result.ok is False
     assert "类别" in result.error
 
@@ -247,7 +258,9 @@ def test_compare_products_rejects_mixed_categories(registry, context):
 
 def test_search_knowledge_executes(registry, context):
     result = _call(
-        registry, context, "search_knowledge",
+        registry,
+        context,
+        "search_knowledge",
         query="处理器档位是什么意思",
     )
     assert result.ok
@@ -264,7 +277,9 @@ def test_search_knowledge_out_of_corpus_is_not_an_error(registry, context):
 
 def test_search_knowledge_without_index_fails_clearly(registry):
     result = registry.invoke(
-        "search_knowledge", {"query": "x"}, context=ToolContext(catalog=data_loader.load_catalog())
+        "search_knowledge",
+        {"query": "x"},
+        context=ToolContext(catalog=data_loader.load_catalog()),
     )
     assert result.ok is False
     assert "知识库" in result.error

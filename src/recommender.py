@@ -35,7 +35,9 @@ _HARD_CONSTRAINT_CHECKS: dict[str, tuple[str, ...]] = {
 }
 
 
-def _check_hard_constraint(product: Product, constraint: str) -> tuple[bool | None, str]:
+def _check_hard_constraint(
+    product: Product, constraint: str
+) -> tuple[bool | None, str]:
     """判断商品是否满足一条硬性限制。
 
     返回 (是否满足, 说明)。`None` 表示这条限制无法识别、未参与筛选。
@@ -157,9 +159,7 @@ def _filter_candidates(
     if demand.has_category:
         candidates = catalog.by_category(demand.category)
         if not candidates:
-            notes.append(
-                f"商品数据中没有「{demand.category_label}」类别的商品"
-            )
+            notes.append(f"商品数据中没有「{demand.category_label}」类别的商品")
             return [], notes
     else:
         candidates = list(catalog.products)
@@ -184,9 +184,7 @@ def _filter_candidates(
         # 无法识别的限制只在提示里说一次，不按商品重复
         for constraint in demand.hard_constraints:
             if constraint.strip() not in _HARD_CONSTRAINT_CHECKS:
-                notes.append(
-                    f"无法识别的限制条件「{constraint.strip()}」，未参与筛选"
-                )
+                notes.append(f"无法识别的限制条件「{constraint.strip()}」，未参与筛选")
 
         kept: list[Product] = []
         unverifiable: set[str] = set()
@@ -228,15 +226,19 @@ def _build_relaxations(
 
     # 建议一：预算不够时给出该类别的实际价格下限
     pool = candidates or (
-        catalog.by_category(demand.category) if demand.has_category else catalog.products
+        catalog.by_category(demand.category)
+        if demand.has_category
+        else catalog.products
     )
     priced = [p for p in pool if p.price is not None]
     if priced and demand.budget is not None:
-        cheapest = min(priced, key=lambda p: p.price)
-        if cheapest.price > demand.budget:
+        cheapest = min(priced, key=lambda p: p.price or 0.0)
+        # priced 已过滤掉 None，这里再兜一层只为让类型收窄（取值不变）。
+        cheapest_price = cheapest.price or 0.0
+        if cheapest_price > demand.budget:
             suggestions.append(
-                f"当前类别的最低参考价为 {cheapest.price:.0f} 元"
-                f"（{cheapest.name}）。把预算提高到 {cheapest.price:.0f} 元以上"
+                f"当前类别的最低参考价为 {cheapest_price:.0f} 元"
+                f"（{cheapest.name}）。把预算提高到 {cheapest_price:.0f} 元以上"
                 f"就能进入候选范围。"
             )
     elif not priced:
@@ -264,9 +266,7 @@ def _build_relaxations(
         suggestions.append(
             f"商品数据中暂不包含「{demand.category_label}」，"
             f"可改用以下类别之一："
-            + "、".join(
-                config.category_label(c) for c in catalog.present_categories()
-            )
+            + "、".join(config.category_label(c) for c in catalog.present_categories())
             + "。"
         )
 
@@ -304,7 +304,9 @@ def recommend(
     # 数据质量提示：信息不完整的商品仍然参与，但要让用户知道
     incomplete = [p for p in candidates if not p.is_complete]
     if incomplete:
-        names = "、".join(f"{p.name}（缺 {'、'.join(p.missing_fields)}）" for p in incomplete[:3])
+        names = "、".join(
+            f"{p.name}（缺 {'、'.join(p.missing_fields)}）" for p in incomplete[:3]
+        )
         more = f" 等 {len(incomplete)} 件" if len(incomplete) > 3 else ""
         notes.append(f"以下商品信息不完整，相关维度未参与评分：{names}{more}")
 
@@ -346,7 +348,9 @@ def recommend(
                     product=product,
                     score=score,
                     within_budget=False,
-                    overage=product.price - demand.budget,
+                    # 该分支已由上面的守卫保证 price 与 budget 都非 None，
+                    # 这里的 ignore 只针对 mypy 无法跟随 budget_known 布尔标志。
+                    overage=product.price - demand.budget,  # type: ignore[operator]
                 )
             )
 

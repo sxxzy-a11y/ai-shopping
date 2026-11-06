@@ -492,7 +492,10 @@ def test_a_failed_cascade_rolls_everything_back(report, monkeypatch):
     import sqlite3
 
     _seed("lisi", report, extra_history=1)
-    before = (len(database.list_analyses_of("lisi")), len(database.list_favorites("lisi")))
+    before = (
+        len(database.list_analyses_of("lisi")),
+        len(database.list_favorites("lisi")),
+    )
 
     real = database._delete_user_rows
 

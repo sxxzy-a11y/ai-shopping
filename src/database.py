@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import sqlite3
 from contextlib import contextmanager
@@ -252,8 +253,33 @@ class HistoryEntry:
 # --------------------------------------------------------------------------
 
 
+logger = logging.getLogger("zhigou.database")
+
+#: 写锁等待上限（毫秒）。短锁靠等待自动化解，超时仍按领域异常报给用户。
+_BUSY_TIMEOUT_MS = 10_000
+
+
 def _ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _apply_concurrency_pragmas(connection: sqlite3.Connection, target: Path) -> None:
+    """打开 WAL 与锁等待策略；失败只记日志，不让一个 PRAGMA 把功能掀掉。
+
+    Streamlit 是多线程服务：`app.py` 每轮渲染都会查一次账号有效性，与历史、
+    收藏、账号管理写入会并发。默认的 rollback journal 下读写互斥，撞上
+    `database is locked` 的概率不低；WAL 让读不阻塞写，`busy_timeout` 让
+    短锁等待自动重试，`synchronous=NORMAL` 减少每次提交的 fsync。
+
+    这些是健壮性/性能优化而非正确性前提：库损坏、只读文件系统、或不支持
+    WAL 的环境里跳过即可，业务仍走原来的路径。
+    """
+    try:
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = NORMAL")
+        connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
+    except sqlite3.Error as exc:
+        logger.warning("数据库并发参数未生效（%s）：%s", target.name, exc)
 
 
 @contextmanager
@@ -267,7 +293,9 @@ def connect(path: Path | None = None):
     _ensure_parent(target)
 
     try:
-        connection = sqlite3.connect(target)
+        # timeout 与 busy_timeout 保持一致：前者是 Python 侧的等待，
+        # 后者是 SQLite 侧的等待，两侧都设才不会出现一边先放弃的情况。
+        connection = sqlite3.connect(target, timeout=_BUSY_TIMEOUT_MS / 1000)
     except sqlite3.Error as exc:
         raise HistoryReadError(
             "无法打开本地数据库文件，历史记录功能暂不可用。",
@@ -279,6 +307,7 @@ def connect(path: Path | None = None):
         # SQLite 默认**不启用**外键约束，必须逐连接打开，
         # 否则 `product_prices` 上的 ON DELETE CASCADE 只是一句摆设。
         connection.execute("PRAGMA foreign_keys = ON")
+        _apply_concurrency_pragmas(connection, target)
         yield connection
     finally:
         connection.close()
@@ -300,9 +329,7 @@ def _database_shape(path: Path) -> tuple[set[str], dict[str, set[str]], dict[str
 
     try:
         with connect(path) as connection:
-            for row in connection.execute(
-                "SELECT type, name, sql FROM sqlite_master"
-            ):
+            for row in connection.execute("SELECT type, name, sql FROM sqlite_master"):
                 if row["type"] == "table":
                     tables.add(row["name"])
                     columns[row["name"]] = {
@@ -419,13 +446,13 @@ def init_history_db(path: Path | None = None) -> None:
 
 def init_product_db(path: Path | None = None) -> None:
     """只建商品库的表。商品仓储层用它。不带路径时落到 `products.db`。"""
-    _run_schema(path if path is not None else config.products_db_path(), _SCHEMA_PRODUCTS)
+    _run_schema(
+        path if path is not None else config.products_db_path(), _SCHEMA_PRODUCTS
+    )
 
 
 def _table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
-    return {
-        row["name"] for row in connection.execute(f"PRAGMA table_info({table})")
-    }
+    return {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
 
 
 def _rebuild_favorites(connection: sqlite3.Connection) -> None:
@@ -487,7 +514,9 @@ def _migrate(connection: sqlite3.Connection) -> None:
     """
     tables = {
         row["name"]
-        for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
     }
 
     # 商品库的补列走这一支
@@ -516,7 +545,9 @@ def _migrate(connection: sqlite3.Connection) -> None:
         # 可空：遗留记录没有归属，如实留空而不是硬塞给某个账号（design D4）
         connection.execute("ALTER TABLE analysis_history ADD COLUMN user_id TEXT")
 
-    if "favorites" in tables and "user_id" not in _table_columns(connection, "favorites"):
+    if "favorites" in tables and "user_id" not in _table_columns(
+        connection, "favorites"
+    ):
         _rebuild_favorites(connection)
 
     _drop_legacy_signature_index(connection)
@@ -717,9 +748,7 @@ def _guard_last_admin(connection: sqlite3.Connection, username: str) -> None:
         (ROLE_ADMIN, username),
     ).fetchone()
     if int(others["n"]) == 0:
-        raise LastAdminProtected(
-            detail=f"{username} 是最后一个可用管理员，拒绝该操作"
-        )
+        raise LastAdminProtected(detail=f"{username} 是最后一个可用管理员，拒绝该操作")
 
 
 def _count_rows(connection: sqlite3.Connection, table: str, username: str) -> int:
@@ -1177,7 +1206,9 @@ def list_analyses_of(
     return _rows_to_entries(rows)
 
 
-def _may_read(connection: sqlite3.Connection, entry_id: int, viewer: User | None) -> bool:
+def _may_read(
+    connection: sqlite3.Connection, entry_id: int, viewer: User | None
+) -> bool:
     """这条记录能不能给这个访问者看。
 
     三种情况放行：管理员；记录归他本人；**遗留记录**（`user_id` 为空）只对管理员放行。

@@ -68,7 +68,10 @@ class SearchKnowledgeParams(BaseModel):
 
 
 def _check_budget_range(params: SearchProductsParams) -> str | None:
-    for name, value in (("budget_min", params.budget_min), ("budget_max", params.budget_max)):
+    for name, value in (
+        ("budget_min", params.budget_min),
+        ("budget_max", params.budget_max),
+    ):
         if value is not None and value <= 0:
             return f"{name} 必须是正数，收到 {value:g}"
     if (
@@ -200,7 +203,9 @@ def _run_get_product_detail(
 def _run_compare_products(params: CompareParams, context: ToolContext) -> ToolResult:
     ids = params.product_ids
     if len(ids) < config.MIN_COMPARE_COUNT:
-        return ToolResult.rejected(f"至少需要 {config.MIN_COMPARE_COUNT} 件商品才能比较")
+        return ToolResult.rejected(
+            f"至少需要 {config.MIN_COMPARE_COUNT} 件商品才能比较"
+        )
     if len(ids) > config.MAX_COMPARE_COUNT:
         return ToolResult.rejected(f"最多只能比较 {config.MAX_COMPARE_COUNT} 件商品")
     if len(set(ids)) != len(ids):

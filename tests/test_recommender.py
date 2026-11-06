@@ -53,8 +53,12 @@ def _fake_headphones(count: int, *, base_price: float = 800.0) -> Catalog:
             price=base_price + index * 100,
             brand="测试品牌",
             specs={
-                "driver_mm": 40, "connection": "蓝牙 5.3", "battery_h": 30,
-                "weight_g": 250, "noise_cancelling": True, "audio_tier": 3,
+                "driver_mm": 40,
+                "connection": "蓝牙 5.3",
+                "battery_h": 30,
+                "weight_g": 250,
+                "noise_cancelling": True,
+                "audio_tier": 3,
             },
             use_cases=["通勤"],
             pros=["测试用"],
@@ -172,7 +176,9 @@ def test_bonus_and_penalty_track_dimension_ranks(catalog, student_laptop_demand)
     """
     checked = 0
     for laptop in catalog.by_category("laptop"):
-        result = score_product(laptop, student_laptop_demand, catalog.by_category("laptop"))
+        result = score_product(
+            laptop, student_laptop_demand, catalog.by_category("laptop")
+        )
         if len(result.dimensions) < 2:
             continue
 
@@ -205,7 +211,9 @@ def test_bonus_and_penalty_are_deterministic_under_ties(catalog, student_laptop_
         assert again.total == first.total
 
 
-def test_missing_specs_exclude_dimensions_instead_of_defaulting(catalog, minimal_laptop):
+def test_missing_specs_exclude_dimensions_instead_of_defaulting(
+    catalog, minimal_laptop
+):
     """spec：缺参数商品仍能得到评分，缺失维度不参与计算并标明。"""
     result = score_product(minimal_laptop, _demand(), [minimal_laptop])
 
@@ -226,7 +234,9 @@ def test_disabled_score_naming_avoids_market_claims():
 
 
 def test_match_level_uses_explainable_wording(catalog, student_laptop_demand):
-    result = score_product(catalog.get("LP001"), student_laptop_demand, catalog.by_category("laptop"))
+    result = score_product(
+        catalog.get("LP001"), student_laptop_demand, catalog.by_category("laptop")
+    )
     assert result.match_level in {"高度匹配", "较为匹配", "基本可用", "匹配度较低"}
 
 
@@ -258,7 +268,9 @@ def test_over_budget_item_reports_exact_overage(catalog, student_laptop_demand):
         assert f"{expected:.0f} 元" in item.budget_label
 
 
-def test_over_budget_products_are_never_labelled_within_budget(catalog, student_laptop_demand):
+def test_over_budget_products_are_never_labelled_within_budget(
+    catalog, student_laptop_demand
+):
     result = recommend(catalog, student_laptop_demand)
 
     for item in result.over_budget:
@@ -308,14 +320,28 @@ def test_higher_need_match_outranks_cheaper_weak_item():
     排序、实则在测数据的断言。
     """
     weak = _fake_laptop(
-        "WEAK", 3500, cpu_tier=1, ram_gb=8, storage_gb=256,
-        weight_kg=1.9, battery_h=5, has_dedicated_gpu=False,
+        "WEAK",
+        3500,
+        cpu_tier=1,
+        ram_gb=8,
+        storage_gb=256,
+        weight_kg=1.9,
+        battery_h=5,
+        has_dedicated_gpu=False,
     )
     strong = _fake_laptop(
-        "STRONG", 6000, cpu_tier=5, ram_gb=32, storage_gb=1024,
-        weight_kg=1.4, battery_h=10, has_dedicated_gpu=True,
+        "STRONG",
+        6000,
+        cpu_tier=5,
+        ram_gb=32,
+        storage_gb=1024,
+        weight_kg=1.4,
+        battery_h=10,
+        has_dedicated_gpu=True,
     )
-    demand = Demand(category="laptop", budget=8000, use_cases=["办公"], core_needs=["性能"])
+    demand = Demand(
+        category="laptop", budget=8000, use_cases=["办公"], core_needs=["性能"]
+    )
 
     result = recommend(Catalog(products=[weak, strong]), demand, limit=10)
 
@@ -352,8 +378,12 @@ def test_changing_budget_recomputes_candidates(catalog):
 
     # 同样要放大限条数，否则两边的截断会掩盖真实的候选差异
     limit = len(catalog)
-    tight = recommend(catalog, Demand(category="laptop", budget=tight_budget), limit=limit)
-    loose = recommend(catalog, Demand(category="laptop", budget=loose_budget), limit=limit)
+    tight = recommend(
+        catalog, Demand(category="laptop", budget=tight_budget), limit=limit
+    )
+    loose = recommend(
+        catalog, Demand(category="laptop", budget=loose_budget), limit=limit
+    )
 
     tight_ids = {i.product.id for i in tight.within_budget}
     loose_ids = {i.product.id for i in loose.within_budget}
@@ -458,14 +488,28 @@ def test_weaker_within_budget_pick_triggers_a_budget_tension_note():
     失败信息只会说「62.5 > 77.8 不成立」，看不出其实是数据变了。
     """
     weak = _fake_laptop(
-        "WEAK", 3500, cpu_tier=1, ram_gb=8, storage_gb=256,
-        weight_kg=1.9, battery_h=5, has_dedicated_gpu=False,
+        "WEAK",
+        3500,
+        cpu_tier=1,
+        ram_gb=8,
+        storage_gb=256,
+        weight_kg=1.9,
+        battery_h=5,
+        has_dedicated_gpu=False,
     )
     strong = _fake_laptop(
-        "STRONG", 6000, cpu_tier=5, ram_gb=32, storage_gb=1024,
-        weight_kg=1.4, battery_h=10, has_dedicated_gpu=True,
+        "STRONG",
+        6000,
+        cpu_tier=5,
+        ram_gb=32,
+        storage_gb=1024,
+        weight_kg=1.4,
+        battery_h=10,
+        has_dedicated_gpu=True,
     )
-    demand = Demand(category="laptop", budget=4000, use_cases=["办公"], core_needs=["性能"])
+    demand = Demand(
+        category="laptop", budget=4000, use_cases=["办公"], core_needs=["性能"]
+    )
 
     result = recommend(Catalog(products=[weak, strong]), demand, limit=10)
 
@@ -489,7 +533,9 @@ def test_limit_is_respected(catalog, wide_budget_laptop_demand):
     assert len(result.within_budget) <= 2
 
 
-def test_best_prefers_within_budget_over_higher_scoring_over_budget(catalog, student_laptop_demand):
+def test_best_prefers_within_budget_over_higher_scoring_over_budget(
+    catalog, student_laptop_demand
+):
     result = recommend(catalog, student_laptop_demand)
     assert result.best.product.price <= student_laptop_demand.budget
 

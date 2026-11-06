@@ -148,8 +148,7 @@ class BM25Index:
             scored.append(
                 ScoredDocument(
                     document=document,
-                    score=raw
-                    * self._weight_for(document, mentioned, mentioned_brands),
+                    score=raw * self._weight_for(document, mentioned, mentioned_brands),
                 )
             )
 

@@ -49,6 +49,7 @@ def db_path() -> Path:
     """
     return config.database_path()
 
+
 #: 升级前那一版的结构。
 _OLD_SCHEMA = """
 CREATE TABLE analysis_history (
@@ -133,7 +134,9 @@ def test_legacy_history_survives_without_an_owner(db_path: Path):
 
     database.init_db(db_path)
 
-    assert _count(db_path, "SELECT COUNT(*) FROM analysis_history") == LEGACY_HISTORY_ROWS
+    assert (
+        _count(db_path, "SELECT COUNT(*) FROM analysis_history") == LEGACY_HISTORY_ROWS
+    )
     assert (
         _count(db_path, "SELECT COUNT(*) FROM analysis_history WHERE user_id IS NULL")
         == LEGACY_HISTORY_ROWS
@@ -157,10 +160,9 @@ def test_legacy_favorites_are_carried_over_as_unowned(db_path: Path):
 
     assert _columns(db_path, "favorites") == {"user_id", "product_id", "added_at"}
     assert _count(db_path, "SELECT COUNT(*) FROM favorites") == len(LEGACY_FAVORITES)
-    assert (
-        _count(db_path, "SELECT COUNT(*) FROM favorites WHERE user_id IS NULL")
-        == len(LEGACY_FAVORITES)
-    )
+    assert _count(
+        db_path, "SELECT COUNT(*) FROM favorites WHERE user_id IS NULL"
+    ) == len(LEGACY_FAVORITES)
 
     # 它们不出现在任何人的收藏列表里，但也不是被删掉了
     assert database.list_favorites(ALICE.username, db_path) == []
@@ -177,7 +179,10 @@ def test_new_favorites_work_after_the_rebuild(db_path: Path):
 
     assert database.list_favorites(ALICE.username, db_path).__len__() == 1
     # 遗留的那条 LP001 与自己这条并存，互不影响
-    assert _count(db_path, "SELECT COUNT(*) FROM favorites WHERE product_id = 'LP001'") == 2
+    assert (
+        _count(db_path, "SELECT COUNT(*) FROM favorites WHERE product_id = 'LP001'")
+        == 2
+    )
 
 
 def test_signature_index_is_rebuilt_per_user(db_path: Path):
@@ -206,9 +211,12 @@ def test_two_users_can_save_the_same_signature_after_upgrade(db_path: Path, repo
     database.save_analysis(report, db_path, user_id="alice")
     database.save_analysis(report, db_path, user_id="bob")
 
-    assert _count(
-        db_path, "SELECT COUNT(*) FROM analysis_history WHERE user_id IS NOT NULL"
-    ) == 2
+    assert (
+        _count(
+            db_path, "SELECT COUNT(*) FROM analysis_history WHERE user_id IS NOT NULL"
+        )
+        == 2
+    )
     assert database.find_analysis_by_signature(report.signature, "alice", db_path) != (
         database.find_analysis_by_signature(report.signature, "bob", db_path)
     )
@@ -244,11 +252,15 @@ def test_migration_is_idempotent(db_path: Path):
     database.init_db(db_path)
     database.init_db(db_path)
 
-    assert _count(db_path, "SELECT COUNT(*) FROM analysis_history") == LEGACY_HISTORY_ROWS
+    assert (
+        _count(db_path, "SELECT COUNT(*) FROM analysis_history") == LEGACY_HISTORY_ROWS
+    )
     assert _count(db_path, "SELECT COUNT(*) FROM favorites") == len(LEGACY_FAVORITES)
 
 
-def test_legacy_settings_file_becomes_the_new_user_template(db_path: Path, tmp_path: Path):
+def test_legacy_settings_file_becomes_the_new_user_template(
+    db_path: Path, tmp_path: Path
+):
     """任务 2.9：那份全局偏好成为新用户的初始值，原文件改名保留。"""
     legacy_file = tmp_path / "settings.json"
     legacy_file.write_text(
@@ -313,10 +325,14 @@ def test_failed_migration_rolls_everything_back(db_path: Path, monkeypatch):
 
     # 表形状退回原样
     assert "user_id" not in _columns(db_path, "analysis_history"), "补的列没有回滚"
-    assert _columns(db_path, "favorites") == {"product_id", "added_at"}, "收藏表被改了一半"
+    assert _columns(db_path, "favorites") == {"product_id", "added_at"}, (
+        "收藏表被改了一半"
+    )
 
     # 数据一条不少
-    assert _count(db_path, "SELECT COUNT(*) FROM analysis_history") == LEGACY_HISTORY_ROWS
+    assert (
+        _count(db_path, "SELECT COUNT(*) FROM analysis_history") == LEGACY_HISTORY_ROWS
+    )
     assert _count(db_path, "SELECT COUNT(*) FROM favorites") == len(LEGACY_FAVORITES)
 
 
@@ -336,6 +352,8 @@ def test_database_stays_usable_after_a_failed_migration(db_path: Path, monkeypat
     monkeypatch.setattr(database, "_rebuild_favorites", real)
     database.init_db(db_path)
 
-    assert _count(db_path, "SELECT COUNT(*) FROM analysis_history") == LEGACY_HISTORY_ROWS
+    assert (
+        _count(db_path, "SELECT COUNT(*) FROM analysis_history") == LEGACY_HISTORY_ROWS
+    )
     assert "user_id" in _columns(db_path, "analysis_history")
     assert _columns(db_path, "favorites") == {"user_id", "product_id", "added_at"}

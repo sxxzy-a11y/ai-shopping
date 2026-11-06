@@ -96,7 +96,6 @@ def _category_options(catalog: Catalog) -> dict[str, str]:
     return mapping
 
 
-
 def _agent_question(demand) -> str:
     """把需求还原成一句自然语言问题交给编排层。
 
@@ -200,7 +199,11 @@ def _render_inputs(catalog: Catalog) -> None:
     category_key = _category_options(catalog).get(chosen, "")
     if category_key:
         brands_in_category = sorted(
-            {product.brand for product in catalog.by_category(category_key) if product.brand}
+            {
+                product.brand
+                for product in catalog.by_category(category_key)
+                if product.brand
+            }
         )
         if brands_in_category:
             st.selectbox(
@@ -230,11 +233,7 @@ def _run_analysis(catalog: Catalog) -> None:
     brands = [chosen_brand] if chosen_brand != _NO_BRAND else []
 
     # 文字和结构化控件都没填 → 直接拒绝，连解析都不必
-    if (
-        not raw_text.strip()
-        and not category
-        and not str(budget_raw).strip()
-    ):
+    if not raw_text.strip() and not category and not str(budget_raw).strip():
         state.put(state.KEY_ERROR, to_user_message(EmptyDemand()))
         return
 
@@ -324,7 +323,9 @@ def _run_analysis(catalog: Catalog) -> None:
     _persist(report, signature)
 
 
-def _parse_text(raw_text: str, catalog: Catalog, ai_enabled: bool, notes: list[str]) -> Demand:
+def _parse_text(
+    raw_text: str, catalog: Catalog, ai_enabled: bool, notes: list[str]
+) -> Demand:
     """解析需求：优先 AI，失败回退规则。
 
     回退不是「静默降级」——失败原因会记进 notes 并在界面上说出来，
@@ -416,12 +417,16 @@ def _render_left_column(demand: Demand, result) -> None:
         f"  {facts(_summary_pairs(demand))}"
         f'  <div class="zg-dossier-divider"></div>'
         f'  <div class="zg-dossier-head"><span>筛选情况</span></div>'
-        f"  {facts([
-            ('候选商品', f'{result.candidate_count} 件'),
-            ('预算内', f'{result.within_budget_total} 件'),
-            ('超出预算', f'{result.over_budget_total} 件'),
-            ('排序依据', config.SCORE_DISPLAY_NAME),
-        ])}"
+        f"  {
+            facts(
+                [
+                    ('候选商品', f'{result.candidate_count} 件'),
+                    ('预算内', f'{result.within_budget_total} 件'),
+                    ('超出预算', f'{result.over_budget_total} 件'),
+                    ('排序依据', config.SCORE_DISPLAY_NAME),
+                ]
+            )
+        }"
         f"  {ring_html}"
         f"</div>",
         unsafe_allow_html=True,
@@ -456,8 +461,7 @@ def _render_insights_column(result) -> None:
         unsafe_allow_html=True,
     )
     components.caption(
-        "价格是采集时的参考价，不是实时价格；"
-        "评分是系统匹配度，不是用户评价或市场口碑。"
+        "价格是采集时的参考价，不是实时价格；评分是系统匹配度，不是用户评价或市场口碑。"
     )
 
     agent_run = state.get("zg_agent_run")

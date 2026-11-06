@@ -109,7 +109,10 @@ def test_unknown_keys_in_stored_json_are_ignored():
     with database.connect() as connection:
         connection.execute(
             "UPDATE user_preferences SET prefs_json = ? WHERE user_id = ?",
-            (json.dumps({"brand_preferences": ["轻羽"], "ai_enhanced": False}), ALICE.username),
+            (
+                json.dumps({"brand_preferences": ["轻羽"], "ai_enhanced": False}),
+                ALICE.username,
+            ),
         )
         connection.commit()
 
@@ -188,7 +191,9 @@ def test_reading_a_new_user_does_not_write_a_row():
 
 def test_effective_core_needs_follows_price_priority():
     assert "性价比" in UserPreferences(price_priority="value").effective_core_needs()
-    assert "性能" in UserPreferences(price_priority="performance").effective_core_needs()
+    assert (
+        "性能" in UserPreferences(price_priority="performance").effective_core_needs()
+    )
 
 
 def test_default_preferences_inject_nothing():

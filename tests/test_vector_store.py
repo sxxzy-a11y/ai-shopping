@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from src.knowledge.chunking import Slice, split_corpus
+from src.knowledge.chunking import split_corpus
 from src.knowledge.corpus import Document, TYPE_CATEGORY
 from src.knowledge.vector_store import VectorStore
 
@@ -158,9 +158,7 @@ def test_search_ignores_vectors_from_another_model(store):
     slices = split_corpus(_docs())
     store.build_index(slices, service=FakeEmbedding(model="old-model"))
 
-    hits = store.search(
-        [1.0, 0.0, 0.1], model="new-model", dim=3, min_score=0.0
-    )
+    hits = store.search([1.0, 0.0, 0.1], model="new-model", dim=3, min_score=0.0)
     assert hits == []
 
 

@@ -6,12 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from src import config
 from src.knowledge import admin as knowledge_docs
 from src.knowledge.corpus import load_documents
 
 
-def _write(path: Path, title: str, doc_type: str, *, category: str = "", body: str = "正文") -> None:
+def _write(
+    path: Path, title: str, doc_type: str, *, category: str = "", body: str = "正文"
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "---\n"
@@ -61,7 +62,9 @@ def test_category_document_requires_a_known_category(tmp_path: Path):
 
 
 def test_second_guide_for_the_same_category_is_rejected(tmp_path: Path):
-    _write(tmp_path / "category" / "laptop.md", "笔记本指南", "category", category="laptop")
+    _write(
+        tmp_path / "category" / "laptop.md", "笔记本指南", "category", category="laptop"
+    )
 
     with pytest.raises(knowledge_docs.KnowledgeDocError) as excinfo:
         knowledge_docs.create_document(

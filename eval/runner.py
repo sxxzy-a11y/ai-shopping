@@ -139,7 +139,9 @@ def build_evaluation(
     )
 
 
-def evaluate(payload: dict | None = None, cases: list[dict] | None = None) -> EvaluationReport:
+def evaluate(
+    payload: dict | None = None, cases: list[dict] | None = None
+) -> EvaluationReport:
     """便捷入口：载入评测集并跑完整套，返回报告对象。"""
     payload = payload or load_cases()
     return build_evaluation(payload, cases if cases is not None else payload["cases"])
@@ -176,6 +178,20 @@ def _print(text: str) -> None:
     print(text)
 
 
+def render_categories(cases: list[dict]) -> str:
+    """列出可用类别及用例数，供 `--list-categories` 与错误提示共用。"""
+    counts: dict[str, int] = {}
+    for case in cases:
+        category = str(case.get("category") or "未分类")
+        counts[category] = counts.get(category, 0) + 1
+
+    lines = ["可用场景类别："]
+    lines.extend(f"  {name}（{count} 条）" for name, count in sorted(counts.items()))
+    lines.append("")
+    lines.append("用法：python -m eval.runner --only <类别名>（支持名称片段匹配）")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     _configure_stdout()
     parser = argparse.ArgumentParser(description="跑一遍效果评测")
@@ -186,14 +202,28 @@ def main(argv: list[str] | None = None) -> int:
         "--output-dir",
         help="把 report.json 与 report.md 写到指定目录（两者同源）",
     )
+    parser.add_argument(
+        "--list-categories",
+        action="store_true",
+        help="列出可用的场景类别与用例数后退出",
+    )
     args = parser.parse_args(argv)
 
     payload = load_cases()
     cases = payload["cases"]
+
+    if args.list_categories:
+        _print(render_categories(cases))
+        return 0
+
     if args.only:
         cases = [case for case in cases if args.only in case["category"]]
         if not cases:
-            print(f"没有匹配「{args.only}」的用例", file=sys.stderr)
+            # 原来的「没有匹配」让用户不知道能传什么，把可选项一起给出来。
+            print(
+                f"没有匹配「{args.only}」的用例。\n{render_categories(payload['cases'])}",
+                file=sys.stderr,
+            )
             return 2
 
     report = build_evaluation(payload, cases)

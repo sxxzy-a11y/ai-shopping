@@ -26,7 +26,6 @@ import numpy as np
 
 from src import config
 from src.database import connect
-from src.errors import ZhigouError
 from src.knowledge.chunking import Slice
 from src.knowledge.embeddings import EmbeddingService
 

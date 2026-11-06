@@ -16,9 +16,9 @@ import httpx
 import pytest
 
 from src import ai_service, config, data_loader
-from src.agent.registry import Tool, ToolContext, ToolRegistry
+from src.agent.registry import Tool, ToolRegistry
 from src.agent.runner import AgentRun, TraceStep, run_agent
-from src.agent.tools import TOOLS, build_registry
+from src.agent.tools import TOOLS
 from src.errors import UpstreamTimeout, UpstreamUnavailable
 from src.knowledge.corpus import build_corpus
 from src.knowledge.index import BM25Index
@@ -59,7 +59,10 @@ def _call(name: str, arguments: dict, *, call_id: str = "c1") -> dict:
     return {
         "id": call_id,
         "type": "function",
-        "function": {"name": name, "arguments": json.dumps(arguments, ensure_ascii=False)},
+        "function": {
+            "name": name,
+            "arguments": json.dumps(arguments, ensure_ascii=False),
+        },
     }
 
 
@@ -100,14 +103,28 @@ def test_model_answers_without_using_tools(catalog, index):
 def test_multi_step_task_runs_tools_in_order(catalog, index):
     service = _scripted_service(
         [
-            _reply(tool_calls=[_call("search_products", {"category": "laptop", "budget_max": 5000})]),
-            _reply(tool_calls=[_call("search_knowledge", {"query": "笔记本多重适合带出门"}, call_id="c2")]),
+            _reply(
+                tool_calls=[
+                    _call("search_products", {"category": "laptop", "budget_max": 5000})
+                ]
+            ),
+            _reply(
+                tool_calls=[
+                    _call(
+                        "search_knowledge",
+                        {"query": "笔记本多重适合带出门"},
+                        call_id="c2",
+                    )
+                ]
+            ),
             _reply("综合来看，这几款适合编程。"),
         ]
     )
     run = run_agent(
         "预算 5000 编程，笔记本多重适合带出门",
-        catalog=catalog, service=service, knowledge_index=index,
+        catalog=catalog,
+        service=service,
+        knowledge_index=index,
     )
 
     assert [step.tool for step in run.trace] == ["search_products", "search_knowledge"]
@@ -120,14 +137,22 @@ def test_parallel_calls_in_one_round(catalog, index):
     """一轮里可以请求多个工具——这正是复合问题的形态。"""
     service = _scripted_service(
         [
-            _reply(tool_calls=[
-                _call("search_products", {"category": "phone", "budget_max": 3000}, call_id="a"),
-                _call("search_knowledge", {"query": "手机怎么选"}, call_id="b"),
-            ]),
+            _reply(
+                tool_calls=[
+                    _call(
+                        "search_products",
+                        {"category": "phone", "budget_max": 3000},
+                        call_id="a",
+                    ),
+                    _call("search_knowledge", {"query": "手机怎么选"}, call_id="b"),
+                ]
+            ),
             _reply("两边的结果合起来看……"),
         ]
     )
-    run = run_agent("3000 以内手机怎么选", catalog=catalog, service=service, knowledge_index=index)
+    run = run_agent(
+        "3000 以内手机怎么选", catalog=catalog, service=service, knowledge_index=index
+    )
 
     assert len(run.trace) == 2
     assert {step.tool for step in run.trace} == {"search_products", "search_knowledge"}
@@ -142,7 +167,11 @@ def test_tool_arguments_are_forwarded_verbatim(catalog, index):
     """
     service = _scripted_service(
         [
-            _reply(tool_calls=[_call("search_products", {"category": "laptop", "budget_max": 5000})]),
+            _reply(
+                tool_calls=[
+                    _call("search_products", {"category": "laptop", "budget_max": 5000})
+                ]
+            ),
             _reply("好了"),
         ]
     )
@@ -161,7 +190,9 @@ def test_round_limit_stops_the_loop(catalog, index):
     service = _scripted_service(
         [_reply(tool_calls=[_call("search_products", {"budget_max": 5000})])]
     )
-    run = run_agent("问题", catalog=catalog, service=service, knowledge_index=index, max_rounds=3)
+    run = run_agent(
+        "问题", catalog=catalog, service=service, knowledge_index=index, max_rounds=3
+    )
 
     assert run.rounds == 3
     assert len(run.trace) == 3
@@ -187,7 +218,9 @@ def test_timeout_propagates_for_degradation(catalog, index):
         raise httpx.TimeoutException("simulated")
 
     service = ai_service.AIService(
-        api_key=FAKE_KEY, base_url="https://example.invalid/v1", model="m",
+        api_key=FAKE_KEY,
+        base_url="https://example.invalid/v1",
+        model="m",
         client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
     with pytest.raises(UpstreamTimeout):
@@ -199,7 +232,9 @@ def test_upstream_failure_propagates(catalog, index):
         return httpx.Response(500, json={"error": "boom"})
 
     service = ai_service.AIService(
-        api_key=FAKE_KEY, base_url="https://example.invalid/v1", model="m",
+        api_key=FAKE_KEY,
+        base_url="https://example.invalid/v1",
+        model="m",
         client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
     with pytest.raises(UpstreamUnavailable):
@@ -219,10 +254,12 @@ def test_trace_length_matches_actual_calls(catalog, index):
     """
     service = _scripted_service(
         [
-            _reply(tool_calls=[
-                _call("search_products", {"category": "laptop"}, call_id="a"),
-                _call("get_product_detail", {"product_id": "LP001"}, call_id="b"),
-            ]),
+            _reply(
+                tool_calls=[
+                    _call("search_products", {"category": "laptop"}, call_id="a"),
+                    _call("get_product_detail", {"product_id": "LP001"}, call_id="b"),
+                ]
+            ),
             _reply("完成"),
         ]
     )
@@ -275,8 +312,10 @@ def test_tool_internal_error_is_recorded_as_error(catalog, index):
         raise RuntimeError("模拟内部错误")
 
     broken = Tool(
-        name="search_products", description="x",
-        params_model=TOOLS[0].params_model, run=_boom,
+        name="search_products",
+        description="x",
+        params_model=TOOLS[0].params_model,
+        run=_boom,
     )
     service = _scripted_service(
         [
@@ -285,14 +324,19 @@ def test_tool_internal_error_is_recorded_as_error(catalog, index):
         ]
     )
     run = run_agent(
-        "问题", catalog=catalog, service=service, knowledge_index=index,
+        "问题",
+        catalog=catalog,
+        service=service,
+        knowledge_index=index,
         registry=ToolRegistry([broken]),
     )
     assert run.trace[0].status == "error"
 
 
 def test_trace_step_labels_are_reader_friendly():
-    step = TraceStep(round=1, tool="search_products", arguments={}, status="ok", summary="x")
+    step = TraceStep(
+        round=1, tool="search_products", arguments={}, status="ok", summary="x"
+    )
     assert step.arguments_label == "（无参数）"
     assert step.status_label == "成功"
 
@@ -314,7 +358,9 @@ def test_tool_declarations_are_sent_every_round(catalog, index):
         return _reply("好了")
 
     service = ai_service.AIService(
-        api_key=FAKE_KEY, base_url="https://example.invalid/v1", model="m",
+        api_key=FAKE_KEY,
+        base_url="https://example.invalid/v1",
+        model="m",
         client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
     run_agent("问题", catalog=catalog, service=service, knowledge_index=index)
@@ -329,11 +375,15 @@ def test_tool_results_are_fed_back_to_the_model(catalog, index):
         body = json.loads(request.content)
         captured.append(body)
         if len(captured) == 1:
-            return _reply(tool_calls=[_call("get_product_detail", {"product_id": "LP001"})])
+            return _reply(
+                tool_calls=[_call("get_product_detail", {"product_id": "LP001"})]
+            )
         return _reply("好了")
 
     service = ai_service.AIService(
-        api_key=FAKE_KEY, base_url="https://example.invalid/v1", model="m",
+        api_key=FAKE_KEY,
+        base_url="https://example.invalid/v1",
+        model="m",
         client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
     run_agent("问题", catalog=catalog, service=service, knowledge_index=index)
@@ -347,7 +397,9 @@ def test_tool_results_are_fed_back_to_the_model(catalog, index):
     assert "LP001" in tool_message["content"]
 
     assistant_message = second[-2]
-    assert assistant_message["tool_calls"][0]["function"]["name"] == "get_product_detail"
+    assert (
+        assistant_message["tool_calls"][0]["function"]["name"] == "get_product_detail"
+    )
 
 
 def test_missing_knowledge_index_is_reported_not_faked(catalog):

@@ -111,7 +111,9 @@ def _render_user_row(viewer, user) -> None:
                 # 界面测试没法按标签取到想要的那一个。
                 "修改角色",
                 options=list(_ROLE_OPTIONS),
-                index=_ROLE_OPTIONS.index(user.role) if user.role in _ROLE_OPTIONS else 0,
+                index=_ROLE_OPTIONS.index(user.role)
+                if user.role in _ROLE_OPTIONS
+                else 0,
                 format_func=lambda value: ROLE_LABELS.get(value, value),
                 key=f"zg_admin_role_{user.username}",
             )

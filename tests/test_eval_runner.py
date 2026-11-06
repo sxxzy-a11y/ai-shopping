@@ -104,16 +104,20 @@ def test_report_has_versioned_structure_and_no_combined_score(tool_cases, payloa
     assert data["dataset"]["products_sha256"]
 
     for metric in data["metrics"]:
-        assert {"key", "label", "definition", "numerator", "denominator", "display"} <= set(
-            metric
-        )
+        assert {
+            "key",
+            "label",
+            "definition",
+            "numerator",
+            "denominator",
+            "display",
+        } <= set(metric)
         assert isinstance(metric["numerator"], int)
         assert isinstance(metric["denominator"], int)
 
     assert "total_score" not in data
     assert all(
-        item["status"] == "尚未测量（需人工复核）"
-        for item in data["manual_metrics"]
+        item["status"] == "尚未测量（需人工复核）" for item in data["manual_metrics"]
     )
 
 
@@ -153,7 +157,18 @@ def test_cli_output_dir_writes_both_formats(tmp_path, capsys):
 
 def test_cli_unknown_category_returns_2(capsys):
     assert main(["--only", "不存在的类别"]) == 2
-    assert "没有匹配" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "没有匹配" in err
+    assert "可用场景类别" in err, "错误信息要告诉用户能传什么"
+
+
+def test_cli_lists_categories(capsys):
+    assert main(["--list-categories"]) == 0
+    out = capsys.readouterr().out
+
+    assert "可用场景类别" in out
+    assert "工具调用" in out
+    assert "--only" in out
 
 
 def test_cli_survives_narrow_encoding_console():

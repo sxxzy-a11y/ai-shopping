@@ -16,7 +16,7 @@ from src.data_loader import Catalog
 from src.errors import ZhigouError, to_user_message
 from src.ui import components, state
 from src.ui.hover_button import hover_button
-from src.ui.theme import bullet_list, facts
+from src.ui.theme import bullet_list
 
 # 控件键。带上前缀避免与其它页面重名。
 _KEY_AI = "zg_pref_ai"
@@ -84,7 +84,8 @@ def render(catalog: Catalog) -> None:
         "偏好只作为默认值——你在分析页手动填的内容永远优先。",
     )
 
-    prefs = _seed_widget_state(settings.load_preferences(user), user)
+    # 只为把偏好镜像进 session_state，返回值用不上。
+    _seed_widget_state(settings.load_preferences(user), user)
 
     left, right = st.columns([3, 2], gap="large")
 
@@ -169,11 +170,10 @@ def render(catalog: Catalog) -> None:
             unsafe_allow_html=True,
         )
 
-
-
     # --- API 配置（仅管理员） ----------------------------------------------
     if is_admin(state.current_user()):
         _render_api_config()
+
 
 # --------------------------------------------------------------------------
 # API 配置（仅管理员）
@@ -248,8 +248,10 @@ def _clear() -> None:
 
 def _test_llm() -> None:
     ok, message = ai_service.probe()
-    _flash(("对话模型连接正常：" if ok else "对话模型连接失败：") + message,
-           "ok" if ok else "stop")
+    _flash(
+        ("对话模型连接正常：" if ok else "对话模型连接失败：") + message,
+        "ok" if ok else "stop",
+    )
 
 
 def _test_embedding() -> None:

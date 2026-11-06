@@ -208,6 +208,4 @@ def apply_preferences(prefs: UserPreferences, demand: Demand) -> Demand:
 
     # Demand 是 pydantic 模型，用 model_copy 而不是 dataclasses.replace。
     # source 改为 "merged"：标记这条需求混入了偏好，界面据此提示。
-    return demand.model_copy(
-        update={"core_needs": merged_needs, "source": "merged"}
-    )
+    return demand.model_copy(update={"core_needs": merged_needs, "source": "merged"})

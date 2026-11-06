@@ -166,7 +166,9 @@ def test_fresh_dataset_is_not_flagged_as_stale(catalog, laptop_demand):
 
 def test_incomplete_product_is_flagged_by_name(catalog, laptop_demand):
     broken = Product(id="BROKEN", name="缺参数机型", category="laptop", price=3500)
-    patched = Catalog(products=[*catalog.products, broken], disclaimer=catalog.disclaimer)
+    patched = Catalog(
+        products=[*catalog.products, broken], disclaimer=catalog.disclaimer
+    )
 
     result = recommend(patched, laptop_demand)
     items = collect_verification_items(result, patched)
@@ -246,15 +248,22 @@ def test_report_round_trips_through_json(sample_report):
     assert restored.created_at == sample_report.created_at
     assert restored.demand_summary == sample_report.demand_summary
     assert len(restored.recommendations) == len(sample_report.recommendations)
-    assert restored.recommendations[0].score_total == sample_report.recommendations[0].score_total
-    assert restored.recommendations[0].reasons == sample_report.recommendations[0].reasons
+    assert (
+        restored.recommendations[0].score_total
+        == sample_report.recommendations[0].score_total
+    )
+    assert (
+        restored.recommendations[0].reasons == sample_report.recommendations[0].reasons
+    )
     assert restored.demand_facts == sample_report.demand_facts
     assert to_markdown(restored) == to_markdown(sample_report)
 
 
 def test_from_dict_tolerates_missing_fields():
     """老记录缺少新加的字段时也要能打开。"""
-    report = DecisionReport.from_dict({"created_at": "2026-01-01T00:00:00", "demand_summary": "旧的"})
+    report = DecisionReport.from_dict(
+        {"created_at": "2026-01-01T00:00:00", "demand_summary": "旧的"}
+    )
     assert report.recommendations == []
     assert report.to_verify == []
 
@@ -371,8 +380,12 @@ def test_export_helpers_never_touch_the_filesystem(sample_report):
 
     from src import report_service
 
-    for func in (report_service.markdown_bytes, report_service.csv_bytes,
-                 report_service.to_markdown, report_service.to_csv):
+    for func in (
+        report_service.markdown_bytes,
+        report_service.csv_bytes,
+        report_service.to_markdown,
+        report_service.to_csv,
+    ):
         source = inspect.getsource(func)
         for banned in ("open(", "write_bytes", "write_text", "Path("):
             assert banned not in source, f"{func.__name__} 里出现了文件操作：{banned}"
@@ -587,8 +600,12 @@ def truncated_report():
             price=800.0 + index * 100,
             brand="测试品牌",
             specs={
-                "driver_mm": 40, "connection": "蓝牙 5.3", "battery_h": 30,
-                "weight_g": 250, "noise_cancelling": True, "audio_tier": 3,
+                "driver_mm": 40,
+                "connection": "蓝牙 5.3",
+                "battery_h": 30,
+                "weight_g": 250,
+                "noise_cancelling": True,
+                "audio_tier": 3,
             },
             use_cases=["通勤"],
             pros=["测试用"],
@@ -657,9 +674,17 @@ def test_markdown_export_carries_verification_status(catalog, laptop_demand):
 
 
 def test_csv_export_carries_verification_status(catalog, laptop_demand):
-    rows = list(csv.reader(io.StringIO(to_csv(
-        build_report(catalog, laptop_demand, recommend(catalog, laptop_demand))
-    ))))
+    rows = list(
+        csv.reader(
+            io.StringIO(
+                to_csv(
+                    build_report(
+                        catalog, laptop_demand, recommend(catalog, laptop_demand)
+                    )
+                )
+            )
+        )
+    )
     header = rows[0]
     assert "核验状态" in header
 

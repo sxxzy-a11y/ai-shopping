@@ -98,7 +98,7 @@ def home_masthead(
     return (
         f'<section class="zg-home-masthead{enter_class}">'
         f'  <div class="zg-masthead-top">'
-        f'    <span><b>智购参谋</b> · 采购决策工作台</span>'
+        f"    <span><b>智购参谋</b> · 采购决策工作台</span>"
         f"    <span>{right}</span>"
         f"  </div>"
         f'  <h1 class="zg-masthead-title">{esc(title)}</h1>'
@@ -112,9 +112,7 @@ def home_masthead(
     )
 
 
-def rail_notes(
-    items: list[tuple[str, str, str]], *, enter_class: str = ""
-) -> str:
+def rail_notes(items: list[tuple[str, str, str]], *, enter_class: str = "") -> str:
     """编号脚注列表：把能力说明从「四张卡」改成一条可读的边栏。"""
     notes = "".join(
         f'<div class="zg-rail-note">'
@@ -170,7 +168,7 @@ def caption(text: str) -> None:
 def empty_state(text: str, icon_name: str = "search") -> None:
     st.markdown(
         f'<div class="zg-empty"><div class="zg-empty-icon">'
-        f'{icons.icon(icon_name, size=30)}</div>{esc(text)}</div>',
+        f"{icons.icon(icon_name, size=30)}</div>{esc(text)}</div>",
         unsafe_allow_html=True,
     )
 
@@ -204,7 +202,7 @@ def stat_tile(icon_name: str, value: str, label: str) -> str:
     return (
         f'<div class="zg-stat">'
         f'  <div class="zg-stat-icon">{icons.icon(icon_name, size=20)}</div>'
-        f'  <div>'
+        f"  <div>"
         f'    <div class="zg-stat-value">{esc(value)}</div>'
         f'    <div class="zg-stat-label">{esc(label)}</div>'
         f"  </div>"
@@ -287,7 +285,7 @@ def stars(score: float, *, count: int = 5, size: int = 13) -> str:
     filled = int(round(max(0.0, min(100.0, score)) / 100 * count))
     glyphs = "".join(
         f'<span class="{"zg-star-on" if i < filled else "zg-star-off"}">'
-        f'{icons.icon("star", size=size)}</span>'
+        f"{icons.icon('star', size=size)}</span>"
         for i in range(count)
     )
     return f'<span class="zg-stars">{glyphs}</span>'
@@ -319,7 +317,7 @@ def score_breakdown_html(score: ScoreResult) -> str:
     parts = ["".join(_dimension_bar(d) for d in ordered)]
 
     if score.bonus:
-        parts.append(f'<div class="zg-caption" style="margin-top:14px">主要加分项</div>')
+        parts.append('<div class="zg-caption" style="margin-top:14px">主要加分项</div>')
         parts.append(bullet_list(score.bonus))
     if score.penalty:
         parts.append('<div class="zg-caption" style="margin-top:12px">主要扣分项</div>')
@@ -375,7 +373,11 @@ def _highlight_chips(score: ScoreResult) -> str:
     ranked = sorted(score.dimensions, key=lambda d: (-d.score, d.key))
     chunks: list[str] = []
     for dimension in ranked[:2]:
-        tone = "ok" if dimension.score >= 80 else ("brand" if dimension.score >= 60 else "neutral")
+        tone = (
+            "ok"
+            if dimension.score >= 80
+            else ("brand" if dimension.score >= 60 else "neutral")
+        )
         chunks.append(chip(f"{dimension.label} {dimension.score:.0f}", tone))
     return "".join(chunks)
 
@@ -407,9 +409,7 @@ def render_agent_trace(run) -> None:
                 unsafe_allow_html=True,
             )
             st.markdown(run.answer)
-            caption(
-                "这段结论由 AI 调用下列工具后得出，请以工具返回的数据为准。"
-            )
+            caption("这段结论由 AI 调用下列工具后得出，请以工具返回的数据为准。")
 
     section_title("AI 执行过程", len(run.trace))
 
@@ -491,14 +491,14 @@ def product_row(
         f'<div class="zg-card{" is-accent" if highlight else ""}">'
         f'  <div class="zg-row">'
         f"    {rank_html}"
-        f'    {_thumb(product, size=27)}'
+        f"    {_thumb(product, size=27)}"
         f'    <div class="zg-row-main">'
         f'      <div class="zg-row-name">{esc(product.name or product.id)}</div>'
         f'      <div class="zg-row-spec">{esc(product.brand or "品牌未知")}'
         f"        · {esc(product.category_label)} · {esc(_spec_line(product))}</div>"
         f'      <div style="display:flex;flex-wrap:wrap;gap:6px">'
-        f'        {chip(budget_label, _budget_tone(budget_label))}'
-        f'        {chip(score.match_level, _MATCH_TONE.get(score.match_level, "neutral"))}'
+        f"        {chip(budget_label, _budget_tone(budget_label))}"
+        f"        {chip(score.match_level, _MATCH_TONE.get(score.match_level, 'neutral'))}"
         f"        {data_issue_chip(product)}"
         f"      </div>"
         f"      {reason_html}"
@@ -514,12 +514,13 @@ def product_row(
         + (
             f'  <div class="zg-notice zg-notice-info" style="margin:12px 0 0 0">'
             f'<span class="zg-notice-icon">{icons.icon("sparkles", size=16)}</span>'
-            f'<span><strong>AI 解读</strong>：{esc(ai_note)}</span></div>'
+            f"<span><strong>AI 解读</strong>：{esc(ai_note)}</span></div>"
             if ai_note
             else ""
         )
-        + "  " + _source_line(product)
-        + f"</div>"
+        + "  "
+        + _source_line(product)
+        + "</div>"
     )
 
 
@@ -594,7 +595,12 @@ def render_product_row(
     """
     st.markdown(
         product_row(
-            product, score, budget_label, rank=rank, highlight=highlight, ai_note=ai_note
+            product,
+            score,
+            budget_label,
+            rank=rank,
+            highlight=highlight,
+            ai_note=ai_note,
         ),
         unsafe_allow_html=True,
     )
@@ -615,13 +621,11 @@ def render_product_row(
 
 def product_mini(product: Product, *, budget_label: str = "") -> str:
     """紧凑商品条，用于比较页顶部与历史记录。"""
-    chip_html = (
-        chip(budget_label, _budget_tone(budget_label)) if budget_label else ""
-    )
+    chip_html = chip(budget_label, _budget_tone(budget_label)) if budget_label else ""
     return (
         f'<div class="zg-card is-flat">'
         f'  <div class="zg-row">'
-        f'    {_thumb(product, size=30, large=True)}'
+        f"    {_thumb(product, size=30, large=True)}"
         f'    <div class="zg-row-main">'
         f'      <div class="zg-row-name">{esc(product.name or product.id)}</div>'
         f'      <div class="zg-row-spec">{esc(product.brand or "品牌未知")}'
@@ -655,12 +659,12 @@ def compare_overview(products, *, budgets: dict[str, str], scores: dict) -> str:
         budget = budgets.get(product.id, "")
         cells.append(
             f'<div class="zg-compare-cell">'
-            f'  {_thumb(product, size=26)}'
+            f"  {_thumb(product, size=26)}"
             f'  <div class="zg-compare-name">{esc(product.name or product.id)}</div>'
             f'  <div class="zg-compare-brand">{esc(product.brand or "品牌未知")}'
             f"    · {esc(product.category_label)}</div>"
             f'  <div class="zg-compare-price">{esc(product.price_label)}</div>'
-            f'  <div>{chip(budget, _budget_tone(budget))}</div>'
+            f"  <div>{chip(budget, _budget_tone(budget))}</div>"
             f'  <div style="margin-top:11px">{score_html}</div>'
             f"</div>"
         )
@@ -675,12 +679,16 @@ def pros_cons_grid(products) -> str:
     """
     cards = []
     for product in products:
-        pros = "".join(f"<li>{esc(item)}</li>" for item in product.pros) or "<li>无</li>"
-        cons = "".join(f"<li>{esc(item)}</li>" for item in product.cons) or "<li>无</li>"
+        pros = (
+            "".join(f"<li>{esc(item)}</li>" for item in product.pros) or "<li>无</li>"
+        )
+        cons = (
+            "".join(f"<li>{esc(item)}</li>" for item in product.cons) or "<li>无</li>"
+        )
         cards.append(
             f'<div class="zg-proscons-card">'
             f'  <div class="zg-proscons-title">'
-            f'    {_thumb(product, size=17, style="width:30px;height:30px;border-radius:8px")}'
+            f"    {_thumb(product, size=17, style='width:30px;height:30px;border-radius:8px')}"
             f"    {esc(product.name or product.id)}</div>"
             f'  <div class="zg-proscons-sub">优点</div>'
             f'  <ul class="zg-list">{pros}</ul>'
@@ -763,28 +771,42 @@ def render_stored_report(report) -> None:
     )
 
     section_title("需求摘要")
-    st.markdown(f'<div class="zg-card is-flat">{facts(report.demand_facts)}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="zg-card is-flat">{facts(report.demand_facts)}</div>',
+        unsafe_allow_html=True,
+    )
     if report.demand_text:
         with st.expander("原始输入"):
             st.write(report.demand_text)
 
     section_title("预算与筛选条件")
-    st.markdown(f'<div class="zg-card is-flat">{facts(report.filter_facts)}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="zg-card is-flat">{facts(report.filter_facts)}</div>',
+        unsafe_allow_html=True,
+    )
 
     section_title("推荐商品及排序", len(report.recommendations) or None)
     if report.recommendations:
         for item in report.recommendations:
             st.markdown(report_item_card(item), unsafe_allow_html=True)
             with st.expander(f"{item.name} 的推荐理由与优缺点"):
-                st.markdown('<div class="zg-caption">推荐理由</div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<div class="zg-caption">推荐理由</div>', unsafe_allow_html=True
+                )
                 st.markdown(bullet_list(item.reasons), unsafe_allow_html=True)
                 left, right = st.columns(2)
                 with left:
-                    st.markdown('<div class="zg-caption">优点</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        '<div class="zg-caption">优点</div>', unsafe_allow_html=True
+                    )
                     st.markdown(bullet_list(item.pros), unsafe_allow_html=True)
                 with right:
-                    st.markdown('<div class="zg-caption">缺点</div>', unsafe_allow_html=True)
-                    st.markdown(bullet_list(item.cons, tone="con"), unsafe_allow_html=True)
+                    st.markdown(
+                        '<div class="zg-caption">缺点</div>', unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        bullet_list(item.cons, tone="con"), unsafe_allow_html=True
+                    )
     else:
         empty_state("这次分析没有预算内的匹配商品。", icon_name="alert")
 
@@ -813,4 +835,6 @@ def render_stored_report(report) -> None:
     )
 
     if report.dataset_disclaimer:
-        st.markdown(notice_html(report.dataset_disclaimer, "warn"), unsafe_allow_html=True)
+        st.markdown(
+            notice_html(report.dataset_disclaimer, "warn"), unsafe_allow_html=True
+        )

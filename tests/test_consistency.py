@@ -204,9 +204,7 @@ def test_flag_fires_on_real_text_when_spec_contradicts():
     这条是「规则不是空转」的关键证据：证明匹配器认得出真实文本里的肯定式提及，
     而不是碰巧在真实数据上什么都没匹配到。
     """
-    consistent = _product(
-        specs={"has_dedicated_gpu": True}, pros=[_REAL_GPU_PRO_TEXT]
-    )
+    consistent = _product(specs={"has_dedicated_gpu": True}, pros=[_REAL_GPU_PRO_TEXT])
     assert check_product(consistent) == []
 
     contradicted = _product(
@@ -302,7 +300,9 @@ def test_data_issues_do_not_affect_scoring():
     assert check_product(clean) == []
     assert check_product(contradicted) != []
 
-    assert score_product(clean, demand).total == score_product(contradicted, demand).total
+    assert (
+        score_product(clean, demand).total == score_product(contradicted, demand).total
+    )
 
 
 def test_flag_does_not_remove_product_from_results():

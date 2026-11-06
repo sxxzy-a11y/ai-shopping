@@ -12,7 +12,6 @@ from pathlib import Path
 import pytest
 
 from src import data_loader
-from src.knowledge import corpus
 from src.knowledge.corpus import (
     TYPE_CATEGORY,
     TYPE_PRODUCT,
@@ -110,7 +109,9 @@ def test_unknown_type_is_skipped(bad_type: str):
 
 
 def test_empty_body_is_skipped():
-    text = "---\ntitle: T\ntype: service\nsource: S\nupdated_at: 2026-01-01\n---\n\n  \n"
+    text = (
+        "---\ntitle: T\ntype: service\nsource: S\nupdated_at: 2026-01-01\n---\n\n  \n"
+    )
     assert document_from_text(text, fallback_id="x.md") is None
 
 

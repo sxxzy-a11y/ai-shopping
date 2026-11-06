@@ -27,7 +27,7 @@ TEST_USERNAME = "acceptance-tester"
 DEFAULT_USER = User(username=TEST_USERNAME, role=ROLE_USER)
 
 #: 界面上**绝不允许**出现的东西
-FORBIDDEN = ("Traceback", "File \"", "line ", "streamlit.errors", "sqlite3.", "httpx.")
+FORBIDDEN = ("Traceback", 'File "', "line ", "streamlit.errors", "sqlite3.", "httpx.")
 
 
 #: 端到端用的需求句。**预算跟着真实价格上涨过**：需求简报里的原句是
@@ -91,14 +91,34 @@ def _state(at: AppTest, key: str, default=None):
 def _text(at: AppTest) -> str:
     """页面上所有可见文本（含控件标签）。"""
     chunks: list[str] = []
-    for attr in ("markdown", "caption", "title", "header", "subheader", "text",
-                 "info", "warning", "error", "success"):
+    for attr in (
+        "markdown",
+        "caption",
+        "title",
+        "header",
+        "subheader",
+        "text",
+        "info",
+        "warning",
+        "error",
+        "success",
+    ):
         for element in getattr(at, attr, []):
             chunks.append(str(getattr(element, "value", "")))
     # `expander` 也要收：折叠面板的标题是页面上可见的文本，漏掉它会让
     # 「某某确实显示了」这类断言取不到东西（见 test_app._all_text 的说明）。
-    for attr in ("selectbox", "multiselect", "text_input", "text_area", "toggle",
-                 "radio", "checkbox", "button", "number_input", "expander"):
+    for attr in (
+        "selectbox",
+        "multiselect",
+        "text_input",
+        "text_area",
+        "toggle",
+        "radio",
+        "checkbox",
+        "button",
+        "number_input",
+        "expander",
+    ):
         for element in getattr(at, attr, []):
             label = getattr(element, "label", "")
             if label:
@@ -110,7 +130,9 @@ def _text(at: AppTest) -> str:
 
 def _assert_no_leak(at: AppTest, where: str) -> None:
     """没有未捕获异常，也没有任何内部细节漏到界面上。"""
-    assert not at.exception, f"{where}：抛出未捕获异常 {[e.value for e in at.exception]}"
+    assert not at.exception, (
+        f"{where}：抛出未捕获异常 {[e.value for e in at.exception]}"
+    )
 
     body = _text(at)
     assert FALLBACK_TEXT not in body, f"{where}：出现兜底错误提示"
@@ -255,7 +277,9 @@ def test_ai_failure_degrades_to_local_rules(monkeypatch):
             base_url="https://example.invalid/v1",
             model="m",
             client=httpx.Client(
-                transport=httpx.MockTransport(lambda r: httpx.Response(503, text="down"))
+                transport=httpx.MockTransport(
+                    lambda r: httpx.Response(503, text="down")
+                )
             ),
         )
 
@@ -413,8 +437,14 @@ def test_full_decision_journey():
     _assert_no_leak(at, "③ 历史报告")
 
     body = _text(at)
-    for section in ("需求摘要", "预算与筛选条件", "推荐商品及排序",
-                    "需要进一步核实的信息", "最终决策建议", "生成时间"):
+    for section in (
+        "需求摘要",
+        "预算与筛选条件",
+        "推荐商品及排序",
+        "需要进一步核实的信息",
+        "最终决策建议",
+        "生成时间",
+    ):
         assert section in body, f"历史报告缺少「{section}」"
 
     from src import database
@@ -425,7 +455,9 @@ def test_full_decision_journey():
     assert stored is not None
     assert stored.created_at == report.created_at
     assert len(stored.recommendations) == len(report.recommendations)
-    for original, loaded in zip(report.recommendations, stored.recommendations, strict=True):
+    for original, loaded in zip(
+        report.recommendations, stored.recommendations, strict=True
+    ):
         assert loaded.score_total == pytest.approx(original.score_total)
         assert loaded.product_id == original.product_id
 

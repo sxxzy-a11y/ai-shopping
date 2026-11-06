@@ -78,9 +78,7 @@ def get(key: str, path: Path | None = None) -> str:
     return load(path).get(key, "")
 
 
-def save(
-    values: dict[str, str | int | None], path: Path | None = None
-) -> Path:
+def save(values: dict[str, str | int | None], path: Path | None = None) -> Path:
     """合并保存：只写入非空值，未提供的键保持不变。
 
     **空值不覆盖**是刻意的：用户在界面只改模型名时，密钥输入框留空，

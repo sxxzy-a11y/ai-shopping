@@ -182,6 +182,8 @@ def verify_password(password: str, credential: str) -> bool:
     if algorithm != ALGORITHM or iterations <= 0 or not salt or not expected:
         return False
 
-    candidate = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    candidate = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, iterations
+    )
     # 定长比较，不因为「第几个字节不同」而提前返回。
     return hmac.compare_digest(candidate, expected)

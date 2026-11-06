@@ -32,8 +32,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Lint (syntax + undefined names)
+      - name: Lint
         run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
 
       - name: Unit tests
         run: pytest -q
@@ -65,8 +68,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      - name: Format check
-        run: ruff format --check .
+      # 剩余 13 处均为可选值语义（eval 断言与页面的 Demand | None），
+      # 需逐个确认业务意图后才能改；收敛后再把本 job 转为阻断。
       - name: Type check
         run: mypy src
       - name: Coverage report

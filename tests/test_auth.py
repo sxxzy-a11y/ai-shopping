@@ -75,7 +75,13 @@ def test_wrong_password_is_rejected():
 
 @pytest.mark.parametrize(
     "credential",
-    ["", "not-a-credential", "pbkdf2_sha256$abc$00$ff", "md5$1$aa$bb", "pbkdf2_sha256$1$aa"],
+    [
+        "",
+        "not-a-credential",
+        "pbkdf2_sha256$abc$00$ff",
+        "md5$1$aa$bb",
+        "pbkdf2_sha256$1$aa",
+    ],
 )
 def test_malformed_credential_is_rejected_not_raised(credential):
     """坏凭据只能判为「不通过」。抛异常会让登录页把内部错误透给用户。"""
@@ -133,7 +139,9 @@ def test_username_is_stripped_of_outer_spaces():
     assert validate_username("  lisi  ") == "lisi"
 
 
-@pytest.mark.parametrize("name", ["", "   ", "ab", "a" * 33, "li si", "li\tsi", "li\nsi"])
+@pytest.mark.parametrize(
+    "name", ["", "   ", "ab", "a" * 33, "li si", "li\tsi", "li\nsi"]
+)
 def test_invalid_usernames_are_rejected(name):
     with pytest.raises(InvalidUsername) as caught:
         validate_username(name)

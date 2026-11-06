@@ -62,7 +62,10 @@ NAV_ITEMS: list[NavItem] = [
         "商品维护", ":material/inventory_2:", catalog_admin.render, admin_only=True
     ),
     NavItem(
-        "知识库管理", ":material/library_books:", knowledge_admin.render, admin_only=True
+        "知识库管理",
+        ":material/library_books:",
+        knowledge_admin.render,
+        admin_only=True,
     ),
     NavItem("全站概览", ":material/analytics:", admin.render_overview, admin_only=True),
     # 评测结果是管理员视角的「系统测得怎么样」，放在全站概览旁边。
@@ -83,9 +86,7 @@ logger = logging.getLogger("zhigou")
 
 def _visible_nav(user: User | None) -> list[NavItem]:
     """当前角色看得到的导航项。"""
-    return [
-        item for item in NAV_ITEMS if not item.admin_only or is_admin(user)
-    ]
+    return [item for item in NAV_ITEMS if not item.admin_only or is_admin(user)]
 
 
 def _configure_logging() -> None:
@@ -108,12 +109,12 @@ def _render_brand() -> None:
     """侧栏顶部的品牌块。"""
     st.markdown(
         f'<div style="display:flex;align-items:center;gap:11px;'
-        f'padding:8px 2px 14px 2px;margin-bottom:8px;'
+        f"padding:8px 2px 14px 2px;margin-bottom:8px;"
         f'border-bottom:1px solid rgba(120,100,75,.16)">'
         f'  <div style="width:40px;height:40px;border-radius:12px;flex-shrink:0;'
-        f'background:linear-gradient(135deg,#E7C27A,{backend_theme.GOLD});'
-        f'display:flex;align-items:center;justify-content:center;'
-        f'box-shadow:0 8px 18px rgba(169,119,46,.22), inset 0 1px 0 rgba(255,255,255,.45);'
+        f"background:linear-gradient(135deg,#E7C27A,{backend_theme.GOLD});"
+        f"display:flex;align-items:center;justify-content:center;"
+        f"box-shadow:0 8px 18px rgba(169,119,46,.22), inset 0 1px 0 rgba(255,255,255,.45);"
         f'color:{backend_theme.BROWN}">'
         f"{icons.icon('sparkles', size=21, color=backend_theme.BROWN)}</div>"
         f'  <div style="min-width:0">'
@@ -188,8 +189,8 @@ def _render_sidebar(user: User) -> str:
             f'<div style="font-size:11.5px;color:{backend_theme.MUTED};'
             f'line-height:1.75;padding:0 2px 8px 2px">'
             f"商品数据来自公开资料整理：品牌与型号真实，"
-            f"价格是采集时的参考价、<strong style=\"color:{backend_theme.BROWN}\">不是实时价格</strong>，"
-            f"参数经简化且<strong style=\"color:{backend_theme.BROWN}\">未核验</strong>。<br><br>"
+            f'价格是采集时的参考价、<strong style="color:{backend_theme.BROWN}">不是实时价格</strong>，'
+            f'参数经简化且<strong style="color:{backend_theme.BROWN}">未核验</strong>。<br><br>'
             f"「系统匹配评分」衡量的是与你需求的匹配程度，"
             f"不是用户评价或市场口碑。</div>",
             unsafe_allow_html=True,
@@ -210,12 +211,12 @@ def _render_topbar(page: str, user: User) -> None:
         f'    <span class="zg-topbar-brand">智购参谋</span>'
         f'    <span class="zg-topbar-sep">/</span>'
         f'    <span class="zg-topbar-page">{components.esc(page)}</span>'
-        f'  </div>'
+        f"  </div>"
         f'  <div class="zg-topbar-right">'
-        f'    {components.runtime_chip()}'
+        f"    {components.runtime_chip()}"
         f'    <span class="zg-topbar-user">{components.esc(user.username)}</span>'
-        f'  </div>'
-        f'</div>',
+        f"  </div>"
+        f"</div>",
         unsafe_allow_html=True,
     )
 
@@ -320,9 +321,7 @@ def main() -> None:
     # 免得一个只读故障把所有人踢出去。
     if not accounts.still_valid(user):
         state.sign_out()
-        components.show_notice(
-            "你的账号已被停用或删除，请重新登录。", "warn"
-        )
+        components.show_notice("你的账号已被停用或删除，请重新登录。", "warn")
         login.render()
         return
 

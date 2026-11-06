@@ -153,8 +153,8 @@ def test_structured_fills_in_what_natural_language_missed():
 
     merged = merge_demand(structured, parsed)
 
-    assert merged.budget == 4500          # 来自控件
-    assert merged.category == "laptop"    # 来自自然语言
+    assert merged.budget == 4500  # 来自控件
+    assert merged.category == "laptop"  # 来自自然语言
     assert "编程" in merged.use_cases
 
 
@@ -189,7 +189,9 @@ def test_non_positive_budget_is_rejected(value):
         parse_budget_value(value)
 
 
-@pytest.mark.parametrize("value", ["三千块", "三千", "abc", "很多钱", "3.4.5", "3000-4000"])
+@pytest.mark.parametrize(
+    "value", ["三千块", "三千", "abc", "很多钱", "3.4.5", "3000-4000"]
+)
 def test_unparseable_budget_is_rejected(value):
     with pytest.raises(InvalidBudget):
         parse_budget_value(value)
@@ -306,7 +308,9 @@ def test_brand_preference_is_matched_against_catalog_brands(catalog):
     真实品牌之后这条就会失败，而它本来要验的是「能认出数据里的品牌」。
     """
     brand = catalog.brands_of("laptop")[0]
-    demand = parse_demand(f"预算 5000，想要{brand}的笔记本", known_brands=catalog.brands())
+    demand = parse_demand(
+        f"预算 5000，想要{brand}的笔记本", known_brands=catalog.brands()
+    )
     assert demand.brand_preferences == [brand]
 
 
@@ -385,9 +389,9 @@ def test_budget_with_unit_after_the_number(text, expected):
 @pytest.mark.parametrize(
     "text",
     [
-        "14 寸的笔记本电脑",       # 尺寸不是预算
-        "5.3 蓝牙的手机",          # 参数不是预算
-        "重量 1.28kg 的笔记本",    # 参数不是预算
+        "14 寸的笔记本电脑",  # 尺寸不是预算
+        "5.3 蓝牙的手机",  # 参数不是预算
+        "重量 1.28kg 的笔记本",  # 参数不是预算
     ],
 )
 def test_numbers_without_currency_unit_are_not_budget(text):
@@ -395,7 +399,9 @@ def test_numbers_without_currency_unit_are_not_budget(text):
     assert parse_demand(text).budget is None
 
 
-@pytest.mark.parametrize("text", ["预算两千五的手机", "一百五元的商品", "预算一万二的本子"])
+@pytest.mark.parametrize(
+    "text", ["预算两千五的手机", "一百五元的商品", "预算一万二的本子"]
+)
 def test_omitted_place_notation_is_not_guessed(text):
     """省位写法判为**未识别**，由界面追问。
 
@@ -409,9 +415,9 @@ def test_omitted_place_notation_is_not_guessed(text):
 @pytest.mark.parametrize(
     "text, expected",
     [
-        ("预算两千零五的手机", 2005.0),   # 带零标记，意图明确
-        ("预算两千五百的手机", 2500.0),   # 单位完整
-        ("预算十五元的商品", 15.0),       # 十后面的数字不算歧义
+        ("预算两千零五的手机", 2005.0),  # 带零标记，意图明确
+        ("预算两千五百的手机", 2500.0),  # 单位完整
+        ("预算十五元的商品", 15.0),  # 十后面的数字不算歧义
         ("预算一百五十元的商品", 150.0),
     ],
 )

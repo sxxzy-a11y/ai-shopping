@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -341,7 +341,9 @@ def _write_price(
 
     currency = str(record.get("currency") or record.get("price_currency") or "CNY")
     source_note = str(record.get("price_source") or record.get("data_source") or "")
-    collected_at = str(record.get("price_collected_at") or record.get("updated_at") or stamp)
+    collected_at = str(
+        record.get("price_collected_at") or record.get("updated_at") or stamp
+    )
     verified_at = record.get("price_verified_at") or record.get("verified_at") or None
 
     if existing is not None and float(existing["price"]) == price:
@@ -490,9 +492,7 @@ def clear_products(path: Path | None = None) -> None:
         raise ProductStoreWriteError(detail=f"{type(exc).__name__}: {exc}") from exc
 
 
-def seed_from_json(
-    seed_path: Path | None = None, *, path: Path | None = None
-) -> int:
+def seed_from_json(seed_path: Path | None = None, *, path: Path | None = None) -> int:
     """把种子文件导入数据库。
 
     这是「开箱即用」与「单一数据源」之间的折中：只在**库为空**时调用一次。

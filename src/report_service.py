@@ -230,7 +230,9 @@ def _days_since(value: str) -> int | None:
     return (date.today() - then).days
 
 
-def collect_verification_items(result: RecommendationResult, catalog: Catalog) -> list[str]:
+def collect_verification_items(
+    result: RecommendationResult, catalog: Catalog
+) -> list[str]:
     """列出**具体**需要核实的事项。
 
     只写真实存在的缺口：商品缺哪些字段、数据集多久没更新、数据集本身
@@ -328,9 +330,7 @@ def _build_conclusion(result: RecommendationResult) -> str:
             "需要说明的是，它的匹配评分并不高，说明本次条件与可用商品之间存在"
             "一定差距，建议一并看看放宽建议。"
         )
-    elif result.over_budget and (
-        result.over_budget[0].score.total > best.score.total
-    ):
+    elif result.over_budget and (result.over_budget[0].score.total > best.score.total):
         higher = result.over_budget[0]
         tail = (
             f"另外，超预算的 {higher.product.name} 匹配评分更高"
@@ -417,10 +417,16 @@ def _item_block(item: ReportItem, *, show_rank: bool = True) -> list[str]:
     if item.data_issues:
         lines.append("- ⚠️ **资料存疑**（以下几处记录内部互相矛盾，建议核实后再采信）：")
         lines.extend(f"    - {issue}" for issue in item.data_issues)
-    lines.append(f"- 数据来源：{item.data_source or '信息缺失'}（更新于 {item.updated_at or '未知'}）")
+    lines.append(
+        f"- 数据来源：{item.data_source or '信息缺失'}（更新于 {item.updated_at or '未知'}）"
+    )
     # 核验状态：导出结果也要标。只在界面上标是不够的——
     # 导出件会脱离界面单独流传，那时就没人知道这条没核实过。
-    status = "已核验" if item.is_verified else "**未核验**（该记录尚未人工核实，请以厂商或平台信息为准）"
+    status = (
+        "已核验"
+        if item.is_verified
+        else "**未核验**（该记录尚未人工核实，请以厂商或平台信息为准）"
+    )
     lines.append(f"- 核验状态：{status}")
     if item.model:
         lines.append(f"- 型号：{item.model}")
@@ -467,7 +473,9 @@ def to_markdown(report: DecisionReport) -> str:
         lines += ["无。", ""]
 
     lines += ["## 五、放宽条件的建议", ""]
-    lines += [f"- {tip}" for tip in report.relaxations] if report.relaxations else ["无。"]
+    lines += (
+        [f"- {tip}" for tip in report.relaxations] if report.relaxations else ["无。"]
+    )
     lines.append("")
 
     lines += ["## 六、分析过程说明", ""]
@@ -475,7 +483,9 @@ def to_markdown(report: DecisionReport) -> str:
     lines.append("")
 
     lines += ["## 七、需要进一步核实的信息", ""]
-    lines += [f"- {item}" for item in report.to_verify] if report.to_verify else ["无。"]
+    lines += (
+        [f"- {item}" for item in report.to_verify] if report.to_verify else ["无。"]
+    )
     lines.append("")
 
     lines += ["## 八、最终决策建议", "", report.conclusion, ""]
@@ -522,7 +532,10 @@ def to_csv(report: DecisionReport) -> str:
         ]
     )
 
-    for zone, items in (("预算内推荐", report.recommendations), ("超出预算", report.over_budget)):
+    for zone, items in (
+        ("预算内推荐", report.recommendations),
+        ("超出预算", report.over_budget),
+    ):
         for item in items:
             writer.writerow(
                 [

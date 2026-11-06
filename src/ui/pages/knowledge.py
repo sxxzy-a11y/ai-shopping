@@ -242,8 +242,7 @@ def _render_answer() -> None:
 
 def _render_empty() -> None:
     components.show_notice(
-        "这次暂时没有生成回答。可以换个说法再试，或者到「智能分析」页"
-        "按条件筛选商品。",
+        "这次暂时没有生成回答。可以换个说法再试，或者到「智能分析」页按条件筛选商品。",
         "warn",
     )
 

@@ -18,7 +18,7 @@ from collections.abc import Sequence
 
 import httpx
 
-from src import config
+from src import config, http_client
 from src.ai_service import redact
 from src.errors import (
     AINotConfigured,
@@ -72,8 +72,17 @@ class EmbeddingService:
     def describe(self) -> dict[str, str]:
         """给界面看的配置摘要，**不含密钥明文**。"""
         key = self._api_key or ""
-        hint = f"{key[:3]}****{key[-4:]}" if len(key) > 8 else ("已配置" if key else "未配置")
-        return {"base_url": self._base_url, "model": self._model, "dim": str(self._dim), "key_hint": hint}
+        hint = (
+            f"{key[:3]}****{key[-4:]}"
+            if len(key) > 8
+            else ("已配置" if key else "未配置")
+        )
+        return {
+            "base_url": self._base_url,
+            "model": self._model,
+            "dim": str(self._dim),
+            "key_hint": hint,
+        }
 
     # -- 调用 ------------------------------------------------------------
 
@@ -86,7 +95,9 @@ class EmbeddingService:
             UpstreamResponseError: 网络、鉴权、服务不可用、响应非法或维度不符。
         """
         if not self.configured:
-            raise AINotConfigured(f"未配置 {config.EMBEDDING_API_KEY_ENV}，无法进行向量化。")
+            raise AINotConfigured(
+                f"未配置 {config.EMBEDDING_API_KEY_ENV}，无法进行向量化。"
+            )
 
         cleaned = [t for t in texts]
         if not cleaned:
@@ -106,21 +117,27 @@ class EmbeddingService:
             "Content-Type": "application/json",
         }
 
-        client = self._client or httpx.Client(timeout=self._timeout_s)
-        owns_client = self._client is None
         try:
-            response = client.post(url, json=payload, headers=headers)
+            # 与对话模型共用进程内连接池；重试只覆盖可能自愈的失败。
+            response = http_client.post_with_retry(
+                url,
+                json=payload,
+                headers=headers,
+                timeout_s=self._timeout_s,
+                client=self._client,
+            )
         except httpx.TimeoutException as exc:
             raise UpstreamTimeout("向量化服务响应超时，请稍后重试。") from exc
         except httpx.HTTPError as exc:
             logger.warning("向量化请求失败：%s", redact(str(exc)))
-            raise UpstreamUnavailable("向量化服务暂时不可用，请检查网络后重试。") from exc
-        finally:
-            if owns_client:
-                client.close()
+            raise UpstreamUnavailable(
+                "向量化服务暂时不可用，请检查网络后重试。"
+            ) from exc
 
         if response.status_code in (401, 403):
-            raise UpstreamAuthError("向量化服务鉴权失败，请检查 Embedding 密钥是否有效。")
+            raise UpstreamAuthError(
+                "向量化服务鉴权失败，请检查 Embedding 密钥是否有效。"
+            )
         if response.status_code >= 500:
             raise UpstreamUnavailable("向量化服务暂时不可用，请稍后重试。")
         if response.status_code != 200:

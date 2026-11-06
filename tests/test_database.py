@@ -30,6 +30,37 @@ BOB_USER = User(username=BOB, role=ROLE_USER)
 ADMIN_USER = User(username="root", role=ROLE_ADMIN)
 
 
+# --------------------------------------------------------------------------
+# 连接级并发参数
+# --------------------------------------------------------------------------
+
+
+def test_connection_enables_wal_and_busy_timeout(tmp_path):
+    """多线程 Streamlit 下读写会并发，连接必须带 WAL 与锁等待。"""
+    path = tmp_path / "concurrency.db"
+    with database.connect(path) as connection:
+        mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+        busy = connection.execute("PRAGMA busy_timeout").fetchone()[0]
+        foreign_keys = connection.execute("PRAGMA foreign_keys").fetchone()[0]
+
+    assert mode == "wal", "WAL 让读不再阻塞写"
+    assert busy == 10_000
+    assert foreign_keys == 1, "外键约束仍必须开启"
+
+
+def test_failed_pragmas_are_logged_but_do_not_raise(tmp_path, caplog):
+    """只读盘 / 损坏库上 PRAGMA 可能失败，不能因此让整个数据层不可用。"""
+
+    class FailingConnection:
+        def execute(self, _sql):
+            raise sqlite3.OperationalError("database is locked")
+
+    with caplog.at_level("WARNING", logger="zhigou.database"):
+        database._apply_concurrency_pragmas(FailingConnection(), tmp_path / "x.db")
+
+    assert "并发参数未生效" in caplog.text
+
+
 # `db_path` 与 `report` 两个夹具在 tests/conftest.py —— 迁移测试也要用。
 
 
@@ -102,11 +133,15 @@ def test_same_conditions_different_session_stores_one_row(
     """条件相同、时间不同的两次分析（模拟刷新页面后的新会话）只存一条。"""
     demand = Demand(category="laptop", budget=4000, use_cases=["编程"])
     morning = build_report(
-        catalog, demand, recommend(catalog, demand),
+        catalog,
+        demand,
+        recommend(catalog, demand),
         created_at=datetime(2026, 10, 13, 8, 0, 0),
     )
     evening = build_report(
-        catalog, demand, recommend(catalog, demand),
+        catalog,
+        demand,
+        recommend(catalog, demand),
         created_at=datetime(2026, 10, 13, 21, 0, 0),
     )
 
@@ -224,7 +259,9 @@ def test_list_respects_the_limit(db_path: Path, catalog):
     assert len(database.list_analyses(limit=2, path=db_path)) == 2
 
 
-def test_get_analysis_restores_the_original_conclusions(db_path: Path, report: DecisionReport):
+def test_get_analysis_restores_the_original_conclusions(
+    db_path: Path, report: DecisionReport
+):
     """spec：再次打开时还原当时的推荐结果与得分。"""
     entry_id = database.save_analysis(report, db_path, user_id=ALICE)
     restored = database.get_analysis(entry_id, db_path, viewer=ALICE_USER)
@@ -233,7 +270,9 @@ def test_get_analysis_restores_the_original_conclusions(db_path: Path, report: D
     assert restored.created_at == report.created_at
     assert len(restored.recommendations) == len(report.recommendations)
 
-    for original, loaded in zip(report.recommendations, restored.recommendations, strict=True):
+    for original, loaded in zip(
+        report.recommendations, restored.recommendations, strict=True
+    ):
         assert loaded.product_id == original.product_id
         assert loaded.rank == original.rank
         assert loaded.score_total == pytest.approx(original.score_total)
@@ -263,7 +302,9 @@ def test_delete_analysis(db_path: Path, report: DecisionReport):
     assert database.delete_analysis(entry_id, db_path, viewer=ALICE_USER) is False
 
 
-def test_admin_can_delete_an_unowned_legacy_record(db_path: Path, report: DecisionReport):
+def test_admin_can_delete_an_unowned_legacy_record(
+    db_path: Path, report: DecisionReport
+):
     """无归属的遗留记录**只对管理员可见**，所以也只有管理员能处理它们。
 
     禁止删除等于让这几条永久占位且无法清理——而它们恰恰是最没有价值的那些
@@ -316,7 +357,9 @@ def test_two_users_with_the_same_conditions_each_get_their_own_record(
     assert database.count_analyses(db_path) == 2
 
 
-def test_the_same_user_submitting_twice_still_dedupes(db_path: Path, report: DecisionReport):
+def test_the_same_user_submitting_twice_still_dedupes(
+    db_path: Path, report: DecisionReport
+):
     """按用户去重之后，「同一组条件只存一条」对**同一个人**仍然成立。"""
     first = database.save_analysis(report, db_path, user_id=ALICE)
     second = database.save_analysis(report, db_path, user_id=ALICE)
@@ -333,7 +376,9 @@ def test_reading_another_users_record_is_refused(db_path: Path, report: Decision
     assert database.get_analysis(entry_id, db_path, viewer=None) is None
 
 
-def test_deleting_another_users_record_is_refused(db_path: Path, report: DecisionReport):
+def test_deleting_another_users_record_is_refused(
+    db_path: Path, report: DecisionReport
+):
     """能读才谈得上删——越权删除必须既不返回成功也不真的删。"""
     entry_id = database.save_analysis(report, db_path, user_id=ALICE)
 
@@ -362,7 +407,9 @@ def test_unowned_legacy_records_are_admin_only(db_path: Path, report: DecisionRe
     assert database.count_unowned_analyses(db_path) == 1
 
 
-def test_user_history_list_only_contains_their_own(db_path: Path, report, second_report):
+def test_user_history_list_only_contains_their_own(
+    db_path: Path, report, second_report
+):
     """spec：一个用户的列表里不出现别人的记录。"""
     database.save_analysis(report, db_path, user_id=ALICE)
     database.save_analysis(second_report, db_path, user_id=BOB)
@@ -511,8 +558,7 @@ def test_stored_columns_contain_no_personal_information(db_path: Path, report):
 
     with sqlite3.connect(db_path) as connection:
         columns = {
-            row[1]
-            for row in connection.execute("PRAGMA table_info(analysis_history)")
+            row[1] for row in connection.execute("PRAGMA table_info(analysis_history)")
         }
 
     assert columns == {
@@ -550,16 +596,21 @@ def test_user_table_has_no_extra_personal_information(db_path: Path):
     database.init_db(db_path)
 
     with sqlite3.connect(db_path) as connection:
-        columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(users)")
-        }
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
 
     assert columns == {"username", "role", "is_active", "password_hash", "created_at"}
     # 「name」不列入禁用词：`username` 必然包含它，而用户名正是本表**唯一**
     # 的身份字段，也是 spec 许可的「应用内部账号标识」。
     # 禁用词只列那些会指向应用之外某个真人的字段。
     for forbidden in (
-        "email", "phone", "mobile", "address", "location", "device", "idcard", "real_name",
+        "email",
+        "phone",
+        "mobile",
+        "address",
+        "location",
+        "device",
+        "idcard",
+        "real_name",
     ):
         assert not any(forbidden in column.lower() for column in columns)
 

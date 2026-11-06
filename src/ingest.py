@@ -95,7 +95,17 @@ TIER_KEYS: frozenset[str] = frozenset(
 )
 
 #: 中文数字 → 数值，用于「一级能效」这类表述。
-_CN_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+_CN_DIGITS = {
+    "一": 1,
+    "二": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+}
 
 #: 「能效等级」的中文档位 → 内部 1–5（5 = 一级，最省电）。
 #: 注意方向：项目内部 5 最高，而「一级能效」是最好的，所以一级映射到 5。
@@ -430,8 +440,14 @@ def validate_products(products: Sequence[Mapping[str, Any]]) -> list[str]:
 
         for key, value in (product.get("specs") or {}).items():
             if key in TIER_KEYS and value is not None:
-                if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 5:
-                    issues.append(f"{pid}：档位 {key} 应为 1–5 的整数（实际 {value!r}）")
+                if (
+                    not isinstance(value, int)
+                    or isinstance(value, bool)
+                    or not 1 <= value <= 5
+                ):
+                    issues.append(
+                        f"{pid}：档位 {key} 应为 1–5 的整数（实际 {value!r}）"
+                    )
 
         source = str(product.get("data_source") or "")
         if not source:

@@ -51,6 +51,7 @@ def _connection(path: Path | None):
     with database.connect(target) as connection:
         yield connection
 
+
 @dataclass(frozen=True)
 class CategoryEntry:
     """一个分类在界面上的一条记录：键 + 生效后的元数据。"""
@@ -119,7 +120,9 @@ def category_entries(path: Path | None = None) -> list[CategoryEntry]:
             CategoryEntry(
                 key=key,
                 label=(row["display_label"] or default_label),
-                sort_order=row["sort_order"] if row["sort_order"] is not None else index,
+                sort_order=row["sort_order"]
+                if row["sort_order"] is not None
+                else index,
                 is_active=bool(row["is_active"]),
                 custom_label=custom,
             )
@@ -189,13 +192,17 @@ def set_category_meta(
     current = next(
         (entry for entry in category_entries(path) if entry.key == key), None
     )
-    label = display_label if display_label is not None else (
-        current.label if current and current.custom_label else None
+    label = (
+        display_label
+        if display_label is not None
+        else (current.label if current and current.custom_label else None)
     )
-    order = sort_order if sort_order is not None else (
-        current.sort_order if current else 0
+    order = (
+        sort_order if sort_order is not None else (current.sort_order if current else 0)
     )
-    active = is_active if is_active is not None else (current.is_active if current else True)
+    active = (
+        is_active if is_active is not None else (current.is_active if current else True)
+    )
 
     try:
         with _connection(path) as connection:
@@ -248,8 +255,11 @@ def sync_brands(
     if products is None:
         from src import product_store
 
-        products = [p for p in product_store.load_product_records(path) if p.get("brand")]
-        names = sorted({str(p.get("brand")) for p in products if p.get("brand")})
+        # 这里读的是原始字典记录，不能覆盖 `products` 参数（那是 Product 列表）。
+        records = [
+            p for p in product_store.load_product_records(path) if p.get("brand")
+        ]
+        names = sorted({str(p.get("brand")) for p in records if p.get("brand")})
     else:
         names = sorted({p.brand for p in products if p.brand})
 
@@ -325,9 +335,7 @@ def set_brand_meta(
 
     if row is None:
         if not (display_name or "").strip():
-            raise ProductStoreWriteError(
-                "新增品牌必须填写展示名。", detail=name
-            )
+            raise ProductStoreWriteError("新增品牌必须填写展示名。", detail=name)
         try:
             with _connection(path) as connection:
                 connection.execute(
@@ -338,7 +346,7 @@ def set_brand_meta(
                     """,
                     (
                         name,
-                        display_name.strip(),
+                        (display_name or name).strip(),
                         int(sort_order or 0),
                         1 if (is_active is None or is_active) else 0,
                     ),
@@ -385,9 +393,7 @@ def _hidden_brands(products: list[Product], path: Path | None) -> set[str]:
     }
 
 
-def visible_products(
-    catalog: Catalog, *, path: Path | None = None
-) -> list[Product]:
+def visible_products(catalog: Catalog, *, path: Path | None = None) -> list[Product]:
     """能被搜索与推荐到的商品。
 
     三件事叠加：商品自身在售、所属分类启用、品牌启用。
@@ -428,5 +434,9 @@ def active_brands(
         for product in catalog.products
         if category is None or product.category == category
     ]
-    hidden = {entry.brand_name for entry in brand_entries(products, path=path) if not entry.is_active}
+    hidden = {
+        entry.brand_name
+        for entry in brand_entries(products, path=path)
+        if not entry.is_active
+    }
     return sorted({p.brand for p in products if p.brand and p.brand not in hidden})

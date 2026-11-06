@@ -43,7 +43,7 @@ import html
 NAVY_900 = "#171714"
 NAVY_800 = "#201F1B"
 SIDEBAR_TEXT = "#F4F0E6"
-ON_NAVY = "#D8D2C4"        # 深色侧栏上的次级文字
+ON_NAVY = "#D8D2C4"  # 深色侧栏上的次级文字
 SIDEBAR_MUTED = "#9A9385"  # 深色侧栏上的弱化文字
 
 # 主操作色：深琥珀用于文字/图标，亮琥珀用于按钮与选中态

@@ -48,6 +48,7 @@ _SPEC_RANGES: dict[str, dict[str, tuple[float, float]]] = {
     },
 }
 
+
 def spec_bounds(category: str, key: str) -> tuple[float, float] | None:
     """该参数在评分里的取值区间（得 0 分 ↔ 得 100 分的两端）。
 
@@ -239,9 +240,7 @@ def _score_budget_fit(product: Product, demand: Demand) -> tuple[float | None, s
     return score, reason
 
 
-def _score_need_fit(
-    product: Product, demand: Demand
-) -> tuple[float | None, str]:
+def _score_need_fit(product: Product, demand: Demand) -> tuple[float | None, str]:
     """需求匹配：使用场景重合度 + 核心需求的可量化满足度。"""
     parts: list[tuple[str, float]] = []
 
@@ -280,7 +279,9 @@ def _score_need_fit(
             normalized
             for key in signals
             if product.has_spec(key)
-            and (normalized := _normalize_spec(product.category, key, product.spec(key)))
+            and (
+                normalized := _normalize_spec(product.category, key, product.spec(key))
+            )
             is not None
         ]
         if values:
@@ -294,8 +295,7 @@ def _score_need_fit(
         )
         if handled_elsewhere:
             text += (
-                f"；{'、'.join(handled_elsewhere)}"
-                f"由对应维度单独衡量，未在此重复计分"
+                f"；{'、'.join(handled_elsewhere)}由对应维度单独衡量，未在此重复计分"
             )
         average = sum(need_scores) / len(need_scores) if need_scores else 0.0
         parts.append((text, average))
@@ -357,9 +357,7 @@ def _score_value(
 
     # 同类别内性能排位：算力高于本商品的占比
     peer_caps = [
-        cap
-        for peer in priced
-        if (cap := _score_performance_fit(peer)[0]) is not None
+        cap for peer in priced if (cap := _score_performance_fit(peer)[0]) is not None
     ]
     if len(peer_caps) < 2:
         return None, "同类别可比较性能的商品不足"
@@ -470,15 +468,15 @@ def score_product(
     )
 
 
-def score_all(
-    products: Iterable[Product], demand: Demand
-) -> dict[str, ScoreResult]:
+def score_all(products: Iterable[Product], demand: Demand) -> dict[str, ScoreResult]:
     """批量评分。自动按类别分组以正确计算性价比排位。"""
     by_category: dict[str, list[Product]] = {}
     for product in products:
         by_category.setdefault(product.category, []).append(product)
 
     return {
-        product.id: score_product(product, demand, by_category.get(product.category, []))
+        product.id: score_product(
+            product, demand, by_category.get(product.category, [])
+        )
         for product in products
     }

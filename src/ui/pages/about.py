@@ -6,8 +6,8 @@ import streamlit as st
 
 from src import config
 from src.data_loader import Catalog
-from src.ui import components, state
-from src.ui.theme import bullet_list, facts
+from src.ui import components
+from src.ui.theme import bullet_list
 
 
 def render(catalog: Catalog) -> None:

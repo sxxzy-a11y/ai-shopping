@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import os
 import sys
 from abc import ABC, abstractmethod
@@ -139,7 +138,10 @@ class ApiSource(ProductSource):
     # --- 接入点 1：鉴权 ---------------------------------------------------
     def _headers(self) -> dict[str, str]:
         # TODO(接入方)：按平台要求改成 AppKey/签名/Token 等。
-        return {"Authorization": f"Bearer {self._api_key}", "Accept": "application/json"}
+        return {
+            "Authorization": f"Bearer {self._api_key}",
+            "Accept": "application/json",
+        }
 
     # --- 接入点 2：分页协议 ------------------------------------------------
     def _params(self, page: int) -> dict[str, Any]:
@@ -204,8 +206,18 @@ def write_csv_template(path: Path) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     headers = [
-        "商品ID", "标题", "商品类目", "价格", "品牌", "型号",
-        "参数", "适用场景", "优点", "缺点", "来源链接", "图片",
+        "商品ID",
+        "标题",
+        "商品类目",
+        "价格",
+        "品牌",
+        "型号",
+        "参数",
+        "适用场景",
+        "优点",
+        "缺点",
+        "来源链接",
+        "图片",
     ]
     rows = [
         [
@@ -269,9 +281,7 @@ def _resolve_source(args: argparse.Namespace) -> ProductSource:
             "未配置 ZHIGOU_PLATFORM_BASE_URL。请先在环境变量里设置平台接口地址。"
         )
     if not api_key:
-        raise SystemExit(
-            "未配置 ZHIGOU_PLATFORM_API_KEY。请在环境变量里设置平台密钥。"
-        )
+        raise SystemExit("未配置 ZHIGOU_PLATFORM_API_KEY。请在环境变量里设置平台密钥。")
     return ApiSource(
         base_url=base_url,
         api_key=api_key,
@@ -308,25 +318,35 @@ def main(argv: Iterable[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--source", choices=["csv", "api"], default="csv",
-                        help="数据源类型（默认 csv）")
+    parser.add_argument(
+        "--source", choices=["csv", "api"], default="csv", help="数据源类型（默认 csv）"
+    )
     parser.add_argument("--input", help="CSV 模式下的输入文件路径")
-    parser.add_argument("--out", default=str(DEFAULT_DB_PATH),
-                        help="写入的数据库（默认 storage/zhigou.db）")
-    parser.add_argument("--mode", choices=["merge", "replace"], default="merge",
-                        help="与现有数据的合并方式（默认 merge：同 id 覆盖，新 id 追加）")
-    parser.add_argument("--limit", type=int, default=0,
-                        help="只处理前 N 条（调试用，0 表示不限制）")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="只转换与校验，不写文件")
-    parser.add_argument("--write-template", metavar="CSV_PATH",
-                        help="生成 CSV 列名模板后退出")
-    parser.add_argument("--source-label", default="",
-                        help="数据来源标注（覆盖环境变量与默认值）")
-    parser.add_argument("--api-path", default="/products",
-                        help="API 模式的商品列表路径")
-    parser.add_argument("--page-size", type=int, default=100,
-                        help="API 模式每页条数")
+    parser.add_argument(
+        "--out",
+        default=str(DEFAULT_DB_PATH),
+        help="写入的数据库（默认 storage/zhigou.db）",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["merge", "replace"],
+        default="merge",
+        help="与现有数据的合并方式（默认 merge：同 id 覆盖，新 id 追加）",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=0, help="只处理前 N 条（调试用，0 表示不限制）"
+    )
+    parser.add_argument("--dry-run", action="store_true", help="只转换与校验，不写文件")
+    parser.add_argument(
+        "--write-template", metavar="CSV_PATH", help="生成 CSV 列名模板后退出"
+    )
+    parser.add_argument(
+        "--source-label", default="", help="数据来源标注（覆盖环境变量与默认值）"
+    )
+    parser.add_argument(
+        "--api-path", default="/products", help="API 模式的商品列表路径"
+    )
+    parser.add_argument("--page-size", type=int, default=100, help="API 模式每页条数")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
 
@@ -380,13 +400,17 @@ def main(argv: Iterable[str] | None = None) -> int:
     else:
         product_store.save_products(merged, path=out_path)
     product_store.save_dataset_meta(dataset_meta, path=out_path)
-    print(f"\n已写入 {out_path}：共 {len(merged)} 条商品"
-          f"（本次转换 {len(products)} 条，模式 {args.mode}）。")
+    print(
+        f"\n已写入 {out_path}：共 {len(merged)} 条商品"
+        f"（本次转换 {len(products)} 条，模式 {args.mode}）。"
+    )
 
     # 最后用应用自己的加载器做一次冒烟验证
     catalog = data_loader.load_catalog(out_path)
-    print(f"加载器验证通过：{len(catalog)} 条可用商品，"
-          f"覆盖类别 {'、'.join(config.category_label(c) for c in catalog.present_categories())}")
+    print(
+        f"加载器验证通过：{len(catalog)} 条可用商品，"
+        f"覆盖类别 {'、'.join(config.category_label(c) for c in catalog.present_categories())}"
+    )
     for issue in catalog.issues:
         print(f"  提示：{issue}")
     return 0

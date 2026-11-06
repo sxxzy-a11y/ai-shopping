@@ -29,14 +29,27 @@ MISSING_TEXT = "信息缺失"
 #: 表外的类别由调用方落到「按商品自身有的参数排」的兜底分支。
 _PARAM_ORDER: dict[str, list[str]] = {
     "laptop": [
-        "cpu", "cpu_tier", "ram_gb", "storage_gb",
-        "screen_size", "weight_kg", "battery_h", "has_dedicated_gpu",
+        "cpu",
+        "cpu_tier",
+        "ram_gb",
+        "storage_gb",
+        "screen_size",
+        "weight_kg",
+        "battery_h",
+        "has_dedicated_gpu",
     ],
     "phone": [
-        "chip", "chip_tier", "ram_gb", "storage_gb",
-        "screen_size", "weight_g", "battery_mah", "camera_tier",
+        "chip",
+        "chip_tier",
+        "ram_gb",
+        "storage_gb",
+        "screen_size",
+        "weight_g",
+        "battery_mah",
+        "camera_tier",
     ],
 }
+
 
 def param_keys(category: str) -> tuple[str, ...]:
     """该类别既有的参数键。
@@ -134,7 +147,11 @@ def format_param(key: str, value) -> str:
         yes, no = _PARAM_BOOL[key]
         return yes if value else no
 
-    if key in _PARAM_TIER and isinstance(value, (int, float)) and not isinstance(value, bool):
+    if (
+        key in _PARAM_TIER
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+    ):
         return f"{value:g}/{_PARAM_TIER[key]}"
 
     unit = _PARAM_UNITS.get(key, "")
@@ -234,7 +251,9 @@ def compare(
     )
 
     # --- 品牌 ---
-    add_row("品牌", [p.brand or MISSING_TEXT for p in items], [not p.brand for p in items])
+    add_row(
+        "品牌", [p.brand or MISSING_TEXT for p in items], [not p.brand for p in items]
+    )
 
     # --- 核心参数 ---
     for key in _ordered_param_keys(items):

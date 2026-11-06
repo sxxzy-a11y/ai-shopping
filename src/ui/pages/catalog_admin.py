@@ -101,9 +101,7 @@ def _render_overview(records: list[dict]) -> None:
     active = sum(1 for r in records if r.get("is_active", True))
     inactive = total - active
     unverified = sum(
-        1
-        for r in records
-        if r.get("data_status") != config.STATUS_VERIFIED
+        1 for r in records if r.get("data_status") != config.STATUS_VERIFIED
     )
     components.stat_row(
         [
@@ -121,7 +119,9 @@ def _render_filters(records: list[dict]) -> dict:
     category_label = st.selectbox(
         "分类",
         options=[_ALL, *categories],
-        format_func=lambda value: _ALL if value == _ALL else config.category_label(value),
+        format_func=lambda value: _ALL
+        if value == _ALL
+        else config.category_label(value),
         key=_CATEGORY_KEY,
     )
 
@@ -221,7 +221,9 @@ def _render_new_product_form(viewer) -> None:
                 "参考价（元）", min_value=0.0, step=100.0, key=f"{_NEW_PREFIX}price"
             )
             image_url = st.text_input(
-                "图片地址", key=f"{_NEW_PREFIX}image", help="http:// 或 https:// 开头，可留空"
+                "图片地址",
+                key=f"{_NEW_PREFIX}image",
+                help="http:// 或 https:// 开头，可留空",
             )
             source_url = st.text_input("来源链接", key=f"{_NEW_PREFIX}source")
 
@@ -231,7 +233,9 @@ def _render_new_product_form(viewer) -> None:
             help="一行一个「参数名: 取值」。参数名必须是该分类既有的参数。",
             placeholder="cpu_tier: 3\nram_gb: 16\nweight_kg: 1.4",
         )
-        use_cases = st.text_area("适用场景", key=f"{_NEW_PREFIX}use_cases", help="一行一个")
+        use_cases = st.text_area(
+            "适用场景", key=f"{_NEW_PREFIX}use_cases", help="一行一个"
+        )
         pros = st.text_area("亮点", key=f"{_NEW_PREFIX}pros", help="一行一个")
         cons = st.text_area("不足", key=f"{_NEW_PREFIX}cons", help="一行一个")
 
@@ -284,7 +288,10 @@ def _render_product_row(viewer, record) -> None:
             components.facts(
                 [
                     ("商品 ID", product_id),
-                    ("品牌 / 型号", f"{record.get('brand') or '未填'} · {record.get('model') or '未填'}"),
+                    (
+                        "品牌 / 型号",
+                        f"{record.get('brand') or '未填'} · {record.get('model') or '未填'}",
+                    ),
                     ("参考价", price_text),
                     ("录入者", entered),
                     ("来源说明", record.get("data_source") or "（无）"),
@@ -306,13 +313,18 @@ def _render_product_row(viewer, record) -> None:
 
 def _render_edit_form(viewer, record) -> None:
     product_id = str(record.get("id"))
-    category = str(record.get("category"))
 
     with st.form(f"zg_cat_edit_{product_id}"):
         col_a, col_b = st.columns(2)
         with col_a:
-            name = st.text_input("名称", value=record.get("name") or "", key=f"zg_cat_name_{product_id}")
-            brand = st.text_input("品牌", value=record.get("brand") or "", key=f"zg_cat_brand_{product_id}")
+            name = st.text_input(
+                "名称", value=record.get("name") or "", key=f"zg_cat_name_{product_id}"
+            )
+            brand = st.text_input(
+                "品牌",
+                value=record.get("brand") or "",
+                key=f"zg_cat_brand_{product_id}",
+            )
             price = st.number_input(
                 "参考价（元）",
                 value=float(record.get("price") or 0.0),
@@ -320,12 +332,20 @@ def _render_edit_form(viewer, record) -> None:
                 key=f"zg_cat_price_{product_id}",
             )
         with col_b:
-            model = st.text_input("型号", value=record.get("model") or "", key=f"zg_cat_model_{product_id}")
+            model = st.text_input(
+                "型号",
+                value=record.get("model") or "",
+                key=f"zg_cat_model_{product_id}",
+            )
             image_url = st.text_input(
-                "图片地址", value=record.get("image_url") or "", key=f"zg_cat_image_{product_id}"
+                "图片地址",
+                value=record.get("image_url") or "",
+                key=f"zg_cat_image_{product_id}",
             )
             source_url = st.text_input(
-                "来源链接", value=record.get("source_url") or "", key=f"zg_cat_source_{product_id}"
+                "来源链接",
+                value=record.get("source_url") or "",
+                key=f"zg_cat_source_{product_id}",
             )
 
         components.caption(
@@ -388,15 +408,24 @@ def _render_categories(viewer) -> None:
                     help=f"留空或与默认一致则回到默认名「{config.CATEGORY_LABELS[entry.key]}」",
                 )
                 order = st.number_input(
-                    "排序", value=int(entry.sort_order), step=1, key=f"zg_cat_order_{entry.key}"
+                    "排序",
+                    value=int(entry.sort_order),
+                    step=1,
+                    key=f"zg_cat_order_{entry.key}",
                 )
-                active = st.checkbox("启用", value=entry.is_active, key=f"zg_cat_enabled_{entry.key}")
+                active = st.checkbox(
+                    "启用", value=entry.is_active, key=f"zg_cat_enabled_{entry.key}"
+                )
                 # 标签带上前缀而不是统一叫「保存」：一页里三个分块的保存按钮
                 # 都叫「保存」时，界面测试按标签取只能拿到第一个。
                 saved = st.form_submit_button("保存分类")
 
             if saved:
-                display = "" if label.strip() == config.CATEGORY_LABELS[entry.key] else label.strip()
+                display = (
+                    ""
+                    if label.strip() == config.CATEGORY_LABELS[entry.key]
+                    else label.strip()
+                )
                 _apply(
                     lambda: catalog_meta.set_category_meta(
                         viewer,
@@ -437,18 +466,31 @@ def _render_brands(viewer, catalog) -> None:
 
     for entry in entries:
         state_label = "启用" if entry.is_active else "**已停用**"
-        with st.expander(f"{entry.display_name} · {entry.product_count} 件 · {state_label}"):
+        with st.expander(
+            f"{entry.display_name} · {entry.product_count} 件 · {state_label}"
+        ):
             if entry.product_count == 0:
-                components.caption("字典里有这个品牌，但商品库里没有它的商品——不会被解析器认识。")
+                components.caption(
+                    "字典里有这个品牌，但商品库里没有它的商品——不会被解析器认识。"
+                )
 
             with st.form(f"zg_brand_meta_{entry.brand_name}"):
                 display = st.text_input(
-                    "展示名", value=entry.display_name, key=f"zg_brand_name_{entry.brand_name}"
+                    "展示名",
+                    value=entry.display_name,
+                    key=f"zg_brand_name_{entry.brand_name}",
                 )
                 order = st.number_input(
-                    "排序", value=int(entry.sort_order), step=1, key=f"zg_brand_order_{entry.brand_name}"
+                    "排序",
+                    value=int(entry.sort_order),
+                    step=1,
+                    key=f"zg_brand_order_{entry.brand_name}",
                 )
-                active = st.checkbox("启用", value=entry.is_active, key=f"zg_brand_enabled_{entry.brand_name}")
+                active = st.checkbox(
+                    "启用",
+                    value=entry.is_active,
+                    key=f"zg_brand_enabled_{entry.brand_name}",
+                )
                 saved = st.form_submit_button("保存品牌")
 
             if saved:
@@ -462,6 +504,7 @@ def _render_brands(viewer, catalog) -> None:
                     ),
                     f"已保存品牌「{entry.display_name}」的元数据。",
                 )
+
 
 # --------------------------------------------------------------------------
 # 详情与参数
@@ -487,9 +530,13 @@ def _render_product_details(viewer) -> None:
         "也会被合成进知识库参与检索——保存后到「知识库管理」重新生成向量即可生效。"
     )
 
-    query = st.text_input(
-        "搜索商品", key=f"{_DETAIL_PREFIX}q", placeholder="名称 / 型号 / ID"
-    ).strip().lower()
+    query = (
+        st.text_input(
+            "搜索商品", key=f"{_DETAIL_PREFIX}q", placeholder="名称 / 型号 / ID"
+        )
+        .strip()
+        .lower()
+    )
     scoped = [
         record
         for record in records
@@ -517,13 +564,23 @@ def _render_product_details(viewer) -> None:
         components.facts(
             [
                 ("商品 ID", product_id),
-                ("品牌 / 型号", f"{record.get('brand') or '未填'} · {record.get('model') or '未填'}"),
+                (
+                    "品牌 / 型号",
+                    f"{record.get('brand') or '未填'} · {record.get('model') or '未填'}",
+                ),
                 ("分类", config.category_label(category)),
                 (
                     "参考价",
-                    "未知" if record.get("price") is None else f"¥{record.get('price')}",
+                    "未知"
+                    if record.get("price") is None
+                    else f"¥{record.get('price')}",
                 ),
-                ("核验状态", "已核验" if record.get("data_status") == config.STATUS_VERIFIED else "未核验"),
+                (
+                    "核验状态",
+                    "已核验"
+                    if record.get("data_status") == config.STATUS_VERIFIED
+                    else "未核验",
+                ),
             ]
         ),
         unsafe_allow_html=True,
@@ -583,6 +640,7 @@ def _render_product_details(viewer) -> None:
         )
     st.rerun()
 
+
 # --------------------------------------------------------------------------
 # 新增分类 / 品牌
 # --------------------------------------------------------------------------
@@ -600,7 +658,9 @@ def _render_new_category_form(viewer) -> None:
                 "分类键", key="zg_cat_newcat_key", help="小写字母开头，如 tablet"
             )
             label = st.text_input("展示名", key="zg_cat_newcat_label")
-            order = st.number_input("排序", key="zg_cat_newcat_order", value=100, step=1)
+            order = st.number_input(
+                "排序", key="zg_cat_newcat_order", value=100, step=1
+            )
             active = st.checkbox("启用", value=True, key="zg_cat_newcat_active")
             submitted = st.form_submit_button("新增分类", type="primary")
 
@@ -632,7 +692,9 @@ def _render_new_brand_form(viewer) -> None:
         with st.form("zg_cat_new_brand"):
             name = st.text_input("品牌名", key="zg_cat_newbrand_name")
             display = st.text_input("展示名", key="zg_cat_newbrand_display")
-            order = st.number_input("排序", key="zg_cat_newbrand_order", value=100, step=1)
+            order = st.number_input(
+                "排序", key="zg_cat_newbrand_order", value=100, step=1
+            )
             active = st.checkbox("启用", value=True, key="zg_cat_newbrand_active")
             submitted = st.form_submit_button("新增品牌", type="primary")
 
@@ -661,11 +723,10 @@ def _sync_knowledge_vectors() -> str:
     if not service.configured:
         return "关键词检索已同步；向量服务未配置，语义检索不受影响。"
     try:
-        slices = chunking.split_corpus(state.get_knowledge_index().documents)
+        slices = chunking.split_corpus(list(state.get_knowledge_index().documents))
         result = state.get_vector_store().build_index(slices, service=service)
     except Exception:  # noqa: BLE001 —— 同步失败不该阻断保存结果
         return "知识向量未同步，请到「知识库管理」重新生成。"
     if result.embedded:
         return f"知识向量已同步更新（{result.embedded} 个切片）。"
     return "知识内容无变化，无需更新向量。"
-

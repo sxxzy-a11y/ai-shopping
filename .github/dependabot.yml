@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  # 运行时依赖已精确锁定（==），由 Dependabot 提 PR 来升级，
+  # 避免「上游发版 → 构建不可复现」的漂移。
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - dependencies
+    # dev 工具与运行时依赖在同一文件，统一由这里管；CI 会验证能否装上。
+    groups:
+      dev-tools:
+        patterns:
+          - "ruff"
+          - "mypy"
+          - "pytest*"
+          - "pip-audit"
+
+  # CI 里用的 actions 也该跟进，否则会用到被弃用的版本。
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies

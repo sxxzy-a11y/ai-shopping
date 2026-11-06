@@ -53,6 +53,18 @@ def isolated_local_state(tmp_path, monkeypatch):
     monkeypatch.delenv(config.ADMIN_PASSWORD_ENV, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def fast_retry_backoff(monkeypatch):
+    """重试退避在测试里不真睡。
+
+    被测的是「有没有重试」，不是「等了几秒」；真睡会让每个失败用例多花
+    一秒多，整套测试明显变慢。
+    """
+    from src import http_client
+
+    monkeypatch.setattr(http_client, "_sleep", lambda _seconds: None)
+
+
 @pytest.fixture(scope="session")
 def catalog() -> Catalog:
     """真实数据集 data/products.json，整个测试会话只加载一次。"""

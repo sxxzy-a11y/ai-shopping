@@ -73,7 +73,9 @@ def test_deleting_a_product_cascades_to_its_prices(db: Path):
     with database.connect(db) as connection:
         connection.execute("DELETE FROM products WHERE product_id = 'A1'")
         connection.commit()
-        remaining = connection.execute("SELECT COUNT(*) n FROM product_prices").fetchone()
+        remaining = connection.execute(
+            "SELECT COUNT(*) n FROM product_prices"
+        ).fetchone()
     assert remaining["n"] == 0
 
 
@@ -128,7 +130,9 @@ def test_broken_json_column_degrades_instead_of_raising(db: Path):
     """JSON 列坏了只降级该字段——与文件时代「逐条容错」的立场一致。"""
     product_store.save_products([_product("A1")], path=db)
     with database.connect(db) as connection:
-        connection.execute("UPDATE products SET specs = '不是 JSON' WHERE product_id = 'A1'")
+        connection.execute(
+            "UPDATE products SET specs = '不是 JSON' WHERE product_id = 'A1'"
+        )
         connection.commit()
 
     record = product_store.load_product_records(db)[0]
@@ -181,7 +185,10 @@ def test_changing_the_price_keeps_the_old_record(db: Path):
             "SELECT price, is_current FROM product_prices ORDER BY id"
         ).fetchall()
 
-    assert [(row["price"], row["is_current"]) for row in rows] == [(100.0, 0), (120.0, 1)]
+    assert [(row["price"], row["is_current"]) for row in rows] == [
+        (100.0, 0),
+        (120.0, 1),
+    ]
     assert product_store.current_price("A1", path=db).price == 120
 
 
@@ -225,7 +232,9 @@ def test_dataset_meta_round_trip(db: Path):
 
 def test_dataset_meta_survives_without_the_seed_file(db: Path):
     """元信息存在库里，**种子文件删掉之后免责声明不能跟着消失**。"""
-    product_store.save_dataset_meta({"disclaimer": "演示数据，不得作为购买依据"}, path=db)
+    product_store.save_dataset_meta(
+        {"disclaimer": "演示数据，不得作为购买依据"}, path=db
+    )
     product_store.save_products([_product("A1")], path=db)
 
     # 模拟种子文件已不在——元信息仍应从库里读得到

@@ -81,7 +81,9 @@ def _paragraphs(body: str) -> list[str]:
     return [p.strip() for p in _PARAGRAPH_SPLIT.split(body) if p.strip()]
 
 
-def extract_excerpt(body: str, query: str, *, max_chars: int = EXCERPT_MAX_CHARS) -> str:
+def extract_excerpt(
+    body: str, query: str, *, max_chars: int = EXCERPT_MAX_CHARS
+) -> str:
     """从正文里抽出与查询最相关的一段。
 
     整篇资料上千字，全展示等于没展示。做法是把正文按空行切段，

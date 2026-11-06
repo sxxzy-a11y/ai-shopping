@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from src import config, data_loader
-from src.knowledge import corpus, search
+from src.knowledge import corpus
 from src.knowledge.corpus import Document
 from src.knowledge.index import BM25Index
 from src.knowledge.search import (
@@ -98,7 +98,9 @@ def test_passage_type_labels_are_chinese(index):
 def test_out_of_corpus_question_returns_nothing(index):
     """语料外的问题必须**明确判定为检索不到**，而不是硬返回弱相关结果。"""
     for question in ["今天天气怎么样", "周杰伦的新歌好听吗", "怎么修自行车"]:
-        assert search_knowledge(question, index=index) == [], f"「{question}」不该有结果"
+        assert search_knowledge(question, index=index) == [], (
+            f"「{question}」不该有结果"
+        )
 
 
 def test_threshold_changes_the_verdict(index):
@@ -115,7 +117,9 @@ def test_blank_query_returns_nothing(index):
 
 
 def test_limit_is_respected(index):
-    passages = search_knowledge("笔记本 手机 拍照 续航 重量 内存 芯片", index=index, limit=2)
+    passages = search_knowledge(
+        "笔记本 手机 拍照 续航 重量 内存 芯片", index=index, limit=2
+    )
     assert len(passages) <= 2
 
 
@@ -133,14 +137,18 @@ def test_relative_cut_drops_hits_an_order_of_magnitude_below_the_top(index):
     """与第一名不同量级的弱命中被丢弃——它们过了绝对阈值，但对作答只有稀释。"""
     # 实测分布：19.20 / 1.26 / 1.09 —— 只有第一名在自己量级里
     passages = search_knowledge("系统匹配评分是怎么算出来的", index=index, limit=5)
-    assert len(passages) == 1, f"应当只剩最高分那一条，实际 {[round(p.score, 2) for p in passages]}"
+    assert len(passages) == 1, (
+        f"应当只剩最高分那一条，实际 {[round(p.score, 2) for p in passages]}"
+    )
 
 
 def test_relative_cut_keeps_a_close_second_hit(index):
     """并列相关的第二条要保住——截断不能把「同一量级」的资料误伤。"""
     # 实测分布：8.57 / 4.13 / 2.41 —— 第二条在同量级，第三条不是
     passages = search_knowledge("处理器档位是什么意思", index=index, limit=5)
-    assert len(passages) == 2, f"应当保留前两条，实际 {[round(p.score, 2) for p in passages]}"
+    assert len(passages) == 2, (
+        f"应当保留前两条，实际 {[round(p.score, 2) for p in passages]}"
+    )
 
 
 def test_excerpt_covers_the_key_numbers_of_the_matched_section(index):
@@ -231,8 +239,7 @@ def test_positive_cases_hit_the_right_kind_of_document(
 
     top = passages[0]
     assert top.type_label in expected_types, (
-        f"「{query}」排第一的是 {top.type_label}「{top.title}」，"
-        f"期待 {expected_types}"
+        f"「{query}」排第一的是 {top.type_label}「{top.title}」，期待 {expected_types}"
     )
     if title_fragment:
         assert title_fragment in top.title, (
@@ -263,7 +270,9 @@ def test_design_document_queries_still_hold(index):
     assert hits[0].score > hits[1].score
 
     # 通用选购问题命中对应品类的指南
-    assert "笔记本电脑" in search_knowledge("笔记本多重适合带出门", index=index)[0].title
+    assert (
+        "笔记本电脑" in search_knowledge("笔记本多重适合带出门", index=index)[0].title
+    )
 
     # 语料外问题无任何结果
     assert search_knowledge("今天天气怎么样", index=index) == []
@@ -305,8 +314,16 @@ def test_absolute_scores_depend_on_corpus_size(index):
 
     body = "折叠屏手机的选购建议，注意转轴寿命。"
     alone = BM25Index(
-        [Document(doc_id="x", title="T", body=body, doc_type="service",
-                  source="s", updated_at="t")]
+        [
+            Document(
+                doc_id="x",
+                title="T",
+                body=body,
+                doc_type="service",
+                source="s",
+                updated_at="t",
+            )
+        ]
     )
     small_score = alone.search("折叠屏手机转轴寿命")[0].score
 
@@ -324,7 +341,12 @@ def test_empty_corpus_yields_no_results():
 
 def test_document_with_only_title_still_does_not_crash():
     doc = Document(
-        doc_id="x", title="标题", body="", doc_type="service", source="s", updated_at="t"
+        doc_id="x",
+        title="标题",
+        body="",
+        doc_type="service",
+        source="s",
+        updated_at="t",
     )
     assert search_knowledge("标题", index=BM25Index([doc])) is not None
 

@@ -106,9 +106,7 @@ def test_regular_user_cannot_create_a_product(seeded_products):
 
 def test_tier_out_of_range_is_rejected(seeded_products):
     with pytest.raises(InvalidSpec):
-        catalog_admin.create_product(
-            ADMIN, _new_product(specs={"cpu_tier": 9})
-        )
+        catalog_admin.create_product(ADMIN, _new_product(specs={"cpu_tier": 9}))
 
 
 def test_unknown_spec_key_is_rejected(seeded_products):
@@ -152,7 +150,9 @@ def test_contradictory_data_is_rejected(seeded_products):
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("bad", ["javascript:alert(1)", "/local/path.png", "example.com/a.jpg"])
+@pytest.mark.parametrize(
+    "bad", ["javascript:alert(1)", "/local/path.png", "example.com/a.jpg"]
+)
 def test_image_url_must_be_http(bad):
     with pytest.raises(InvalidImageUrl):
         catalog_admin.validate_image_url(bad)

@@ -69,9 +69,7 @@ _DEMAND_CATEGORIES = frozenset(
 )
 
 #: 知识检索类用例的类别。
-_KNOWLEDGE_CATEGORIES = frozenset(
-    {"知识检索", "语料外反例", "幻觉场景4_知识库无资料"}
-)
+_KNOWLEDGE_CATEGORIES = frozenset({"知识检索", "语料外反例", "幻觉场景4_知识库无资料"})
 
 #: 参与检索质量指标的具体检查项名称。
 _KNOWLEDGE_CHECK_NAMES = frozenset(
@@ -154,9 +152,7 @@ def summarise(outcomes: list[Outcome]) -> list[Metric]:
         for check in outcome.checks
     ]
     understand = [
-        check
-        for check in demand_checks
-        if check[0].startswith(("类别=", "预算="))
+        check for check in demand_checks if check[0].startswith(("类别=", "预算="))
     ]
     budget = [check for check in demand_checks if check[0] == "全部满足预算"]
     knowledge = [
@@ -325,9 +321,7 @@ def render_markdown(report: EvaluationReport) -> str:
         "|---|---|---|",
     ]
     for metric in report.metrics:
-        lines.append(
-            f"| **{metric.label}** | {metric.definition} | {metric.display} |"
-        )
+        lines.append(f"| **{metric.label}** | {metric.definition} | {metric.display} |")
 
     lines += [
         "",

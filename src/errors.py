@@ -21,7 +21,9 @@ class ZhigouError(Exception):
 
     default_message: str = "处理请求时发生问题，请稍后重试。"
 
-    def __init__(self, message: str | None = None, *, detail: str | None = None) -> None:
+    def __init__(
+        self, message: str | None = None, *, detail: str | None = None
+    ) -> None:
         self.detail = detail
         super().__init__(message or self.default_message)
 
@@ -109,7 +111,9 @@ class UpstreamResponseError(ZhigouError):
 
 
 class HistoryReadError(ZhigouError):
-    default_message = "历史记录读取失败，可能是本地数据库文件损坏。当前仍可进行新的分析。"
+    default_message = (
+        "历史记录读取失败，可能是本地数据库文件损坏。当前仍可进行新的分析。"
+    )
 
 
 class HistoryWriteError(ZhigouError):

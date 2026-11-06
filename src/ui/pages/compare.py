@@ -77,7 +77,9 @@ def _request_fill_from_analysis() -> None:
     if not items:
         return
     leading_category = items[0].product.category
-    same_category = [item for item in items if item.product.category == leading_category]
+    same_category = [
+        item for item in items if item.product.category == leading_category
+    ]
     picks = same_category[: config.MAX_COMPARE_COUNT]
     st.session_state[state.KEY_COMPARE_PREFILL] = {
         "category": leading_category,

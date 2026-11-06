@@ -61,7 +61,10 @@ def test_empty_body_produces_no_slices():
 
 
 def test_corpus_order_is_preserved():
-    docs = [_doc("## A\n\n内容。", title="文档一"), _doc("## B\n\n内容。", title="文档二")]
+    docs = [
+        _doc("## A\n\n内容。", title="文档一"),
+        _doc("## B\n\n内容。", title="文档二"),
+    ]
     slices = split_corpus(docs)
 
     assert [s.title for s in slices] == ["文档一", "文档二"]

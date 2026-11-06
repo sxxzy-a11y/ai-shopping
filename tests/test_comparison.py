@@ -43,7 +43,9 @@ def _row(table, label):
     for row in table.rows:
         if row.label == label:
             return row
-    raise AssertionError(f"比较表里没有「{label}」行，现有：{[r.label for r in table.rows]}")
+    raise AssertionError(
+        f"比较表里没有「{label}」行，现有：{[r.label for r in table.rows]}"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -126,8 +128,14 @@ def test_more_than_the_cap_is_rejected(catalog, laptop_demand):
 def test_exactly_the_minimum_and_maximum_are_accepted(catalog, laptop_demand):
     laptops = catalog.by_category("laptop")
 
-    assert len(compare(laptops[: config.MIN_COMPARE_COUNT], laptop_demand)) == config.MIN_COMPARE_COUNT
-    assert len(compare(laptops[: config.MAX_COMPARE_COUNT], laptop_demand)) == config.MAX_COMPARE_COUNT
+    assert (
+        len(compare(laptops[: config.MIN_COMPARE_COUNT], laptop_demand))
+        == config.MIN_COMPARE_COUNT
+    )
+    assert (
+        len(compare(laptops[: config.MAX_COMPARE_COUNT], laptop_demand))
+        == config.MAX_COMPARE_COUNT
+    )
 
 
 def test_duplicate_products_are_rejected(catalog, laptop_demand):

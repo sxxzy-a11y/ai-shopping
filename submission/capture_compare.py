@@ -13,7 +13,9 @@ DEMO_PASSWORD = os.environ.get("ZHIGOU_DEMO_PASSWORD", "12345678")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, channel="msedge")
-    page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
+    page = browser.new_page(
+        viewport={"width": 1440, "height": 1000}, device_scale_factor=1
+    )
     page.goto("http://localhost:8501", wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(3000)
     page.locator("input").nth(0).fill(DEMO_USER)

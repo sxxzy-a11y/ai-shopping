@@ -55,11 +55,11 @@ class TestHoverStyles:
     @pytest.mark.parametrize(
         "needle",
         [
-            'st-key-zg-hover-',
-            'button::before',
-            'button::after',
-            'button:hover::before',
-            'button:hover::after',
+            "st-key-zg-hover-",
+            "button::before",
+            "button::after",
+            "button:hover::before",
+            "button:hover::after",
         ],
     )
     def test_rule_present(self, needle):

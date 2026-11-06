@@ -46,10 +46,11 @@ _HEADERS = {
 #: 常见图片格式的文件头。有些图床把 content-type 写成 application/octet-stream，
 #: 只看响应头会把这些**能正常显示的图**判成坏链——误报比漏报更费时间。
 _MAGIC_NUMBERS: tuple[bytes, ...] = (
-    b"\xff\xd8\xff",           # JPEG
-    b"\x89PNG\r\n\x1a\n",      # PNG
-    b"GIF87a", b"GIF89a",      # GIF
-    b"BM",                     # BMP
+    b"\xff\xd8\xff",  # JPEG
+    b"\x89PNG\r\n\x1a\n",  # PNG
+    b"GIF87a",
+    b"GIF89a",  # GIF
+    b"BM",  # BMP
 )
 
 
@@ -78,7 +79,11 @@ def _probe(url: str, *, proxy: str | None = None) -> tuple[int, str, bytes]:
                     head += chunk
                     if len(head) >= 512:
                         break
-                return response.status_code, response.headers.get("content-type", ""), head
+                return (
+                    response.status_code,
+                    response.headers.get("content-type", ""),
+                    head,
+                )
     except httpx.HTTPError as exc:
         return 0, f"{type(exc).__name__}", b""
 
@@ -116,9 +121,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="体检商品数据的外链可用性")
     parser.add_argument("--db", help="商品库路径，默认取项目配置")
     parser.add_argument("--seed", help="改为体检种子 JSON 文件")
-    parser.add_argument("--proxy", help="直连失败后重试用的代理，如 socks5://127.0.0.1:10808")
-    parser.add_argument("--only", choices=("image_url", "source_url"),
-                        help="只体检其中一类链接")
+    parser.add_argument(
+        "--proxy", help="直连失败后重试用的代理，如 socks5://127.0.0.1:10808"
+    )
+    parser.add_argument(
+        "--only", choices=("image_url", "source_url"), help="只体检其中一类链接"
+    )
     args = parser.parse_args(argv)
 
     rows = _load_rows(args)
@@ -153,7 +161,9 @@ def main(argv: list[str] | None = None) -> int:
         by_field: dict[str, int] = {}
         for _, field in missing:
             by_field[field] = by_field.get(field, 0) + 1
-        detail = "、".join(f"{field} {count} 条" for field, count in sorted(by_field.items()))
+        detail = "、".join(
+            f"{field} {count} 条" for field, count in sorted(by_field.items())
+        )
         print(f"未填写的链接：{detail}（留空是允许的，不计为失败）")
 
     if not broken:

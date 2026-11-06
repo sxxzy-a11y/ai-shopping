@@ -94,7 +94,9 @@ def _point_seed_at(monkeypatch, tmp_path: Path, payload) -> Path:
     """把种子文件指到临时目录。配合 conftest 给的临时空库用。"""
     seed = tmp_path / "products.json"
     seed.write_text(
-        payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False),
+        payload
+        if isinstance(payload, str)
+        else json.dumps(payload, ensure_ascii=False),
         encoding="utf-8",
     )
     monkeypatch.setenv("ZHIGOU_PRODUCTS_PATH", str(seed))

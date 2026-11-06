@@ -17,7 +17,9 @@ import pytest
 
 from src import data_loader
 
-CASES_PATH = Path(__file__).resolve().parent.parent / "data" / "evaluation" / "cases.json"
+CASES_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "evaluation" / "cases.json"
+)
 
 #: 必须覆盖的场景类别。少了任何一个，评测的覆盖面就有洞。
 REQUIRED_CATEGORIES = {
@@ -161,7 +163,9 @@ def test_must_include_and_exclude_do_not_overlap(cases):
         demand = case["expected"].get("demand", {})
         include = set(demand.get("must_include") or [])
         exclude = set(demand.get("must_exclude") or [])
-        assert not (include & exclude), f"{case['id']} 的必含与必排有重叠：{include & exclude}"
+        assert not (include & exclude), (
+            f"{case['id']} 的必含与必排有重叠：{include & exclude}"
+        )
 
 
 # --------------------------------------------------------------------------
@@ -183,7 +187,9 @@ def test_contradictory_expectations_are_not_both_set(cases, left, right):
         case["id"]
         for case in cases
         if (case["expected"].get("demand", {}).get(left) or case["expected"].get(left))
-        and (case["expected"].get("demand", {}).get(right) or case["expected"].get(right))
+        and (
+            case["expected"].get("demand", {}).get(right) or case["expected"].get(right)
+        )
     ]
     assert problems == [], f"这些用例同时设置了 {left} 与 {right}：{problems}"
 
@@ -193,7 +199,9 @@ def test_knowledge_expectations_declare_find_or_not(cases):
         knowledge = case["expected"].get("knowledge")
         if knowledge is None:
             continue
-        assert "should_find" in knowledge, f"{case['id']} 的知识预期没说要找得到还是找不到"
+        assert "should_find" in knowledge, (
+            f"{case['id']} 的知识预期没说要找得到还是找不到"
+        )
         if knowledge["should_find"]:
             assert knowledge.get("expected_type"), (
                 f"{case['id']} 要求检索命中，但没说命中的应当是哪一类文档——"
@@ -206,7 +214,9 @@ def test_compare_expectations_declare_outcome(cases):
         compare = case["expected"].get("compare")
         if compare is None:
             continue
-        assert "should_succeed" in compare, f"{case['id']} 的比较预期没说该成功还是该失败"
+        assert "should_succeed" in compare, (
+            f"{case['id']} 的比较预期没说该成功还是该失败"
+        )
         assert len(compare.get("ids", [])) >= 1, f"{case['id']} 的比较预期没有给 ID"
 
 

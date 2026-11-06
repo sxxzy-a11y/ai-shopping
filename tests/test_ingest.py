@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -73,7 +72,9 @@ def test_normalize_category(raw, expected):
     assert ingest.normalize_category(raw) == expected
 
 
-@pytest.mark.parametrize("raw", ["家用电器", "冰箱", "母婴用品", "家具", "键盘", "耳机"])
+@pytest.mark.parametrize(
+    "raw", ["家用电器", "冰箱", "母婴用品", "家具", "键盘", "耳机"]
+)
 def test_category_map_drops_names_the_catalog_no_longer_covers(raw):
     """随品类收缩退出的类目名不再有映射。
 
@@ -170,8 +171,13 @@ def test_normalize_record_maps_platform_fields_and_stamps_source():
 
 
 def test_normalize_record_accepts_semicolon_specs_text():
-    raw = {"id": "P1", "name": "x", "category": "手机", "price": 2000,
-           "参数": "拍照档位: 三星; 电池容量: 5000; 未知键: 52"}
+    raw = {
+        "id": "P1",
+        "name": "x",
+        "category": "手机",
+        "price": 2000,
+        "参数": "拍照档位: 三星; 电池容量: 5000; 未知键: 52",
+    }
 
     record, _ = ingest.normalize_record(raw, source_label="测试")
 
@@ -294,10 +300,14 @@ def test_csv_pipeline_end_to_end(tmp_path: Path):
     out_path = tmp_path / "products.db"
     exit_code = fetch_products.main(
         [
-            "--source", "csv",
-            "--input", str(csv_path),
-            "--out", str(out_path),
-            "--source-label", "来自测试平台",
+            "--source",
+            "csv",
+            "--input",
+            str(csv_path),
+            "--out",
+            str(out_path),
+            "--source-label",
+            "来自测试平台",
         ]
     )
 
@@ -323,8 +333,15 @@ def test_csv_pipeline_dry_run_writes_nothing(tmp_path: Path):
     out_path = tmp_path / "products.db"
 
     exit_code = fetch_products.main(
-        ["--source", "csv", "--input", str(csv_path),
-         "--out", str(out_path), "--dry-run"]
+        [
+            "--source",
+            "csv",
+            "--input",
+            str(csv_path),
+            "--out",
+            str(out_path),
+            "--dry-run",
+        ]
     )
 
     assert exit_code == 0
@@ -391,7 +408,9 @@ def test_model_is_empty_when_there_is_none(name, brand):
 
 def test_derive_model_handles_missing_input():
     assert ingest.derive_model("", "") == ""
-    assert ingest.derive_model("没有品牌前缀的型号 X1", "") == "没有品牌前缀的型号 X1".replace("没有品牌前缀的型号 ", "")
+    assert ingest.derive_model(
+        "没有品牌前缀的型号 X1", ""
+    ) == "没有品牌前缀的型号 X1".replace("没有品牌前缀的型号 ", "")
 
 
 def test_every_derived_model_contains_a_digit(catalog):
@@ -399,4 +418,6 @@ def test_every_derived_model_contains_a_digit(catalog):
     for product in catalog.products[:20]:
         model = ingest.derive_model(product.name, product.brand)
         if model:
-            assert any(ch.isdigit() for ch in model), f"{product.id} 派生出无数字的型号：{model}"
+            assert any(ch.isdigit() for ch in model), (
+                f"{product.id} 派生出无数字的型号：{model}"
+            )

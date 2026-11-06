@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from streamlit.testing.v1 import AppTest
 
 from eval.report import load_report
@@ -34,8 +33,7 @@ def _run_page(tmp_path, monkeypatch, report_path: Path, user: User = ADMIN_USER)
     monkeypatch.setenv("ZHIGOU_EVAL_REPORT_PATH", str(report_path))
     script = tmp_path / "dashboard_page.py"
     script.write_text(
-        "from src.ui.pages import eval_dashboard\n"
-        "eval_dashboard.render(None)\n",
+        "from src.ui.pages import eval_dashboard\neval_dashboard.render(None)\n",
         encoding="utf-8",
     )
     at = AppTest.from_file(str(script), default_timeout=30)
@@ -123,9 +121,7 @@ def test_malformed_metric_is_rejected(tmp_path):
 
 def test_valid_report_loads_without_stale_reasons(tmp_path):
     path = tmp_path / "report.json"
-    path.write_text(
-        json.dumps(_valid_report(), ensure_ascii=False), encoding="utf-8"
-    )
+    path.write_text(json.dumps(_valid_report(), ensure_ascii=False), encoding="utf-8")
 
     loaded = load_report(path, cases_path=CASES_PATH)
 
@@ -164,9 +160,7 @@ def test_page_shows_missing_state_and_command(tmp_path, monkeypatch):
 
 def test_page_renders_valid_report(tmp_path, monkeypatch):
     path = tmp_path / "report.json"
-    path.write_text(
-        json.dumps(_valid_report(), ensure_ascii=False), encoding="utf-8"
-    )
+    path.write_text(json.dumps(_valid_report(), ensure_ascii=False), encoding="utf-8")
 
     at = _run_page(tmp_path, monkeypatch, path)
 
@@ -211,9 +205,7 @@ def test_page_warns_when_report_is_stale(tmp_path, monkeypatch):
 
 def test_page_rejects_non_admin(tmp_path, monkeypatch):
     path = tmp_path / "report.json"
-    path.write_text(
-        json.dumps(_valid_report(), ensure_ascii=False), encoding="utf-8"
-    )
+    path.write_text(json.dumps(_valid_report(), ensure_ascii=False), encoding="utf-8")
 
     at = _run_page(tmp_path, monkeypatch, path, user=NORMAL_USER)
 

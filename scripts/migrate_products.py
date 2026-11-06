@@ -76,11 +76,15 @@ def _report(prepared: list[dict], *, db_path: Path, mode: str) -> None:
     print("来源字段按数据集原样转写，不做加工：")
     print(f"  source_url     有 {count(lambda i: i['source_url'])} 条")
     print(f"  image_url      有 {count(lambda i: i['image_url'])} 条")
-    print(f"  data_status    已核验 {count(lambda i: i['data_status'] == 'verified')} 条"
-          f"（其余标为未核验）")
+    print(
+        f"  data_status    已核验 {count(lambda i: i['data_status'] == 'verified')} 条"
+        f"（其余标为未核验）"
+    )
     print()
     print(f"目标数据库：{db_path}")
-    print(f"导入模式：{'replace（先清空）' if mode == 'replace' else 'merge（同 ID 覆盖）'}")
+    print(
+        f"导入模式：{'replace（先清空）' if mode == 'replace' else 'merge（同 ID 覆盖）'}"
+    )
     print(f"共 {len(prepared)} 条商品\n")
 
 
@@ -93,7 +97,9 @@ def main(argv: list[str] | None = None) -> int:
         "--db", default=str(config.products_db_path()), help="目标商品数据库"
     )
     parser.add_argument(
-        "--mode", choices=("merge", "replace"), default="replace",
+        "--mode",
+        choices=("merge", "replace"),
+        default="replace",
         help="replace：清空后导入（默认，整套换数据时用）；merge：同 ID 覆盖",
     )
     parser.add_argument(
@@ -106,8 +112,11 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         records, meta = data_loader.read_seed(seed_path)
-        meta = {key: str(value) for key, value in meta.items()
-                if key not in ("products", "source")}
+        meta = {
+            key: str(value)
+            for key, value in meta.items()
+            if key not in ("products", "source")
+        }
     except ZhigouError as exc:
         print(f"读取种子数据失败：{exc}")
         return 1

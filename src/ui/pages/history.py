@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src import config, database, report_service
+from src import database, report_service
 from src.data_loader import Catalog
 from src.errors import ZhigouError, to_user_message
 from src.ui import components, icons, state
-from src.ui.theme import bullet_list, chip, esc, facts, notice
+from src.ui.theme import bullet_list, chip, esc
 
 _SELECTED_KEY = "zg_history_selected"
 
@@ -86,8 +86,8 @@ def _render_entry_row(entry: database.HistoryEntry) -> None:
             f"      {entry.result_count} 件推荐"
             + (f"　·　首选 {esc(entry.top_product)}" if entry.top_product else "")
             + "</div>"
-            f"  </div>"
-            f"</div>",
+            "  </div>"
+            "</div>",
             unsafe_allow_html=True,
         )
     with col_actions:
@@ -225,7 +225,8 @@ def _render_favorites_tab(catalog: Catalog) -> None:
         col_card, col_action = st.columns([5, 1])
         with col_card:
             st.markdown(
-                components.product_mini(product) + f'<div class="zg-muted" style="margin-top:4px">收藏于 {esc(added_at[:16].replace("T", " "))}</div>',
+                components.product_mini(product)
+                + f'<div class="zg-muted" style="margin-top:4px">收藏于 {esc(added_at[:16].replace("T", " "))}</div>',
                 unsafe_allow_html=True,
             )
         with col_action:
@@ -258,11 +259,15 @@ def render(catalog: Catalog) -> None:
     if not healthy:
         components.show_notice(message, "stop")
         st.markdown(
-            f'<div class="zg-card is-flat">{bullet_list([
-                "历史记录与收藏功能暂不可用，其余功能不受影响",
-                "你仍然可以在「智能分析」页完成新的分析",
-                "如需恢复，可以联系管理员处理",
-            ])}</div>',
+            f'<div class="zg-card is-flat">{
+                bullet_list(
+                    [
+                        "历史记录与收藏功能暂不可用，其余功能不受影响",
+                        "你仍然可以在「智能分析」页完成新的分析",
+                        "如需恢复，可以联系管理员处理",
+                    ]
+                )
+            }</div>',
             unsafe_allow_html=True,
         )
         return

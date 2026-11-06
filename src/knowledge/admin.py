@@ -83,9 +83,7 @@ def create_document(
         if not category:
             raise KnowledgeDocError("品类级资料必须选择商品分类。")
         if category not in config.CATEGORY_LABELS:
-            raise KnowledgeDocError(
-                f"分类「{category}」未在系统中登记。"
-            )
+            raise KnowledgeDocError(f"分类「{category}」未在系统中登记。")
         existing = [
             document
             for document in load_documents(_knowledge_dir(knowledge_dir))

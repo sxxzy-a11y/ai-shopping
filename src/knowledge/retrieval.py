@@ -132,7 +132,9 @@ def retrieve(
         fallback_note = ""
 
     if index is None:
-        logger.debug("未提供关键词索引，返回空结果（降级说明：%s）", fallback_note or "无")
+        logger.debug(
+            "未提供关键词索引，返回空结果（降级说明：%s）", fallback_note or "无"
+        )
         return RetrievalResult(passages=[], mode="keyword", note=fallback_note)
     passages = search_knowledge(query, index=index, limit=limit)
     logger.debug("关键词检索完成：命中 %d 条", len(passages))

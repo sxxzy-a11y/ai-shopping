@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Capture a few real UI screenshots for the competition deck."""
+
 import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -23,7 +24,9 @@ def shot(page, name):
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, channel="msedge")
-    page = browser.new_page(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+    page = browser.new_page(
+        viewport={"width": 1440, "height": 900}, device_scale_factor=1
+    )
     page.goto(URL, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(3000)
     shot(page, "01-login")

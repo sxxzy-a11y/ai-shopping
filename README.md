@@ -266,7 +266,7 @@ AI 可以写解释，但不参与商品数据和排序。当前实际校验分�
 pytest
 ```
 
-测试数量以 `python -m pytest --collect-only` 的输出为准，**当前为 1095 条，分布在 38 个测试文件中**。测试不需要网络，也不需要 API 密钥。
+测试数量以 `python -m pytest --collect-only` 的输出为准，**当前为 1114 条，分布在 40 个测试文件中**。测试不需要网络，也不需要 API 密钥。
 
 覆盖范围包括：需求解析、预算边界、筛选排序、评分权重、商品比较、SQLite 读写、按用户隔离、权限边界、知识检索、Agent 工具校验、AI 失败降级、Streamlit 页面渲染和端到端验收。
 
@@ -278,11 +278,12 @@ pytest
 
 ```bash
 python scripts/evaluate.py                          # 终端 Markdown 报告
+python -m eval.runner --list-categories             # 列出可用类别与用例数
 python scripts/evaluate.py --only 知识检索          # 只跑某一类
 python -m eval.runner --output-dir data/evaluation  # 同时写 report.json / report.md
 ```
 
-`--only` 按中文类别名做子串匹配（可选值见 `cases.json` 的 `category` 字段）。Windows 默认控制台是 GBK，打印含 ✅/❌ 的 Markdown 会触发 `UnicodeEncodeError`；临时规避是设 `$env:PYTHONIOENCODING="utf-8"`（PowerShell）或 `set PYTHONIOENCODING=utf-8`（CMD）。`--output-dir` 只写文件、不打印 Markdown，不受影响。该缺陷已登记为 P0-2 待修。
+`--only` 按中文类别名做子串匹配；不确定能传什么时先跑 `--list-categories`，传错时错误信息也会列出全部可选项。Windows 默认控制台是 GBK，打印含 ✅/❌ 的 Markdown 会触发 `UnicodeEncodeError`；临时规避是设 `$env:PYTHONIOENCODING="utf-8"`（PowerShell）或 `set PYTHONIOENCODING=utf-8`（CMD）。`--output-dir` 只写文件、不打印 Markdown，不受影响。该缺陷已登记为 P0-2 待修。
 
 `report.json` 是机器可读版本，带 schema 版本、生成时间、输入指纹、逐条耗时与检索模式；`report.md` 与它同源生成。管理员登录后可在「效果评测」页直接查看。仓库保留一份 `report.json` 快照供线上演示；本地重跑会更新它，数据变化时页面会提示「报告可能已过期」。`report.md` 仍作为本地生成物，不入库。
 
@@ -391,6 +392,9 @@ copy .env.example .env
 | [docs/database.md](docs/database.md) | SQLite 表结构和字段契约 |
 | [docs/platform-integration.md](docs/platform-integration.md) | 接入外部商品数据的流程 |
 | [DEPLOY.md](DEPLOY.md) | Streamlit Cloud、Docker 和 VPS 部署 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 开发环境、提交前检查、代码约定与 OpenSpec 变更流程 |
+| [SECURITY.md](SECURITY.md) | 演示级鉴权边界、密钥存储与漏洞报告渠道 |
+| [CHANGELOG.md](CHANGELOG.md) | 变更记录 |
 
 ---
 

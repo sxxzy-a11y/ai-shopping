@@ -25,7 +25,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from src import config
-from src.ai_service import AIService, redact
+from src.ai_service import AIService
 from src.data_loader import Product
 from src.demand_parser import AVAILABLE_CORE_NEEDS, AVAILABLE_USE_CASES, Demand
 from src.errors import UpstreamResponseError
@@ -130,7 +130,8 @@ def demand_from_payload(payload: dict, raw_text: str) -> Demand:
 
     brands = _clean_texts(payload.get("brand_preferences"))
     constraints = [
-        item for item in _clean_texts(payload.get("hard_constraints"))
+        item
+        for item in _clean_texts(payload.get("hard_constraints"))
         if item in _ALLOWED_CONSTRAINTS
     ]
 
@@ -168,7 +169,10 @@ def parse_demand_with_ai(
 
     logger.info(
         "AI 解析完成：category=%s budget=%s use_cases=%d core_needs=%d",
-        demand.category or "(空)", demand.budget, len(demand.use_cases), len(demand.core_needs),
+        demand.category or "(空)",
+        demand.budget,
+        len(demand.use_cases),
+        len(demand.core_needs),
     )
     return demand
 
@@ -201,9 +205,15 @@ _EXPLAIN_SYSTEM = """你是一个消费决策助手。用户提出购买需求�
 "per_product": [{"product_id": "LP001", "why": "……"}]}"""
 
 
-def _product_brief(product: Product, *, rank: int, score_total: float,
-                   match_level: str, dimensions: list[tuple[str, float, str]],
-                   budget_label: str) -> dict:
+def _product_brief(
+    product: Product,
+    *,
+    rank: int,
+    score_total: float,
+    match_level: str,
+    dimensions: list[tuple[str, float, str]],
+    budget_label: str,
+) -> dict:
     """给模型看的商品摘要。只放数据里真有的字段。"""
     return {
         "product_id": product.id,
@@ -318,6 +328,7 @@ _SPEC_TOLERANCE_RATIO = 0.02
 
 #: 相对容差的绝对下限，避免极小的数值因比例容差过窄而误杀。
 _SPEC_TOLERANCE_FLOOR = 0.05
+
 
 #: **小数**断言额外允许的取整半径：写到几位小数，就是精确到那一位的一半。
 #:
@@ -826,9 +837,7 @@ def answer_with_products(
     if invented:
         raise UpstreamResponseError(f"回答里出现了商品库/资料中没有的价格：{invented}")
 
-    logger.info(
-        "商品问答作答完成：%d 个候选，回答 %d 字", len(items), len(answer)
-    )
+    logger.info("商品问答作答完成：%d 个候选，回答 %d 字", len(items), len(answer))
     return answer
 
 
@@ -849,7 +858,9 @@ def data_sharing_notice(demand: Demand, item_count: int) -> str:
     if item_count > 0:
         parts.append(f"· {item_count} 件候选商品的名称、价格、参数与优缺点")
     else:
-        parts.append("· 筛选出的候选商品的名称、价格、参数与优缺点（数量取决于你的条件）")
+        parts.append(
+            "· 筛选出的候选商品的名称、价格、参数与优缺点（数量取决于你的条件）"
+        )
     parts.append("")
     parts.append(
         "不会发送：你的收藏、历史记录、任何身份或设备信息。"

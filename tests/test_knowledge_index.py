@@ -84,7 +84,9 @@ def test_longer_document_is_normalised():
     short = _doc("short", "主动降噪适合通勤")
     long = _doc("long", "主动降噪适合通勤。" + "本段与问题无关。" * 80)
 
-    hits = {h.document.doc_id: h.score for h in BM25Index([short, long]).search("主动降噪")}
+    hits = {
+        h.document.doc_id: h.score for h in BM25Index([short, long]).search("主动降噪")
+    }
     assert hits["short"] > hits["long"], "长文档没有被归一化，长度成了得分来源"
 
 
