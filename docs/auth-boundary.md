@@ -1,5 +1,10 @@
 # 账号与鉴权边界
 
+> **版本状态（2026-11-07）**：本文描述 legacy Streamlit 版的会话（`session_state`）。
+> **Vue 版改为** `HttpOnly` + `SameSite=Lax` Cookie 指向服务端内存会话，重启即失效、
+> 仍无会话过期与登录限流；权限仍由后端入口兜底。当前状态见
+> [VUE_MIGRATION.md](VUE_MIGRATION.md) 第 3、7 节。
+
 ## 定位
 
 智购参谋的账号系统用于演示两种角色和数据隔离，不是生产级鉴权。

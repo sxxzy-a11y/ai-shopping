@@ -1,11 +1,17 @@
 # web-ui Specification
 
+> **版本状态（2026-11-07，v2.0）**：当前主界面以 **Vue 3 + FastAPI** 实现，
+> Streamlit 旧版保留为 legacy 入口。本规格中涉及 Streamlit 内部 DOM / Secrets 的
+> 条目是 v1.x 时期的实现约束，业务层面仍成立；页面构成、导航、响应式与视觉规范
+> 对 Vue 版继续适用。逐页覆盖矩阵见 `docs/VUE_MIGRATION.md` 第 2 节。
+
 ## Purpose
-TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
+定义中文 Web 界面的页面构成、导航权限、异常提示、响应式与视觉规范；
+界面实现可在 Vue 3 与 legacy Streamlit 之间演进，规格约束保持不变。
 ## Requirements
 ### Requirement: 页面构成
 
-系统 SHALL 以 Streamlit 提供中文 Web 界面。页面 SHALL 包含：首页、智能分析页、商品比较页、历史记录页、个人设置页、AI 问答页、项目说明页；管理员 SHALL 额外看到：用户管理页、全站概览页、商品维护页、**知识库管理页**。用户 SHALL 能够在有权限的页面之间切换。
+系统 SHALL 以 Vue 3 前端提供中文 Web 界面（Streamlit 旧版作为 legacy 入口保留可运行）。页面 SHALL 包含：首页、智能分析页、商品比较页、历史记录页、个人设置页、AI 问答页、项目说明页；管理员 SHALL 额外看到：用户管理页、全站概览页、商品维护页、**知识库管理页**。用户 SHALL 能够在有权限的页面之间切换。
 
 #### Scenario: 普通用户看不到管理页
 
@@ -106,7 +112,7 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 #### Scenario: 自定义样式不依赖不稳定内部结构
 
 - **WHEN** 检查自定义 CSS
-- **THEN** 样式不依赖 Streamlit 的内部 DOM 类名或未公开的稳定性无保证的选择器
+- **THEN** 样式不依赖框架内部生成的 DOM 类名或未公开的稳定性无保证的选择器
 
 ### Requirement: 异常场景的友好提示
 
@@ -182,7 +188,7 @@ TBD - created by archiving change add-zhigou-mvp. Update Purpose after archive.
 
 ### Requirement: 界面视觉规范
 
-界面 SHALL 使用统一的深色侧栏、线性图标系统与卡片式布局。导航 SHALL 使用线性图标而非 emoji。视觉令牌（配色、圆角、阴影）SHALL 集中定义，不得散落在各页面中。自定义样式 SHALL NOT 依赖 Streamlit 生成的哈希类名。
+界面 SHALL 使用统一的深色侧栏、线性图标系统与卡片式布局。导航 SHALL 使用线性图标而非 emoji。视觉令牌（配色、圆角、阴影）SHALL 集中定义，不得散落在各页面中。自定义样式 SHALL NOT 依赖框架生成的哈希类名；Vue 版由 `src/assets/main.css` 集中定义设计令牌。
 
 #### Scenario: 侧栏为深色并保持生效
 

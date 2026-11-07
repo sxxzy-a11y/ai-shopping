@@ -2,16 +2,25 @@
 
 **把一句“预算 2000，主要拍照”变成一份能看懂的购买建议。**
 
+> **版本状态（2026-11-07）**：当前主界面是 **Vue 3 + FastAPI**，单端口运行；
+> 原 Streamlit 版完整保留为 **legacy 入口**，可随时回退（tag `v1.0.0-streamlit`）。
+> 迁移范围、页面覆盖矩阵与 API 清单见 [docs/VUE_MIGRATION.md](docs/VUE_MIGRATION.md)，
+> 目录分类规范见 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)。
+> `docs/` 下描述旧版界面的技术长文档均带「版本状态」标注；业务层 `src/` 为两版共用，
+> 因此两版推荐结论一致。
+
 智购参谋是一个面向 3C 选购的 Web 应用。它先把你口语化的需求拆成预算、品类、用途和偏好，再从商品库里筛选、按匹配度打分排序，最后用知识库和受控的 AI 工具补充解释。
 
 它不替用户下单，也不假装自己是实时比价平台。它解决的是买之前的那个问题：**在有限预算里，哪件商品更适合这次的具体用途，为什么。**
 
-- 在线演示：<https://ai-shopping-10.streamlit.app/>
+- 在线演示（**旧版** Streamlit Cloud）：<https://ai-shopping-10.streamlit.app/>
 - 代码仓库：<https://github.com/sxxzy-a11y/ai-shopping>
-- 技术栈：Python、Streamlit、SQLite、pandas、pydantic、httpx
+- 技术栈：Vue 3 + Vite + TypeScript / FastAPI + Uvicorn / Python 3.12+ / SQLite
 - 当前数据：20 件商品，2 个品类（笔记本电脑、手机），13 个品牌
 
-> 在线演示部署在 Streamlit Community Cloud。闲置一段时间后应用会休眠，第一次打开可能需要等待几十秒。当前代码默认开放注册；如果部署时关闭了注册，登录页不会显示注册入口。公开演示只用于体验，不要输入真实个人信息。
+> Streamlit Cloud 上的链接指向旧版，闲置后会休眠，第一次打开可能需要等待几十秒。
+> 当前版本的部署方式是构建 `frontend/dist` 后由 FastAPI 单端口托管，见 [DEPLOY.md](DEPLOY.md)。
+> 公开演示只用于体验，不要输入真实个人信息。
 
 ---
 
@@ -132,6 +141,9 @@
 | 个人设置 | AI 增强开关、价格取向、显示偏好；管理员另有 API 配置 | 偏好按账号保存；API 配置写入本机覆盖文件，见第 8 节 |
 | 关于 | 评分口径、数据来源和使用边界 | 不把演示数据说成实时数据 |
 
+> **版本说明**：上表能力在 Vue 版已全部覆盖，包括管理员写操作、API 配置与 AI 连接检测；
+> 两版调用同一批 `src/` 业务函数，结论一致。逐页矩阵见 [docs/VUE_MIGRATION.md](docs/VUE_MIGRATION.md) 第 2 节。
+
 普通用户看不到管理页面。权限判断不只在界面上隐藏按钮，数据层写入口也会检查当前用户。
 
 ### AI 问答现在的行为
@@ -150,9 +162,11 @@ AI 问答不是单纯的聊天窗口，也不是只查知识库：
 ### 5.1 分层
 
 ```text
-app.py                页面编排、登录入口、导航、异常兜底
-src/ui/               Streamlit 界面；唯一依赖 Streamlit 的目录
-src/                  业务逻辑；不依赖 Streamlit，可单独测试
+frontend/             Vue 3 前端：views / components / router / stores / api
+backend/              FastAPI：路由、鉴权、请求模型、业务桥接（只做编排）
+app.py                legacy：Streamlit 旧版入口（保留可运行）
+src/ui/               legacy：Streamlit 界面；唯一依赖 Streamlit 的目录
+src/                  业务逻辑；不依赖任何 Web 框架，可单独测试
   config.py           路径、环境变量、评分权重、标签
   demand_parser.py    自然语言 → Demand
   scoring.py          单商品多维度评分
@@ -170,7 +184,7 @@ tests/                自动化测试
 docs/                 需求、架构、测试、演示和数据说明
 ```
 
-`app.py` 只做编排，评分、筛选、比较等规则都在 `src/` 下。这样测试可以直接调用业务函数，不需要启动 Streamlit；以后如果换成 FastAPI，也可以先搬走业务层。
+`app.py`（legacy）与 `backend/app/`（当前）都只做编排，评分、筛选、比较等规则都在 `src/` 下。这样测试可以直接调用业务函数，不需要启动任何 Web 框架；Vue 化时业务层原封不动复用，因此两版结论一致。
 
 ### 5.2 评分不是黑盒
 
@@ -307,12 +321,20 @@ python -m eval.runner --output-dir data/evaluation  # 同时写 report.json / re
 
 环境要求：Python 3.12 或更高版本。依赖已在 `requirements.txt` 中精确锁定；CI 覆盖 3.12 与 3.13，Docker 镜像使用 3.12。**3.11 尚未验证通过**（`Unit tests` 有未定位的失败，见 `docs/roadmap.md`），因此不声明支持。
 
+**当前版本（Vue + FastAPI，单端口）**：
+
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+cd frontend && npm install && npm run build && cd ..
+python backend/run.py
 ```
 
-打开 <http://localhost:8501>。不配置模型密钥也能使用智能分析、商品比较、历史记录等核心功能；AI 问答需要配置模型密钥。
+打开 <http://127.0.0.1:8000>。一个进程同时提供 `/api/*` 与前端页面。
+开发态可另开终端 `cd frontend && npm run dev`（5173 端口，`/api` 由 Vite 代理到 8000）获得热更新。
+
+**旧版入口（legacy，回退用）**：`streamlit run app.py` → <http://localhost:8501>。
+
+不配置模型密钥也能使用智能分析、商品比较、历史记录等核心功能；AI 问答需要配置模型密钥。
 
 环境变量可以复制 `.env.example` 为 `.env` 后填写：
 
@@ -331,15 +353,16 @@ copy .env.example .env
 | `ZHIGOU_ADMIN_USERNAME` / `ZHIGOU_ADMIN_PASSWORD` | 首次启动时创建管理员 |
 | `ZHIGOU_ALLOW_REGISTRATION` | 是否开放注册 |
 
-密钥不写进源码。读取优先级是「本机覆盖文件 `storage/api_config.json` > 环境变量 / Streamlit Secrets > 内置默认值」：管理员可在「个人设置 → API 配置」里覆盖端点、模型和密钥，写入的文件含**明文密钥**、仅限本机使用，已加入 `.gitignore`，界面与日志都不回显明文。详细部署方式见 [DEPLOY.md](DEPLOY.md)。
+密钥不写进源码。读取优先级是「本机覆盖文件 `storage/api_config.json` > 环境变量 / Streamlit Secrets > 内置默认值」：管理员可在**两版的**「个人设置 → API 配置」里覆盖端点、模型和密钥，并用「测试对话连接 / 测试向量化连接」验证连通性。写入的文件含**明文密钥**、仅限本机使用，已加入 `.gitignore`，界面只显示掩码、日志不回显明文。详细部署方式见 [DEPLOY.md](DEPLOY.md)。
 
 ### 已知限制
 
 - 只有 20 件商品、2 个品类，不能覆盖真实购物平台的长尾需求；
 - 不接入电商平台，不提供实时价格、库存、销量或真实评价；
-- Streamlit Community Cloud 的文件系统是临时的，应用休眠或重新部署后，账号、历史和收藏可能重置；
-- 账号体系是演示级鉴权：没有登录限流、没有会话过期，公开演示不要输入真实个人信息；
-- 当前是 Streamlit 单体，没有 HTTP API，SQLite 也不适合多实例并发写；
+- 旧版演示部署在 Streamlit Community Cloud，文件系统临时，休眠或重部署后账号、历史和收藏可能重置；
+- 账号体系是演示级鉴权：Vue 版会话存服务端内存（重启即失效），没有登录限流与会话过期，公开演示不要输入真实个人信息；
+- SQLite 仍是单实例，云端需挂持久卷；Vue 版已有 HTTP API，但不适合多副本并发写；
+- Vue 版未展示 Agent 执行轨迹，也不在线触发效果评测（旧版同样只读快照），见 `docs/VUE_MIGRATION.md` 第 7 节；
 - 评测集是自评，样本量有限，不能替代真实的用户研究。
 
 下一步计划见 [docs/roadmap.md](docs/roadmap.md)。
@@ -350,29 +373,27 @@ copy .env.example .env
 
 ```text
 .
-├── app.py                 应用入口
-├── data/
-│   ├── products.json      20 条商品种子数据
-│   ├── knowledge/         知识文档
-│   └── evaluation/        评测用例
-├── src/
-│   ├── demand_parser.py   需求解析
-│   ├── scoring.py         评分
-│   ├── recommender.py     筛选与排序
-│   ├── comparison.py      商品比较
-│   ├── ai_service.py      模型调用
-│   ├── ai_enhance.py      提示词与结果校验
-│   ├── knowledge/         知识库与检索
-│   ├── agent/             工具与编排
-│   ├── database.py        SQLite
-│   └── ui/                Streamlit 页面
+├── frontend/              Vue 3 前端（当前主界面）
+│   ├── src/views/         12 个路由页面 + 登录页
+│   ├── src/api/           API 客户端与类型
+│   ├── src/stores/        会话状态
+│   └── dist/              构建产物（不入库，由后端托管）
+├── backend/               FastAPI 后端（当前）
+│   ├── app/main.py        路由与静态托管
+│   ├── app/services.py    业务桥接（调用 src/）
+│   ├── app/core.py        会话与权限依赖
+│   └── run.py             启动入口
+├── app.py                 legacy：Streamlit 旧版入口
+├── src/                   业务领域层（两版共用，不依赖 Web 框架）
+├── src/ui/                legacy：Streamlit 页面
+├── data/                  商品种子、知识语料、评测用例
 ├── storage/               运行时数据库（不提交）
-├── scripts/               数据接入、迁移、评测入口
-├── eval/                  评测 runner、场景检查与报告渲染
-├── tests/                 自动化测试
-├── docs/                  项目文档
-└── openspec/              需求规格与变更记录
+├── scripts/               初始化、导入、备份、评测入口
+├── eval/  tests/  docs/  openspec/  design/  submission/  Plan/
+└── 平台约定文件            README / LICENSE / Dockerfile / requirements*.txt ...
 ```
+
+完整分类规范与「为什么这些文件留在根目录」见 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)。
 
 ---
 
@@ -391,7 +412,9 @@ copy .env.example .env
 | [docs/auth-boundary.md](docs/auth-boundary.md) | 账号体系能做什么、不能做什么 |
 | [docs/database.md](docs/database.md) | SQLite 表结构和字段契约 |
 | [docs/platform-integration.md](docs/platform-integration.md) | 接入外部商品数据的流程 |
-| [DEPLOY.md](DEPLOY.md) | Streamlit Cloud、Docker 和 VPS 部署 |
+| [docs/VUE_MIGRATION.md](docs/VUE_MIGRATION.md) | Vue 化迁移状态、页面覆盖矩阵、API 清单、备份回退 |
+| [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) | 项目目录分类规范与依赖清单单一来源 |
+| [DEPLOY.md](DEPLOY.md) | Vue + FastAPI 单端口部署（含 legacy 版部署存档） |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 开发环境、提交前检查、代码约定与 OpenSpec 变更流程 |
 | [SECURITY.md](SECURITY.md) | 演示级鉴权边界、密钥存储与漏洞报告渠道 |
 | [CHANGELOG.md](CHANGELOG.md) | 变更记录 |

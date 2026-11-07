@@ -5,13 +5,23 @@
 ## 项目概况
 
 **智购参谋**（SmartBuy AI Assistant）——面向 AI 创新大赛的可解释消费决策助手。
-当前基线：12 份能力规格，1114 条测试（以 `python -m pytest --collect-only` 为准），Streamlit 单体。
+当前基线：12 份能力规格，1114 条测试（以 `python -m pytest --collect-only` 为准），
+**Vue 3 + FastAPI 前后端分离**；Streamlit 单体保留为 legacy 入口。
 （各类规模的明细在各自规格里维护，此处不再汇总，免得与规格漂移。）
 
-## 技术约束（「够用版」决策，2026-10-15 确立）
+## 技术约束
 
-1. **保持 Streamlit 单体**。FastAPI + Vue 3 前后端分离与 MySQL 迁移**暂缓，不在任何新变更范围内**；业务逻辑已与界面解耦（`src/` 不依赖 Streamlit），未来如需迁移可原样搬走。
-2. **依赖以必要为限**。运行时依赖基线为 `streamlit` / `pandas` / `pydantic` / `httpx` / `pytest`；**允许**为检索能力引入向量化相关依赖或调用 Embedding 接口，但需在 proposal 中论证用途与替代方案。不引入 LangChain（本项目的检索链路不需要框架抽象）。
+> **决策变更（2026-11-07，v2.0）**：原「保持 Streamlit 单体、FastAPI + Vue 3 暂缓」的决策
+> 已由用户明确要求撤销。理由：需要单一网址的云端部署形态与更专业的界面；业务层早已与
+> 界面解耦，迁移不需要改动 `src/`。原决策作为历史判断保留在 `CHANGELOG.md`。
+> 变更范围、页面覆盖矩阵与验证证据见 `docs/VUE_MIGRATION.md`。**MySQL 迁移仍不在范围内**。
+
+1. **当前为 Vue 3 + FastAPI 前后端分离**：`frontend/` 是主界面，`backend/` 是 API 层，
+   `app.py` + `src/ui/` 作为 legacy 入口保留可运行、可回退。业务逻辑仍集中在 `src/`，
+   **不依赖任何 Web 框架**，两版共用同一批函数。
+2. **依赖以必要为限**。运行时依赖基线为 `streamlit`（legacy）/ `fastapi` / `uvicorn` /
+   `pandas` / `pydantic` / `httpx` / `numpy` / `pytest`；**允许**为检索能力引入向量化相关依赖
+   或调用 Embedding 接口，但需在 proposal 中论证用途与替代方案。不引入 LangChain。
 3. **联网功能一律可降级**（原「离线可用是硬约束」已由 `switch-to-vector-rag` 变更解除）。核心决策链路（解析、筛选、评分、比较、报告）仍必须在不联网时可用；依赖网络的 AI 增强与向量检索**失败时必须回退**到本地规则/关键词检索，并明确告知用户。未配置密钥时相关页面说明如何配置，不展示半成品。
    **历史例外**：「AI 问答」页在未配置密钥时没有本地形态（保留原设计，见 `refine-ai-qa`）。
 4. **架构债不还**。不做支付交易、微服务；数据库维持 SQLite。
@@ -34,7 +44,8 @@
 
 - 规格驱动：行为变更先建 change（proposal + delta specs + tasks），归档时合并进 `openspec/specs/`
 - **严格串行**：同时只开一个变更；阶段顺序与五大核心内容的映射见 `docs/roadmap.md`
-- 业务规则放 `src/`（不依赖 Streamlit），界面只出现在 `src/ui/`
+- 业务规则放 `src/`（不依赖任何 Web 框架）；Vue 界面在 `frontend/`，legacy 界面在 `src/ui/`；
+  `backend/` 只做编排与权限兜底，不写业务规则
 - 领域异常统一走 `errors.py` 的中文映射；界面不出现堆栈与文件路径
 - 每条新行为有配套测试；测试不联网、不需密钥（沿用 `conftest.py` 的隔离夹具）
 - 配置常量集中在 `src/config.py`；可调参数（权重、阈值）不写死在业务模块里

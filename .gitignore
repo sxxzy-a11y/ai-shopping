@@ -27,8 +27,9 @@ env/
 .coverage
 htmlcov/
 
-# --- Node（提交材料的 deck 生成依赖，不入库） ---
+# --- Node（前端依赖与构建产物，不入库） ---
 node_modules/
+frontend/dist/
 
 # --- 编辑器与系统 ---
 .idea/
@@ -63,6 +64,10 @@ pytest-of-*/
 
 # --- 编辑器本地配置（含本机偏好，不入库）---
 .codebuddy/
+
+# --- 开发过程记录（保留在本机用于续做，不随成品发布）---
+Plan/
+.ai-memory/
 
 # --- 冒烟测试运行产物（每次跑都会变，不入库）---
 submission/screenshots/smoke-*.png

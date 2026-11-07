@@ -8,7 +8,8 @@
 
 - 默认开放自助注册（`ZHIGOU_ALLOW_REGISTRATION=true`），任何拿到链接的人都能建普通账号；
 - 没有登录失败限流，没有会话过期；
-- 登录态只存在 Streamlit 的 `session_state`，不是服务端会话或安全 Cookie；
+- 登录态分两套：**Vue 版**用 `HttpOnly` + `SameSite=Lax` Cookie（`zg_session`）指向服务端内存会话，
+  服务重启即全部失效、没有空闲/绝对超时、不支持多副本；**legacy Streamlit 版**仍放在 `session_state`；
 - 管理员可以改角色、重置密码、停用与删除账号；
 - **公开演示不要输入真实密码、手机号、邮箱或任何个人信息**。
 
@@ -19,7 +20,7 @@
 | 位置 | 说明 |
 |---|---|
 | 环境变量 / `.env` | 不入库；`.env` 已在 `.gitignore` 中 |
-| Streamlit Secrets | 云端部署用，`.streamlit/secrets.toml` 不入库 |
+| Streamlit Secrets（legacy 版） | 旧版云端部署用，`.streamlit/secrets.toml` 不入库 |
 | `storage/api_config.json` | 管理员在「个人设置 → API 配置」里写入的本机覆盖文件，**密钥明文落盘**；写入时权限收紧为 `0600`，文件不入库，界面与日志都不回显明文 |
 
 密钥不会写进源码，日志与异常信息会经过脱敏。请定期轮换演示用密钥，并留意公开演示可能被刷 AI 额度。

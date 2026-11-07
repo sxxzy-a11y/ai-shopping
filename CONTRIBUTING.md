@@ -5,18 +5,38 @@
 
 ## 1. 准备环境
 
-需要 Python 3.11 或更高版本（运行时依赖已精确锁定，其中 `numpy 2.3.5`
-要求 >=3.11，见 `requirements.txt`）。
+> **版本状态**：当前主界面是 Vue 3 + FastAPI；`src/` 业务层与 legacy Streamlit 版共用。
+> 目录分类见 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)，
+> 迁移状态与 API 清单见 [docs/VUE_MIGRATION.md](docs/VUE_MIGRATION.md)。
+
+需要 **Python 3.12 或更高版本**（最低版本已收窄；3.11 的测试未验证通过，见 `README.md`）
+与 **Node.js 18+**（本机实测 v24.15.0 / npm 11.12.1）。
 
 ```bash
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
-streamlit run app.py
+cd frontend && npm install && cd ..
+
+# 当前版本：先构建前端，再启动单端口服务
+npm --prefix frontend run build
+python backend/run.py                 # http://127.0.0.1:8000
+
+# 开发态热更新（另开终端）
+npm --prefix frontend run dev         # http://127.0.0.1:5173，/api 代理到 8000
+
+# legacy 版（回退 / 对照用）
+streamlit run app.py                  # http://localhost:8501
 ```
 
-打开 <http://localhost:8501>。不配置任何密钥也能使用智能分析、商品比较、
-历史记录等核心功能；AI 增强与向量检索需要密钥，配置方式见第 3 节。
+不配置任何密钥也能使用智能分析、商品比较、历史记录等核心功能；
+AI 增强与向量检索需要密钥，配置方式见第 3 节。
+
+前端提交前另跑：
+
+```bash
+npm --prefix frontend run build       # vue-tsc --noEmit && vite build
+```
 
 ## 2. 提交前检查
 
@@ -42,9 +62,10 @@ python submission/smoke_test.py --mobile   # 375px 视口
 `tests/` 全部跑在 Streamlit AppTest 里，不渲染真实 DOM；登录页重影、
 `:has()` 兼容性这类问题只能靠上面这个脚本发现。
 
-CI（`.github/workflows/ci.yml`）会在 ubuntu + windows、Python 3.11 / 3.12
-上跑测试，以及 `ruff check`、`ruff format --check`、`mypy src` 三项**阻断**门禁。
-覆盖率、`pip-audit`、Docker 构建目前是**信息性** job，不阻断合并，但结果值得看一眼。
+CI（`.github/workflows/ci.yml`）会在 ubuntu + windows、Python 3.12 / 3.13
+上跑测试，以及 `ruff check`、`ruff format --check`、`mypy src` 三项**阻断**门禁；
+`docker build + healthcheck` 也已转为**阻断**门禁。
+覆盖率、`pip-audit` 是**信息性** job，不阻断合并，但结果值得看一眼。
 
 ## 3. 配置与密钥
 
@@ -97,7 +118,7 @@ storage/api_config.json（个人设置页写入）> 环境变量 / Streamlit Sec
 ## 7. 相关文档
 
 - [README.md](README.md)：功能、数据流、运行方式
-- [DEPLOY.md](DEPLOY.md)：Streamlit Cloud / Docker / VPS 部署
+- [DEPLOY.md](DEPLOY.md)：Vue + FastAPI 单端口部署（含 legacy 版部署存档）
 - [SECURITY.md](SECURITY.md)：鉴权边界与漏洞报告渠道
 - [CHANGELOG.md](CHANGELOG.md)：变更记录
 - `docs/architecture.md`、`docs/testing.md`、`openspec/project.md`
