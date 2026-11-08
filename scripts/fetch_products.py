@@ -55,8 +55,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from src import config, data_loader, ingest, product_store  # noqa: E402
 from src.errors import ZhigouError  # noqa: E402
 
-#: 默认写入目标。商品数据存在数据库里，不再是 JSON 文件。
-DEFAULT_DB_PATH = PROJECT_ROOT / "storage" / "zhigou.db"
+#: 默认写入目标。商品数据存在**商品库**里，不再是 JSON 文件。
+#:
+#: 必须走 `config.products_db_path()`：这里原先硬编码 `storage/zhigou.db`
+#: （历史库），于是 `--out` 缺省时会往历史库里建商品表并写商品数据 ——
+#: 既污染历史库，又让真正的商品库保持旧数据，而脚本还打印「已写入」。
+DEFAULT_DB_PATH = config.products_db_path()
 
 
 # --------------------------------------------------------------------------
@@ -314,7 +318,7 @@ def _load_existing(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
 
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="从外部数据源生成 data/products.json（写盘前严格校验）",
+        description="从外部数据源导入商品到商品数据库（写库前严格校验）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -325,7 +329,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument(
         "--out",
         default=str(DEFAULT_DB_PATH),
-        help="写入的数据库（默认 storage/zhigou.db）",
+        help=f"写入的数据库（默认 {DEFAULT_DB_PATH}）",
     )
     parser.add_argument(
         "--mode",
@@ -336,7 +340,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument(
         "--limit", type=int, default=0, help="只处理前 N 条（调试用，0 表示不限制）"
     )
-    parser.add_argument("--dry-run", action="store_true", help="只转换与校验，不写文件")
+    parser.add_argument("--dry-run", action="store_true", help="只转换与校验，不写库")
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="配合 --mode replace：确认清空现有商品后再写入",
+    )
     parser.add_argument(
         "--write-template", metavar="CSV_PATH", help="生成 CSV 列名模板后退出"
     )
@@ -396,6 +405,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     dataset_meta = {k: v for k, v in document.items() if k != "products"}
 
     if args.mode == "replace":
+        # 覆盖是破坏性操作：不给确认开关，一条命令就能清空演示库里的商品。
+        if not args.yes:
+            raise SystemExit(
+                f"--mode replace 会清空 {out_path} 中的全部商品再写入。\n"
+                "确认无误请加 --yes 重试。"
+            )
         product_store.replace_all(merged, path=out_path)
     else:
         product_store.save_products(merged, path=out_path)

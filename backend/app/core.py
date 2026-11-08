@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import secrets
+import time
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -17,14 +18,33 @@ from src.auth import User, is_admin
 
 COOKIE_NAME = "zg_session"
 _COOKIE_MAX_AGE = 60 * 60 * 12
+#: 空闲多久没请求就失效。绝对过期仍由 `_COOKIE_MAX_AGE` 管，两者取先到者。
+_SESSION_IDLE_TIMEOUT = 30 * 60
 
-# token -> User。单进程部署；重启即失效。
-_sessions: dict[str, User] = {}
+#: token -> (用户, 绝对过期时刻, 最近活动时刻)。单进程部署；重启即失效。
+_sessions: dict[str, tuple[User, float, float]] = {}
+
+
+def _purge_expired(now: float) -> None:
+    """清掉绝对过期或空闲超时的 token。
+
+    没有这一步，`_sessions` 只增不减：Cookie 有 12 小时有效期，但服务端
+    字典里那些「登录后就没再回来」的 token 会一直留到进程重启。
+    """
+    expired = [
+        token
+        for token, (_, expires_at, last_seen) in _sessions.items()
+        if expires_at <= now or now - last_seen >= _SESSION_IDLE_TIMEOUT
+    ]
+    for token in expired:
+        _sessions.pop(token, None)
 
 
 def create_session(user: User) -> str:
+    now = time.monotonic()
+    _purge_expired(now)
     token = secrets.token_urlsafe(32)
-    _sessions[token] = user
+    _sessions[token] = (user, now + _COOKIE_MAX_AGE, now)
     return token
 
 
@@ -37,7 +57,18 @@ def user_from_request(request: Request) -> User | None:
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return None
-    return _sessions.get(token)
+    entry = _sessions.get(token)
+    if entry is None:
+        return None
+    user, expires_at, last_seen = entry
+    now = time.monotonic()
+    if expires_at <= now or now - last_seen >= _SESSION_IDLE_TIMEOUT:
+        # 绝对过期或空闲超时都视为未登录，与 Cookie 到期后的表现一致。
+        _sessions.pop(token, None)
+        return None
+    # 只滑动「最近活动」，绝对过期时刻不动——否则持续操作能无限续命。
+    _sessions[token] = (user, expires_at, now)
+    return user
 
 
 def current_user(request: Request) -> User:

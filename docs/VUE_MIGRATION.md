@@ -159,7 +159,7 @@ $env:ZHIGOU_API_CONFIG_PATH = "$tmp\api_config.json"
 $env:ZHIGOU_KNOWLEDGE_DIR = "$tmp\knowledge"
 $env:ZHIGOU_ADMIN_PASSWORD = "临时库密码"
 $env:ZHIGOU_API_PORT = "8001"
-python scripts/init.py
+python scripts/init.py    # 可选：启动时已自动初始化，这里仅用于提前体检
 python backend/run.py
 ```
 
@@ -175,8 +175,8 @@ python backend/run.py
    未接 `src/agent/runner.run_agent` 的轨迹。Agent 属于长任务，需要独立的 Init-Step-Poll 异步端点，
    不适合塞进同步分析请求；补齐时应单独设计，并保留失败回退规则链路的既有约定。
 2. **不在线触发评测**：「效果评测」页读已有快照，旧版本身也是只读，两版一致。
-3. **会话在进程内存**：重启丢失、无空闲/绝对超时、不支持多副本；公网长期开放前需补 T1 账号安全
-   （登录限流、会话过期、强密码）与集中式会话存储。
+3. **会话在进程内存**：重启丢失、有 12 小时绝对过期但无空闲超时、不支持多副本；公网长期开放前需补 T1 账号安全
+   （登录限流、会话空闲超时、强密码）与集中式会话存储。
 4. **SQLite 仍是单实例**，持久化需挂卷；见 roadmap P2。
 5. **`frontend/dist` 是构建产物**，修改前端源码后需重新 `npm run build` 并重启后端，
    否则静态托管仍指向旧产物。

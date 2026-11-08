@@ -138,6 +138,20 @@ def _assistant_message(response) -> dict[str, Any]:
     }
 
 
+def _persist_run(run: AgentRun, question: str, user_id: str | None) -> None:
+    """把轨迹落到历史库。
+
+    失败只记 warning：轨迹是「过程可解释」的材料，不是编排结果本身。
+    数据库临时不可写时，不能让一次本来成功的 Agent 调用变成失败。
+    """
+    try:
+        from src import database
+
+        database.save_agent_run(run, question=question, user_id=user_id)
+    except Exception:  # noqa: BLE001 - 可解释性材料不阻断主流程
+        logger.warning("Agent 轨迹落库失败", exc_info=True)
+
+
 def run_agent(
     question: str,
     *,
@@ -146,6 +160,7 @@ def run_agent(
     registry: ToolRegistry | None = None,
     knowledge_index: BM25Index | None = None,
     max_rounds: int | None = None,
+    user_id: str | None = None,
 ) -> AgentRun:
     """跑一次编排。
 
@@ -168,7 +183,11 @@ def run_agent(
     """
     registry = registry or build_registry()
     rounds_limit = max_rounds or config.AGENT_MAX_ROUNDS
-    context = ToolContext(catalog=catalog, knowledge_index=knowledge_index)
+    context = ToolContext(
+        catalog=catalog,
+        knowledge_index=knowledge_index,
+        user_id=user_id,
+    )
 
     messages: list[dict[str, Any]] = [
         {
@@ -187,11 +206,13 @@ def run_agent(
 
         if not response.wants_tools:
             logger.info("编排结束：%d 轮，%d 次工具调用", round_number, len(trace))
-            return AgentRun(
+            run = AgentRun(
                 answer=response.content.strip(),
                 trace=tuple(trace),
                 rounds=round_number,
             )
+            _persist_run(run, question, user_id)
+            return run
 
         messages.append(_assistant_message(response))
 
@@ -217,7 +238,7 @@ def run_agent(
             )
 
     logger.warning("编排达到轮次上限 %d，停止", rounds_limit)
-    return AgentRun(
+    run = AgentRun(
         trace=tuple(trace),
         rounds=rounds_limit,
         degraded=True,
@@ -226,3 +247,6 @@ def run_agent(
             f"已改为用既有规则完成本次分析。"
         ),
     )
+    # 降级同样是**真实发生过**的编排，轨迹里那些被拒/出错的调用更值得回放。
+    _persist_run(run, question, user_id)
+    return run

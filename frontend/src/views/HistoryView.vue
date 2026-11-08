@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { DecisionReport, HistoryEntry } from '../api/types'
+import { formatDateTime } from '../utils/format'
 
 const entries = ref<HistoryEntry[]>([])
 const detail = ref<DecisionReport | null>(null)
@@ -19,8 +20,9 @@ async function loadFavorites() {
     ])
     favorites.value = favs.items
     productNames.value = Object.fromEntries(products.products.map((p) => [p.id, p.name]))
-  } catch {
-    favorites.value = []
+  } catch (err) {
+    // 不能静默清空：那会让「加载失败」显示成「你没有收藏」。
+    error.value = err instanceof ApiError ? err.message : '收藏加载失败'
   }
 }
 
@@ -35,23 +37,33 @@ async function removeFavorite(productId: string) {
 
 async function load() {
   loading.value = true
+  error.value = ''
   try {
-    const data = await api.get<{ entries: HistoryEntry[] }>('/history')
+    // 收藏与记录一起加载：先结束 loading 再拉收藏，会让「我的收藏」
+    // 先闪一下「还没有收藏」再变成真实数据。
+    const [data] = await Promise.all([
+      api.get<{ entries: HistoryEntry[] }>('/history'),
+      loadFavorites(),
+    ])
     entries.value = data.entries
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '历史记录加载失败'
   } finally {
     loading.value = false
   }
-  await loadFavorites()
 }
 
 async function open(id: number) {
   activeId.value = id
   detail.value = null
+  const requested = id
   try {
-    detail.value = await api.get<DecisionReport>(`/history/${id}`)
+    const report = await api.get<DecisionReport>(`/history/${id}`)
+    // 连点不同记录时，慢的旧请求不能覆盖新选中的那条。
+    if (activeId.value !== requested) return
+    detail.value = report
   } catch (err) {
+    if (activeId.value !== requested) return
     error.value = err instanceof ApiError ? err.message : '打开报告失败'
   }
 }
@@ -99,7 +111,7 @@ onMounted(load)
         </thead>
         <tbody>
           <tr v-for="e in entries" :key="e.id" :style="activeId === e.id ? 'background:#fdf3ed' : ''">
-            <td class="small">{{ e.created_at?.replace('T', ' ').slice(0, 16) }}</td>
+            <td class="small">{{ formatDateTime(e.created_at) }}</td>
             <td>{{ e.demand_summary || '—' }}</td>
             <td>{{ e.top_product || '—' }}</td>
             <td>{{ e.result_count }}</td>
@@ -147,7 +159,7 @@ onMounted(load)
           <tr v-for="f in favorites" :key="f.product_id">
             <td><strong>{{ productNames[f.product_id] || '（商品已不在库中）' }}</strong></td>
             <td class="small muted">{{ f.product_id }}</td>
-            <td class="small">{{ f.added_at?.replace('T', ' ').slice(0, 16) }}</td>
+            <td class="small">{{ formatDateTime(f.added_at) }}</td>
             <td><button class="btn btn-ghost btn-sm" @click="removeFavorite(f.product_id)">取消收藏</button></td>
           </tr>
         </tbody>

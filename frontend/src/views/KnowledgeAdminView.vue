@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { Meta, ProductList } from '../api/types'
+import { formatDateTime } from '../utils/format'
 
 interface DocRow {
   doc_id: string
@@ -13,6 +14,19 @@ interface DocRow {
 }
 interface RetrievalHit { [key: string]: unknown }
 
+interface VectorStats {
+  configured: boolean
+  message?: string
+  model?: string
+  dim?: number
+  total_slices?: number
+  ready?: number
+  stale?: number
+  missing?: number
+  generation_needed?: number
+  last_indexed_at?: string
+}
+
 const meta = ref<Meta | null>(null)
 const products = ref<ProductList | null>(null)
 const docs = ref<DocRow[]>([])
@@ -20,9 +34,20 @@ const error = ref('')
 const notice = ref('')
 const busy = ref(false)
 const showCreate = ref(false)
-const createForm = reactive({ title: '', doc_type: 'service', body: '', source: '本项目整理（非厂商资料）', category: '' })
+/** 新建资料的初始值。抽成常量，成功后整表重置，不会残留上一次的选择。 */
+const EMPTY_DOC_FORM = {
+  title: '',
+  doc_type: 'service',
+  body: '',
+  source: '本项目整理（非厂商资料）',
+  category: '',
+}
+const createForm = reactive({ ...EMPTY_DOC_FORM })
 const query = ref('笔记本多重适合带出门')
 const retrieval = ref<{ mode: string; note: string; passages: RetrievalHit[]; count: number } | null>(null)
+const vectorStats = ref<VectorStats | null>(null)
+const vectorBusy = ref(false)
+const vectorError = ref('')
 
 const MODE_LABELS: Record<string, string> = {
   vector: '语义检索', keyword: '关键词检索', bm25: '关键词检索', unavailable: '暂不可用',
@@ -45,18 +70,51 @@ async function load() {
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '知识库状态加载失败'
   }
+  // 单独加载、单独兜错：向量索引状态读不到不该让整页三块内容一起变空。
+  void loadVectorStatus()
+}
+
+async function loadVectorStatus() {
+  try {
+    vectorStats.value = await api.get<VectorStats>('/admin/knowledge/vector')
+  } catch (err) {
+    vectorStats.value = null
+    vectorError.value = err instanceof ApiError ? err.message : '索引状态读取失败'
+  }
+}
+
+async function buildVectorIndex() {
+  if (vectorBusy.value) return
+  vectorBusy.value = true
+  vectorError.value = ''
+  notice.value = ''
+  try {
+    const data = await api.post<{ message: string }>('/admin/knowledge/vector/build', {})
+    notice.value = data.message
+    // 构建后立刻刷新状态，按钮会变成「索引已是最新」。
+    await loadVectorStatus()
+  } catch (err) {
+    vectorError.value = err instanceof ApiError ? err.message : '向量索引构建失败'
+  } finally {
+    vectorBusy.value = false
+  }
 }
 
 async function createDoc() {
   if (busy.value) return
+  if (!createForm.title.trim() || !createForm.body.trim()) {
+    error.value = '标题与正文都不能为空。'
+    return
+  }
   busy.value = true
   error.value = ''
   try {
     const data = await api.post<{ documents: DocRow[] }>('/admin/knowledge/documents', createForm)
     docs.value = data.documents
     notice.value = `已新增资料「${createForm.title}」。`
-    createForm.title = ''
-    createForm.body = ''
+    // 整表重置：只清标题和正文会留下上一次的品类与来源，
+    // 连续新建时很容易造出内容错配的资料。
+    Object.assign(createForm, EMPTY_DOC_FORM)
     showCreate.value = false
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '新增失败'
@@ -90,12 +148,19 @@ async function runRetrieval() {
 }
 
 async function reindex() {
+  // 与创建、检索共用 busy：清理索引会重扫全部资料，
+  // 连点等于让同一件事跑多遍。
+  if (busy.value) return
+  busy.value = true
+  error.value = ''
   try {
     const data = await api.post<{ documents: DocRow[]; cleared_caches: number }>('/admin/knowledge/reindex', {})
     docs.value = data.documents
     notice.value = `已清理 ${data.cleared_caches} 处索引缓存，下次检索按文件时间自动重建。`
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '重建失败'
+  } finally {
+    busy.value = false
   }
 }
 
@@ -165,6 +230,40 @@ onMounted(load)
       </table>
     </div>
     <div v-else class="empty"><strong>暂无资料</strong>新增选购指南或常见问题后会显示在这里。</div>
+  </div>
+
+  <div class="card">
+    <h2>语义检索索引</h2>
+    <p class="small muted">
+      生成切片向量后，问答会优先使用语义检索；尚未生成时自动回退关键词检索。
+      按内容哈希增量生成，已是最新的切片会被跳过，重复点击不会重复调用向量服务。
+    </p>
+
+    <p v-if="vectorError" class="notice error">{{ vectorError }}</p>
+
+    <template v-if="vectorStats?.configured">
+      <div class="grid-3" style="margin: 14px 0">
+        <div class="stat"><div class="value">{{ vectorStats.total_slices ?? '—' }}</div><div class="label">切片总数</div></div>
+        <div class="stat accent"><div class="value">{{ vectorStats.ready ?? '—' }}</div><div class="label">已就绪</div></div>
+        <div class="stat"><div class="value">{{ vectorStats.generation_needed ?? '—' }}</div><div class="label">待生成</div></div>
+      </div>
+      <p class="small muted">
+        模型 {{ vectorStats.model || '—' }} · 维度 {{ vectorStats.dim ?? '—' }}
+        <template v-if="vectorStats.last_indexed_at">
+          · 最近构建 {{ formatDateTime(vectorStats.last_indexed_at, { seconds: true }) }}
+        </template>
+      </p>
+      <button
+        class="btn btn-primary"
+        :disabled="vectorBusy || vectorStats.generation_needed === 0"
+        @click="buildVectorIndex"
+      >
+        <span v-if="vectorBusy" class="spinner" />
+        {{ vectorBusy ? '正在生成向量（可能需要数十秒）…' : (vectorStats.generation_needed ? '生成向量索引' : '索引已是最新') }}
+      </button>
+    </template>
+    <p v-else-if="vectorStats" class="notice info">{{ vectorStats.message }}</p>
+    <p v-else class="small muted">正在读取索引状态…</p>
   </div>
 
   <div class="card">

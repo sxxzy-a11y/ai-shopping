@@ -42,9 +42,8 @@ jobs:
         run: ruff format --check .
 
       # 静态类型检查只在 py3.12 跑一次：类型目标版本由 pyproject 的
-      # `python_version = "3.11"` 决定，与运行矩阵无关；py3.11 运行时下 mypy
-      # 对本项目依赖的 stub 解析会报差异（同一份代码在 3.12/3.13 上均零错误）。
-      # 若后续确认 3.11 的报错是真问题，再加回全矩阵。
+      # `python_version = "3.12"` 决定，与运行矩阵无关，跑一遍即可。
+      # 这里的版本号不要另抄一份，以 pyproject.toml 为唯一来源。
       - name: Type check
         if: matrix.python-version == '3.12'
         run: mypy src

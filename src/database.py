@@ -24,6 +24,7 @@ import json
 import logging
 import shutil
 import sqlite3
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -102,6 +103,49 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 CREATE TABLE IF NOT EXISTS preference_template (
     id         INTEGER PRIMARY KEY CHECK (id = 1),
     prefs_json TEXT NOT NULL DEFAULT '{}'
+);
+
+-- Agent 编排轨迹。run 是一次编排，step 是其中**真实发生过**的每一次工具调用。
+-- 分开两张表而不是把轨迹塞进 JSON 列：管理端要按工具/状态筛选与回放，
+-- JSON 列会让每次筛选都变成全表扫描 + 反序列化。
+CREATE TABLE IF NOT EXISTS agent_run (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at     TEXT    NOT NULL,
+    question       TEXT    NOT NULL,
+    answer         TEXT    NOT NULL DEFAULT '',
+    rounds         INTEGER NOT NULL DEFAULT 0,
+    degraded       INTEGER NOT NULL DEFAULT 0,
+    degrade_reason TEXT    NOT NULL DEFAULT '',
+    -- 可空：后台异步生成轨迹时不强行绑定账号（design D4 的同一条原则）。
+    user_id        TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_run_created_at
+    ON agent_run (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS agent_step (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id         INTEGER NOT NULL,
+    round          INTEGER NOT NULL,
+    tool           TEXT    NOT NULL,
+    arguments_json TEXT    NOT NULL DEFAULT '{}',
+    -- ok 成功 / rejected 参数校验被拒 / error 执行出错
+    status         TEXT    NOT NULL,
+    summary        TEXT    NOT NULL DEFAULT '',
+    FOREIGN KEY (run_id) REFERENCES agent_run(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_step_run_id
+    ON agent_step (run_id, id);
+
+-- 登录失败计数。按用户名而不是 IP：公网部署在反向代理之后，
+-- 远程地址可能是代理地址，按 IP 锁定会误伤所有人。
+-- 时间戳存 Unix 秒（REAL），避开 ISO 字符串与时区混用导致的比较错误。
+CREATE TABLE IF NOT EXISTS login_failures (
+    username       TEXT PRIMARY KEY,
+    failed_count   INTEGER NOT NULL DEFAULT 0,
+    locked_until   REAL    NOT NULL DEFAULT 0,
+    last_failed_at REAL    NOT NULL DEFAULT 0
 );
 """
 
@@ -1037,9 +1081,11 @@ def save_analysis(
     top = report.recommendations[0] if report.recommendations else None
 
     try:
-        init_db(path)
+        # 只建历史库的表。`init_db` 会把商品表也建到历史库上，而这个文件
+        # 自己的文档里就写着「别用这个」——它只是给测试和迁移脚本用的。
+        init_history_db(path)
     except HistoryWriteError as exc:
-        # init_db 失败时它说的是「数据库初始化失败」，但用户此刻做的是「保存」。
+        # 初始化失败时它说的是「数据库初始化失败」，但用户此刻做的是「保存」。
         # 报错要按用户正在做的事来说，不然他会以为自己点错了地方。
         raise HistoryWriteError(
             "本次分析记录保存失败，结果仍可在当前页面查看。",
@@ -1441,3 +1487,222 @@ def is_favorite(user_id: str, product_id: str, path: Path | None = None) -> bool
         # 这里刻意吞掉领域异常：它是一个渲染期的辅助查询，
         # 数据库坏了也该让用户看到商品列表，而不是整页报错。
         return False
+
+
+# --------------------------------------------------------------------------
+# Agent 编排轨迹
+# --------------------------------------------------------------------------
+
+
+def save_agent_run(
+    run,
+    *,
+    question: str,
+    user_id: str | None = None,
+    path: Path | None = None,
+) -> int:
+    """把一次 Agent 编排及其执行轨迹落库，返回 `run_id`。
+
+    `run` 就是 `src.agent.runner.AgentRun`（不在这里 import，避免循环依赖）。
+    调用方负责在边界处吞掉异常：轨迹是可解释性材料，不是主流程产物，
+    落库失败不该让分析或问答失败。
+    """
+    init_history_db(path)
+    try:
+        with connect(path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO agent_run
+                    (created_at, question, answer, rounds, degraded,
+                     degrade_reason, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    now_local().isoformat(timespec="seconds"),
+                    question,
+                    run.answer,
+                    run.rounds,
+                    int(run.degraded),
+                    run.degrade_reason,
+                    user_id,
+                ),
+            )
+            run_id = int(cursor.lastrowid)
+            connection.executemany(
+                """
+                INSERT INTO agent_step
+                    (run_id, round, tool, arguments_json, status, summary)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        run_id,
+                        step.round,
+                        step.tool,
+                        json.dumps(step.arguments, ensure_ascii=False),
+                        step.status,
+                        step.summary,
+                    )
+                    for step in run.trace
+                ],
+            )
+            connection.commit()
+    except sqlite3.Error as exc:
+        raise HistoryWriteError(
+            "Agent 执行轨迹保存失败，本次结果仍可查看。",
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+    return run_id
+
+
+def list_agent_runs(limit: int = 20, path: Path | None = None) -> list[dict]:
+    """管理端回放列表：最近 N 次编排，附每次的步骤数。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            rows = connection.execute(
+                """
+                SELECT r.id, r.created_at, r.question, r.answer, r.rounds,
+                       r.degraded, r.degrade_reason, r.user_id,
+                       COUNT(s.id) AS step_count
+                  FROM agent_run r
+                  LEFT JOIN agent_step s ON s.run_id = r.id
+                 GROUP BY r.id
+                 ORDER BY r.created_at DESC, r.id DESC
+                 LIMIT ?
+                """,
+                (max(1, min(limit, 200)),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+    except (sqlite3.Error, ZhigouError) as exc:
+        raise HistoryReadError(
+            "Agent 轨迹列表读取失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def get_agent_run(run_id: int, path: Path | None = None) -> dict | None:
+    """回放详情：一次编排 + 它的全部步骤（按真实发生顺序）。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                "SELECT * FROM agent_run WHERE id = ?", (run_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            steps = connection.execute(
+                """
+                SELECT round, tool, arguments_json, status, summary
+                  FROM agent_step WHERE run_id = ? ORDER BY id
+                """,
+                (run_id,),
+            ).fetchall()
+        payload = dict(row)
+        payload["steps"] = [
+            {
+                "round": step["round"],
+                "tool": step["tool"],
+                "arguments": json.loads(step["arguments_json"] or "{}"),
+                "status": step["status"],
+                "summary": step["summary"],
+            }
+            for step in steps
+        ]
+        return payload
+    except (sqlite3.Error, ZhigouError, json.JSONDecodeError) as exc:
+        raise HistoryReadError(
+            "Agent 轨迹详情读取失败。", detail=f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
+# --------------------------------------------------------------------------
+# 登录失败限流
+# --------------------------------------------------------------------------
+
+#: 连续失败多少次触发临时锁定，以及锁定时长（分钟）。
+#: 与 `docs/roadmap.md` T1 的口径一致。
+LOGIN_MAX_FAILURES = 5
+LOGIN_LOCK_MINUTES = 15
+
+
+def login_lock_remaining(username: str, path: Path | None = None) -> int:
+    """返回该用户名还剩多少秒锁定期；`0` 表示未锁定。
+
+    安全组件读失败时返回 0（放行）并记日志：不能因为限流表坏了
+    就把所有人挡在门外。这属于「放行 + 标记」档。
+    """
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            row = connection.execute(
+                "SELECT locked_until FROM login_failures WHERE username = ?",
+                (username,),
+            ).fetchone()
+        if row is None:
+            return 0
+        return max(0, int(float(row["locked_until"]) - time.time()))
+    except (sqlite3.Error, ZhigouError, ValueError, TypeError) as exc:
+        logger.warning("登录锁定状态读取失败：%s", exc)
+        return 0
+
+
+def record_login_failure(username: str, path: Path | None = None) -> dict:
+    """记录一次失败并按需锁定，返回 `locked` / `remaining` / `failures`。
+
+    UPSERT 与阈值判断放在**同一个事务**里，避免并发请求各自读到旧计数
+    而少算一次。达到阈值后计数清零，解锁后重新计满才再次锁定。
+    """
+    now = time.time()
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            connection.execute(
+                """
+                INSERT INTO login_failures
+                    (username, failed_count, last_failed_at, locked_until)
+                VALUES (?, 1, ?, 0)
+                ON CONFLICT(username) DO UPDATE SET
+                    failed_count = failed_count + 1,
+                    last_failed_at = excluded.last_failed_at
+                """,
+                (username, now),
+            )
+            row = connection.execute(
+                "SELECT failed_count FROM login_failures WHERE username = ?",
+                (username,),
+            ).fetchone()
+            count = int(row["failed_count"])
+            if count >= LOGIN_MAX_FAILURES:
+                connection.execute(
+                    """
+                    UPDATE login_failures
+                       SET locked_until = ?, failed_count = 0
+                     WHERE username = ?
+                    """,
+                    (now + LOGIN_LOCK_MINUTES * 60, username),
+                )
+                locked, remaining = True, LOGIN_LOCK_MINUTES * 60
+            else:
+                locked, remaining = False, LOGIN_MAX_FAILURES - count
+            connection.commit()
+        return {"locked": locked, "remaining": remaining, "failures": count}
+    except sqlite3.Error as exc:
+        logger.warning("登录失败记录写入失败：%s", exc)
+        return {
+            "locked": False,
+            "remaining": LOGIN_MAX_FAILURES,
+            "failures": 0,
+        }
+
+
+def clear_login_failures(username: str, path: Path | None = None) -> None:
+    """登录成功后清掉计数。失败只记日志，不影响本次登录。"""
+    try:
+        _ensure_ready(path)
+        with connect(path) as connection:
+            connection.execute(
+                "DELETE FROM login_failures WHERE username = ?", (username,)
+            )
+            connection.commit()
+    except sqlite3.Error as exc:
+        logger.warning("清除登录失败记录失败：%s", exc)

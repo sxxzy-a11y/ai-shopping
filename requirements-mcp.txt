@@ -1,0 +1,14 @@
+# 智购参谋 MCP Server 专用依赖（可选）
+#
+# 只在运行 `python -m mcp_server.server` 时装，Vue 主站用 requirements-vue.txt，
+# 不要把这份依赖装进生产 venv：它的 pydantic-settings 会顺带升级一堆包。
+#
+# 版本选择依据（实测）：
+#   mcp 1.9.4 + 项目锁定的 pydantic 2.12.4 可正常导入；
+#   mcp 1.9.4 + pydantic 2.14.x 会因内部 API `eval_type_backport` 被移除而 ImportError。
+# 许可证 MIT（wheel METADATA 实测），Requires-Python >=3.10。
+
+-r requirements-vue.txt
+
+mcp==1.9.4
+pydantic==2.12.4

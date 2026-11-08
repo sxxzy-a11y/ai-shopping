@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter
@@ -24,14 +25,25 @@ from src import (
 )
 from src.errors import ZhigouError, to_user_message
 from src.knowledge import admin as knowledge_docs
-from src.knowledge import corpus, embeddings
+from src.knowledge import chunking, corpus, embeddings
 
 from backend.app.core import AdminUser
-from backend.app.services import BadRequest, get_catalog, to_jsonable
+from backend.app.services import (
+    BadRequest,
+    ServiceUnavailable,
+    get_catalog,
+    to_jsonable,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
+logger = logging.getLogger(__name__)
+
 _SECRET_KEYS = frozenset({"llm_api_key", "embedding_api_key"})
+
+#: 全站分析记录一次最多返回多少条。界面需要如实标注「最近 N 条」，
+#: 不能把这个截断后的条数说成全站总数。
+_ANALYSES_LIMIT = 100
 
 
 def _config_view() -> dict:
@@ -404,16 +416,29 @@ def delete_document(doc_id: str, admin: AdminUser) -> dict:
 
 @router.post("/knowledge/retrieve")
 def knowledge_retrieve(payload: RetrievePayload, admin: AdminUser) -> dict:
-    """检索调试：沿用旧版的向量优先 / 关键词回退，并把模式与提示如实返回。"""
-    from src.knowledge.retrieval import retrieve
-    from src.ui.state import get_knowledge_index, get_vector_store
+    """检索调试：沿用旧版的向量优先 / 关键词回退，并把模式与提示如实返回。
 
-    result = retrieve(
-        payload.query,
-        index=get_knowledge_index(),
-        store=get_vector_store(),
-        service=embeddings.get_service(),
-    )
+    这是「调试」接口：检索链路炸掉时不能让界面吃 500，否则错误原因被
+    FastAPI 的通用文案盖住。失败时按降级语义返回，和问答接口保持一致。
+    """
+    from src.knowledge.retrieval import retrieve
+    from src.runtime_cache import get_knowledge_index, get_vector_store
+
+    try:
+        result = retrieve(
+            payload.query,
+            index=get_knowledge_index(),
+            store=get_vector_store(),
+            service=embeddings.get_service(),
+        )
+    except Exception:  # noqa: BLE001 - 调试接口要把失败原因交回界面
+        logger.warning("知识检索调试失败", exc_info=True)
+        return {
+            "mode": "unavailable",
+            "note": "检索暂不可用，请稍后重试或检查知识库配置。",
+            "passages": [],
+            "count": 0,
+        }
     passages = [to_jsonable(p) for p in result.passages]
     return {
         "mode": result.mode,
@@ -425,16 +450,102 @@ def knowledge_retrieve(payload: RetrievePayload, admin: AdminUser) -> dict:
 
 @router.post("/knowledge/reindex")
 def knowledge_reindex(admin: AdminUser) -> dict:
-    """重建索引：清除进程内缓存，让下次检索按文件时间戳自动重建（旧版同一机制）。"""
-    from src.ui import state
+    """重建索引：清除进程内缓存，让下次检索按文件时间戳自动重建。
 
-    cleared = 0
-    for name in ("_load_index_cached", "_index_cache"):
-        cached = getattr(state, name, None)
-        if hasattr(cached, "cache_clear"):
-            cached.cache_clear()
-            cleared += 1
-    return {"ok": True, "cleared_caches": cleared, "documents": _document_rows()}
+    改走 `runtime_cache.clear_caches()`：原先靠 `getattr(state, name)` 猜私有
+    函数名，缓存实现一改名这里就静默清不掉（`cleared` 变成 0 却不报错）。
+    """
+    from src.runtime_cache import clear_caches
+
+    return {"ok": True, "cleared_caches": clear_caches(), "documents": _document_rows()}
+
+
+def _knowledge_slices() -> list[chunking.Slice]:
+    """当前语料的全部切片，与关键词检索索引同源。
+
+    商品级知识文档是 `build_corpus` 从商品字段**合成**的，不只存在于 Markdown
+    文件里。所以必须走 `get_knowledge_index()`，不能只读 `data/knowledge/`——
+    否则商品资料永远不会被向量化。
+    """
+    from src.runtime_cache import get_knowledge_index
+
+    return chunking.split_corpus(list(get_knowledge_index().documents))
+
+
+@router.get("/knowledge/vector")
+def vector_index_status(admin: AdminUser) -> dict:
+    """向量索引状态：配置情况、切片总数、待生成数量。
+
+    Vue 版管理页此前没有构建入口，配了 Embedding 密钥却永远走不了语义检索。
+    这个接口让界面能如实显示「还差多少没生成」，而不是笼统说「暂不可用」。
+    """
+    service = embeddings.get_service()
+    if not service.configured:
+        return {
+            "configured": False,
+            "message": "尚未配置向量化密钥，问答当前使用关键词检索。",
+        }
+
+    from src.runtime_cache import get_vector_store
+
+    try:
+        stats = get_vector_store().stats(
+            _knowledge_slices(), model=service.model, dim=service.dim
+        )
+    except ZhigouError as exc:
+        raise ServiceUnavailable(f"索引状态读取失败：{to_user_message(exc)}") from exc
+    return {
+        "configured": True,
+        "model": stats.model,
+        "dim": stats.dim,
+        "total_slices": stats.total_slices,
+        "ready": stats.ready,
+        "stale": stats.stale,
+        "missing": stats.missing,
+        "generation_needed": stats.generation_needed,
+        "last_indexed_at": stats.last_indexed_at,
+    }
+
+
+@router.post("/knowledge/vector/build")
+def vector_index_build(admin: AdminUser) -> dict:
+    """增量构建向量索引。
+
+    复用 `VectorStore.build_index`：它按内容哈希 + 模型 + 维度跳过已是最新
+    的切片，所以重复点击不会重复调用向量服务、不会重复消耗额度。
+    上游鉴权/超时/维度不符都转成中文 503，不让界面吃 500。
+    """
+    service = embeddings.get_service()
+    if not service.configured:
+        raise BadRequest(
+            "尚未配置向量化服务。请在 .env 里填写 "
+            "ZHIGOU_EMBEDDING_API_KEY / BASE_URL / MODEL / DIM 并重启应用。"
+        )
+
+    from src.runtime_cache import get_vector_store
+
+    slices = _knowledge_slices()
+    if not slices:
+        raise BadRequest("知识库里没有可向量化的切片。")
+
+    try:
+        result = get_vector_store().build_index(slices, service=service)
+    except ZhigouError as exc:
+        raise ServiceUnavailable(f"向量索引构建失败：{to_user_message(exc)}") from exc
+    except Exception:  # noqa: BLE001 - 构建失败不能让页面吃 500
+        logger.exception("向量索引构建出现未预期错误")
+        raise ServiceUnavailable("向量索引构建失败，请查看服务日志。") from None
+
+    return {
+        "ok": True,
+        "embedded": result.embedded,
+        "skipped": result.skipped,
+        "removed": result.removed,
+        "message": (
+            f"已生成 {result.embedded} 个切片，跳过 {result.skipped} 个已最新，"
+            f"清理 {result.removed} 条陈旧记录。"
+        ),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -444,7 +555,34 @@ def knowledge_reindex(admin: AdminUser) -> dict:
 
 @router.get("/analyses")
 def all_analyses(admin: AdminUser) -> dict:
-    return {"entries": [to_jsonable(e) for e in database.list_analyses(limit=100)]}
+    """全站分析记录。
+
+    列表按上限截断，同时返回真实总数：界面此前直接把 `entries.length`
+    显示成「全站分析记录（N）」，记录超过上限时这个数字就是错的。
+    """
+    return {
+        "entries": [
+            to_jsonable(entry)
+            for entry in database.list_analyses(limit=_ANALYSES_LIMIT)
+        ],
+        "total": database.count_analyses(),
+        "limit": _ANALYSES_LIMIT,
+    }
+
+
+@router.get("/agent/runs")
+def agent_runs(admin: AdminUser, limit: int = 20) -> dict:
+    """Agent 编排轨迹列表（管理端回放入口）。"""
+    return {"runs": database.list_agent_runs(limit=limit)}
+
+
+@router.get("/agent/runs/{run_id}")
+def agent_run_detail(run_id: int, admin: AdminUser) -> dict:
+    """回放一次编排的全部步骤。编号不存在时给可读提示，不吃 500。"""
+    run = database.get_agent_run(run_id)
+    if run is None:
+        raise BadRequest(f"没有编号为 {run_id} 的轨迹记录。")
+    return {"run": run}
 
 
 @router.delete("/analyses/{entry_id}")

@@ -130,6 +130,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", choices=DB_CHOICES, default="all", help="目标库")
     args = parser.parse_args(argv)
 
+    # 一个备份文件只含一个库，而 `--db` 默认是 `all`。不加这道拦截，
+    # `restore_db.py --verify backup.bak` 会拿同一个文件去校验两套表，
+    # 必然以「备份缺少表」失败，看起来像备份坏了，其实是用法错了。
+    if (args.verify or args.restore) and args.db == "all":
+        parser.error(
+            "--verify / --restore 需要显式指定 --db history 或 --db products"
+            "（一个备份文件只含一个库）"
+        )
+
     if args.verify:
         path = Path(args.verify)
         for name in _selected(args.db):

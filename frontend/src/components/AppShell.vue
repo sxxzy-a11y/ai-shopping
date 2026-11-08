@@ -79,7 +79,7 @@ async function logout() {
           :key="item.to"
           :to="item.to"
           class="nav-item"
-          :class="{ active: route.path === item.to }"
+          exact-active-class="active"
         >
           <AppIcon :name="item.icon" />
           <span>{{ item.label }}</span>
@@ -113,7 +113,7 @@ async function logout() {
         <span>© 2026 智购参谋 · 商品信息为整理所得参考值，不构成购买建议</span>
         <span class="row" style="gap: 12px">
           <RouterLink to="/about">关于与数据说明</RouterLink>
-          <span class="muted">版本 2.2</span>
+          <span class="muted">版本 2.8</span>
         </span>
       </footer>
     </main>

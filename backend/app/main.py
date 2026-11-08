@@ -11,7 +11,9 @@ Vue 端使用 hash 路由，因此静态托管不需要额外的 history fallbac
 
 from __future__ import annotations
 
+import logging
 import os
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
@@ -20,12 +22,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from src import accounts, config, database, report_service
+from src import accounts, config, database, product_store, report_service
+from src.auth import User
 from src.errors import ZhigouError, to_user_message
 
 from backend.app import schemas, services
 from backend.app.admin_api import router as admin_router
 from backend.app.core import (
+    COOKIE_NAME,
     AdminUser,
     CurrentUser,
     create_session,
@@ -34,7 +38,75 @@ from backend.app.core import (
 )
 from backend.app.services import BadRequest, ServiceUnavailable
 
-app = FastAPI(title="智购参谋 API", version="2.0", docs_url="/api/docs")
+logger = logging.getLogger(__name__)
+
+
+def _session_payload(user: User) -> dict:
+    """登录态在接口里的统一形状。
+
+    `/api/auth/login`、`/api/auth/me`、`/api/meta` 三处都返回它：早先各自
+    手写一份，`/api/meta` 因此漏了 `role_label`，与前端 `SessionUser` 类型
+    对不上。集中一处就不再有字段漂移。
+    """
+    return {
+        "username": user.username,
+        "role": user.role,
+        "role_label": user.role_label,
+        "is_admin": user.is_admin,
+    }
+
+
+def _bootstrap() -> None:
+    """进程启动时的一次性初始化，四件事全部幂等。
+
+    Vue 版单端口入口没有旧版 Streamlit 的 `_bootstrap_once`，全新机器
+    首次启动会出现「商品库/账号表为空、登录永远 401」。这里补齐同一套
+    初始化，让云端部署不必再手动执行 `scripts/init.py`。
+
+    初始化失败只记日志、不阻断启动：否则连 `/api/health` 都打不开，
+    排查会更困难。
+    """
+    try:
+        if product_store.count_products() == 0:
+            product_store.seed_from_json()
+    except ZhigouError as exc:
+        logger.warning("商品种子导入失败: %s", exc.detail or exc)
+
+    try:
+        created = accounts.ensure_initial_admin()
+    except ZhigouError as exc:
+        logger.warning("初始管理员创建失败: %s", exc.detail or exc)
+        return
+
+    # 一次性恢复通道：临时设置 ZHIGOU_RESET_ADMIN_PASSWORD 后重启即可覆盖
+    # 已有管理员密码；成功后应立即删除该变量并再次重启。
+    try:
+        if accounts.reset_admin_password_from_env():
+            logger.info(
+                "管理员密码已按临时 Secret 重置；请立即删除 "
+                "ZHIGOU_RESET_ADMIN_PASSWORD 并重启。"
+            )
+    except ZhigouError as exc:
+        logger.warning("临时管理员密码重置失败: %s", exc.detail or exc)
+
+    if created is None:
+        return
+
+    _admin, notice = created
+    if notice:
+        # 只在启动时输出一次。密码来自配置时 notice 为空，不会打印明文。
+        print("\n" + notice + "\n")
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _bootstrap()
+    yield
+
+
+app = FastAPI(
+    title="智购参谋 API", version="2.0", docs_url="/api/docs", lifespan=_lifespan
+)
 
 _ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -77,26 +149,36 @@ async def _domain_error_handler(request: Request, exc: ZhigouError) -> JSONRespo
 
 
 @app.get("/api/health")
-def health() -> dict:
+def health() -> dict[str, str]:
     healthy, message = database.check_health()
     return {"status": "ok" if healthy else "degraded", "database": message}
 
 
 @app.post("/api/auth/login")
 def login(payload: schemas.LoginRequest, response: Response) -> dict:
+    # 限流按用户名维度：公网在代理之后按 IP 锁会误伤所有人。
+    remaining = database.login_lock_remaining(payload.username)
+    if remaining > 0:
+        raise HTTPException(
+            status_code=429,
+            detail=f"登录失败次数过多，请在 {remaining // 60 + 1} 分钟后重试。",
+        )
     try:
         user = accounts.authenticate(payload.username, payload.password)
     except ZhigouError:
-        # 用户名不存在 / 密码错误 / 账号停用共用同一句话。
+        # 用户名不存在 / 密码错误 / 账号停用共用同一句话，
+        # 不通过提示差异泄露账号是否存在。
+        state = database.record_login_failure(payload.username)
+        if state["locked"]:
+            raise HTTPException(
+                status_code=429,
+                detail=f"登录失败次数过多，账号已临时锁定 {database.LOGIN_LOCK_MINUTES} 分钟。",
+            ) from None
         raise HTTPException(status_code=401, detail="用户名或密码错误") from None
+    database.clear_login_failures(payload.username)
     token = create_session(user)
     response.set_cookie(value=token, **session_cookie_kwargs())
-    return {
-        "username": user.username,
-        "role": user.role,
-        "role_label": user.role_label,
-        "is_admin": user.is_admin,
-    }
+    return _session_payload(user)
 
 
 @app.post("/api/auth/register")
@@ -112,19 +194,15 @@ def register(payload: schemas.RegisterRequest) -> dict:
 
 @app.post("/api/auth/logout")
 def logout(request: Request, response: Response) -> dict:
-    destroy_session(request.cookies.get("zg_session"))
-    response.delete_cookie("zg_session", path="/")
+    token = request.cookies.get(COOKIE_NAME)
+    destroy_session(token)
+    response.delete_cookie(COOKIE_NAME, path="/")
     return {"ok": True}
 
 
 @app.get("/api/auth/me")
 def me(user: CurrentUser) -> dict:
-    return {
-        "username": user.username,
-        "role": user.role,
-        "role_label": user.role_label,
-        "is_admin": user.is_admin,
-    }
+    return _session_payload(user)
 
 
 # --------------------------------------------------------------------------
@@ -142,11 +220,7 @@ def meta(user: CurrentUser) -> dict:
         "dataset_name": data["dataset_name"],
         "disclaimer": data["disclaimer"],
         "score_display_name": config.SCORE_DISPLAY_NAME,
-        "user": {
-            "username": user.username,
-            "role": user.role,
-            "is_admin": user.is_admin,
-        },
+        "user": _session_payload(user),
     }
 
 

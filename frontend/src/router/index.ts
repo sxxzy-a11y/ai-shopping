@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { useSession } from '../stores/session'
 
 // hash 路由：静态部署时无需额外的服务端路由配置。
 const router = createRouter({
@@ -18,6 +19,15 @@ const router = createRouter({
     { path: '/about', name: 'about', component: () => import('../views/AboutView.vue'), meta: { title: '关于' } },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
+})
+
+// 权限守卫：侧栏隐藏入口只是界面层，手动改 hash 仍能进 /users 等管理页。
+// 真正的权限判定在后端（`AdminUser` 依赖），这里只避免普通用户落到满屏 403。
+router.beforeEach(async (to) => {
+  const session = useSession()
+  if (!session.ready) await session.restore()
+  if (to.meta.admin && !session.user?.is_admin) return { path: '/' }
+  return true
 })
 
 export default router

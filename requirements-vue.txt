@@ -1,0 +1,20 @@
+# 智购参谋 —— Vue 版运行时依赖（不含 legacy Streamlit 界面）
+#
+# 什么时候用这个文件：
+#   只部署 Vue 版（`python backend/run.py` + `frontend/dist`）时安装它。
+#   可以省掉 streamlit 及其传递依赖（pyarrow / altair / tornado 等），
+#   本机实测 site-packages 里单是 streamlit 就占 28MB。
+#
+# 什么时候仍用 requirements.txt：
+#   1. 要跑 legacy 界面（`streamlit run app.py`）；
+#   2. 要跑完整测试套件（`tests/` 里有大量 Streamlit AppTest 用例）；
+#   3. 不确定的话就装全量，多花一点磁盘，少一类「模块找不到」。
+#
+# 版本必须与 requirements.txt 完全一致，改一处要同步另一处。
+
+fastapi==0.162.0       # Vue 版 API 服务
+uvicorn==0.54.0        # ASGI 服务器
+pandas==2.3.3          # 商品数据整理与比较表
+pydantic==2.12.4       # 结构化数据校验
+httpx==0.28.1          # 大模型 API（OpenAI 兼容直连）
+numpy==2.3.5           # 向量检索余弦计算

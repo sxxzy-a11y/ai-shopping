@@ -27,8 +27,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from src import accounts, config, database, product_store  # noqa: E402
 from src.errors import ZhigouError, to_user_message  # noqa: E402
 
-#: 与 requirements.txt 中 numpy 2.3.5 的 Requires-Python 保持一致。
-MIN_PYTHON = (3, 11)
+#: 与 `requirements.txt` / README 对外声明的最低版本一致。
+#: `numpy 2.3.5` 只要求 >=3.11，但 3.11 的单元测试有未定位失败，
+#: 项目因此不声明支持 3.11——这里的检查必须和声明对齐，否则会放行
+#: 一个「能装依赖但没验证过」的版本。
+MIN_PYTHON = (3, 12)
 
 
 def _check_python() -> None:
@@ -145,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     for line in _report():
         print(f"  · {line}")
 
-    print("\n下一步：streamlit run app.py")
+    print("\n下一步：python backend/run.py")
     return 0
 
 

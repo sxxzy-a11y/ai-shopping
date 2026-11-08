@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '../api/client'
+import { formatDateTime } from '../utils/format'
 
 interface UserRow {
   username: string
@@ -25,6 +26,10 @@ async function load() {
   try {
     const data = await api.get<{ users: UserRow[] }>('/admin/users')
     users.value = data.users
+    // 刷新后该行可能已不存在，改密码输入框要一起收起，
+    // 否则它会挂到列表里下一个同名位置之外的任意行上。
+    passwordFor.value = ''
+    newPassword.value = ''
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '账号列表加载失败'
   }
@@ -74,7 +79,15 @@ async function toggleActive(row: UserRow) {
 }
 
 async function resetPassword(username: string) {
-  if (!newPassword.value.trim()) return
+  // 输入框 label 已声明「至少 8 位」，这里先按同一口径拦一次，
+  // 免得把校验完全丢给服务端、只能得到一句泛化的 400。
+  if (newPassword.value.trim().length < 8) {
+    error.value = '新密码至少 8 位。'
+    return
+  }
+  if (busy.value) return
+  busy.value = true
+  error.value = ''
   try {
     await api.put(`/admin/users/${encodeURIComponent(username)}/password`, {
       password: newPassword.value,
@@ -84,11 +97,16 @@ async function resetPassword(username: string) {
     newPassword.value = ''
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '重置失败'
+  } finally {
+    busy.value = false
   }
 }
 
 async function remove(row: UserRow) {
+  if (busy.value) return
   if (!confirm(`确定删除账号「${row.username}」吗？该账号的历史、收藏与偏好会一并删除，且不可恢复。`)) return
+  busy.value = true
+  error.value = ''
   try {
     const data = await api.delete<{ deleted_histories: number; deleted_favorites: number }>(
       `/admin/users/${encodeURIComponent(row.username)}`
@@ -97,6 +115,8 @@ async function remove(row: UserRow) {
     await load()
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '删除失败（不能删自己或最后一个管理员）'
+  } finally {
+    busy.value = false
   }
 }
 
@@ -156,7 +176,7 @@ onMounted(load)
               </select>
             </td>
             <td><span class="badge" :class="u.is_active ? 'green' : 'amber'">{{ u.is_active ? '启用' : '停用' }}</span></td>
-            <td class="small">{{ u.created_at || '—' }}</td>
+            <td class="small">{{ formatDateTime(u.created_at) || '—' }}</td>
             <td>
               <div class="row" style="gap: 6px; flex-wrap: nowrap">
                 <button class="btn btn-ghost btn-sm" @click="toggleActive(u)">{{ u.is_active ? '停用' : '启用' }}</button>

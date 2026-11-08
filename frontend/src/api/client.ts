@@ -8,10 +8,14 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // headers 用 Headers 合并、放在 `...init` 之后：先前写成
+  // `{ ...init }` 收尾，任何调用方传入 headers 都会把默认 Content-Type 整块覆盖掉。
+  const headers = new Headers(init.headers)
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   const response = await fetch(`/api${path}`, {
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
     ...init,
+    headers,
   })
 
   if (!response.ok) {

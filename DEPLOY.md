@@ -9,20 +9,39 @@
 一个 Uvicorn 进程同时提供 `/api/*` 接口与前端静态资源，绑定域名后即可直接打开网址。
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-vue.txt   # Vue 版专用，不含 streamlit
 cd frontend && npm install && npm run build && cd ..
 python backend/run.py                 # 默认 127.0.0.1:8000
 ```
+
+> `requirements-vue.txt` 与 `requirements.txt` 版本完全一致，只少了 `streamlit`。
+> 后端已不再 import streamlit（数据集与知识索引缓存抽到了 `src/runtime_cache.py`），
+> 所以只部署 Vue 版时不需要它。要跑 legacy 界面或完整测试套件，仍装全量
+> `requirements.txt`。
 
 云端要点：
 
 1. **先构建再启动**：`frontend/dist/` 是构建产物、不入库；后端启动时检测该目录并自动托管。
    改动前端源码后必须重新 `npm run build` 并重启后端，否则仍指向旧产物。
-2. **绑定地址**：容器或服务器内设 `ZHIGOU_API_HOST=0.0.0.0`、`ZHIGOU_API_PORT=8000`，
-   HTTPS 由平台或反向代理提供。
-3. **持久化**：挂卷到 `storage/`，SQLite 只跑一个实例；重启后数据保留，但内存中的登录会话失效。
-4. **密钥**：`ZHIGOU_LLM_API_KEY` 等只放服务端环境变量，不会下发到浏览器。
-5. **上线前**：补登录限流与会话过期（见 `SECURITY.md`），否则不适合长期公网开放。
+   内存只有 2G 的机器建议**在本地构建**后上传 `dist/`，避免 `vue-tsc` 构建时 OOM。
+2. **启动时自动初始化**：进程启动会幂等地导入商品种子、在账号表为空时创建初始管理员，
+   因此新机器首次启动即可登录，**不再要求手动执行 `scripts/init.py`**（该脚本仍保留，
+   可作为「只体检」或独立初始化手段）。初始化失败只记日志，不会阻断服务启动。
+3. **管理员密码必须显式配置**：`ZHIGOU_ADMIN_PASSWORD` 未设置时会随机生成，
+   且明文只出现在本次启动日志里 —— 用 systemd 部署时容易错过。请写进 `.env`。
+   忘记密码时临时设置 `ZHIGOU_RESET_ADMIN_PASSWORD` 重启一次，成功后再删除并重启。
+4. **绑定地址**：容器或服务器内设 `ZHIGOU_API_HOST=0.0.0.0`、`ZHIGOU_API_PORT=8000`，
+   HTTPS 由平台或反向代理提供。默认值 `127.0.0.1` 只能本机访问。
+5. **放行端口**：云服务器需在安全组 / 防火墙放行 `8000`（测试期）或 `80`、`443`（正式）。
+   服务在本机 `curl` 正常、外部却连接超时，通常就是这一步没做。
+6. **守护进程**：用 systemd 托管 `backend/run.py` 并设 `Restart=always`，
+   否则 SSH 断开或机器重启后站点就打不开了。
+7. **持久化**：挂卷到 `storage/`，SQLite 只跑一个实例；重启后数据保留，但内存中的登录会话失效。
+8. **密钥**：`ZHIGOU_LLM_API_KEY` / `ZHIGOU_EMBEDDING_*` 等只放服务端环境变量，
+   不会下发到浏览器。**本地 `.env` 不入库，部署时必须手动把这几项迁过去**——
+   漏了的话 AI 问答与语义检索不可用（其余功能仍正常，很容易被误认为「功能没做」）。
+   配置后用 `/api/admin/api-config` 返回的 `configured` 字段确认是否真的生效。
+9. **上线前**：补登录限流与会话空闲超时（见 `SECURITY.md`），否则不适合长期公网开放。
 
 > 现有 `Dockerfile` / `docker-compose.yml` 仍是 **legacy Streamlit 版**（8501 端口），
 > 尚未改为多阶段构建 Vue 前端。用它部署 Vue 版之前请先按上述方式替换，
@@ -71,7 +90,7 @@ ZHIGOU_EMBEDDING_API_KEY = "可选的向量检索密钥"
 
 ### 公开演示的安全边界
 
-- 当前账号体系是演示级：没有登录限流、没有会话过期；
+- 当前账号体系是演示级：没有登录限流；会话 12 小时绝对过期，但没有空闲超时；
 - 默认开放注册，任何访问者都能创建普通用户；
 - 不要输入真实个人信息、真实密码或其他敏感数据；
 - 公开演示只用于比赛和体验，不是生产服务。

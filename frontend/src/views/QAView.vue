@@ -2,13 +2,15 @@
 import { onMounted, ref } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { QAResult } from '../api/types'
+import { useFavorites } from '../composables/useFavorites'
+import { formatPrice } from '../utils/format'
 
 const question = ref('')
 const result = ref<QAResult | null>(null)
 const error = ref('')
 const busy = ref(false)
 const expanded = ref('')
-const favorites = ref<string[]>([])
+const { favorites, load: loadFavorites, toggle: toggleFavoriteRaw } = useFavorites()
 
 const examples = [
   '写代码用的笔记本该看哪些参数？',
@@ -31,23 +33,11 @@ function percent(weight: number): string {
   return `${Math.round(weight * 100)}%`
 }
 
-onMounted(async () => {
-  try {
-    const data = await api.get<{ items: { product_id: string }[] }>('/favorites')
-    favorites.value = data.items.map((item) => item.product_id)
-  } catch {
-    favorites.value = []
-  }
-})
+onMounted(loadFavorites)
 
 async function toggleFavorite(productId: string) {
-  const wasFavorite = favorites.value.includes(productId)
   try {
-    if (wasFavorite) await api.delete(`/favorites/${encodeURIComponent(productId)}`)
-    else await api.post('/favorites', { product_id: productId })
-    favorites.value = wasFavorite
-      ? favorites.value.filter((id) => id !== productId)
-      : [...favorites.value, productId]
+    await toggleFavoriteRaw(productId)
   } catch {
     error.value = '收藏操作失败，请稍后重试'
   }
@@ -120,7 +110,7 @@ async function ask(text = question.value) {
               <div class="small muted">{{ p.brand }} {{ p.model }} · {{ p.category_label }}</div>
             </div>
             <div class="row">
-              <span class="price">{{ p.price != null ? `¥${p.price}` : '价格缺失' }}</span>
+              <span class="price">{{ formatPrice(p.price) }}</span>
               <span class="badge accent">{{ p.score_total }} 分</span>
               <span class="badge" :class="p.within_budget ? 'green' : 'amber'">{{ p.budget_label }}</span>
               <button class="btn btn-ghost btn-sm">{{ expanded === p.id ? '收起' : '查看详情' }}</button>

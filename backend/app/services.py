@@ -7,8 +7,9 @@
 from __future__ import annotations
 
 import json
+import logging
+import threading
 from dataclasses import asdict, is_dataclass
-from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
@@ -29,6 +30,9 @@ from src.recommender import recommend
 from src.report_service import build_report
 
 from backend.app.schemas import AnalysisRequest, PreferencesUpdate
+
+
+logger = logging.getLogger(__name__)
 
 
 class BadRequest(Exception):
@@ -81,6 +85,38 @@ def _build_demand(payload: AnalysisRequest, catalog: Catalog) -> Demand:
         raise BadRequest(str(exc)) from exc
 
 
+def _spawn_agent_trace(question: str, user: User) -> None:
+    """分析成功后，异步跑一次 Agent 编排并落库轨迹。
+
+    Vue 版此前 `ai_enhanced=False`、完全不跑 Agent，于是「过程可解释」
+    在线上根本没有数据可看。Agent 是多轮模型调用的长任务，塞进同步分析
+    请求会把响应从毫秒拉到几十秒，所以放后台线程：主链路延迟不变，
+    轨迹由管理端「全站概览」回放。
+
+    失败只记日志：轨迹是可解释性材料，不是分析结果本身。
+    """
+    if not config.is_ai_configured():
+        return
+
+    def _work() -> None:
+        try:
+            from src import ai_service
+            from src.agent.runner import run_agent
+            from src.runtime_cache import get_knowledge_index
+
+            run_agent(
+                question,
+                catalog=get_catalog(),
+                service=ai_service.get_service(),
+                knowledge_index=get_knowledge_index(),
+                user_id=user.username,
+            )
+        except Exception:  # noqa: BLE001 - 后台任务不能让进程出现未处理异常
+            logger.warning("后台 Agent 轨迹生成失败", exc_info=True)
+
+    threading.Thread(target=_work, daemon=True, name="zhigou-agent-trace").start()
+
+
 def run_analysis(payload: AnalysisRequest, user: User) -> dict:
     """一次完整分析：解析 → 追问 / 偏好 → 推荐 → 报告 → 落库。"""
     catalog = get_catalog()
@@ -97,6 +133,7 @@ def run_analysis(payload: AnalysisRequest, user: User) -> dict:
         result.over_budget = []
     report = build_report(catalog, applied, result)
     database.save_analysis(report, user_id=user.username)
+    _spawn_agent_trace(demand.summary_line(), user)
 
     return {
         "status": "ok",
@@ -208,7 +245,10 @@ def answer_question(question: str, user: User) -> dict:
     try:
         from src.knowledge import embeddings
         from src.knowledge.retrieval import retrieve
-        from src.ui.state import get_knowledge_index, get_vector_store
+
+        # 从 `src.runtime_cache` 取，避免经由 `src.ui.state` 把 streamlit
+        # 拖进后端进程（那个模块是 Streamlit 界面层，服务端不该依赖它）。
+        from src.runtime_cache import get_knowledge_index, get_vector_store
 
         found = retrieve(
             question,
@@ -220,7 +260,9 @@ def answer_question(question: str, user: User) -> dict:
         retrieval_mode = found.mode
         retrieval_note = found.note
     except Exception:  # noqa: BLE001 - 检索链路失败不能拖垮问答
-        pass
+        # 降级是预期行为，但**必须留痕**：否则「问答总是走规则模式」这种
+        # 问题会因为没有日志而无法定位。
+        logger.warning("知识检索失败，已回退本地规则", exc_info=True)
 
     # 2) 商品意图：从本地商品库筛真实候选
     demand = parse_demand(question, known_brands=catalog.brands())
@@ -248,7 +290,8 @@ def answer_question(question: str, user: User) -> dict:
         candidate = ai_service.get_service()
         if config.llm_api_key():
             service = candidate
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - 模型服务不可用只影响增强，不影响规则链路
+        logger.warning("模型服务初始化失败，本次回答改用规则链路", exc_info=True)
         service = None
 
     if service is not None:
@@ -277,7 +320,7 @@ def answer_question(question: str, user: User) -> dict:
                 "retrieval_note": retrieval_note,
             }
         except Exception:  # noqa: BLE001 - 模型失败必须回退规则链路
-            pass
+            logger.warning("模型回答失败，已回退规则链路", exc_info=True)
 
     # 4) 规则回退：只用本地商品库里真实存在的条目
     if products:
@@ -339,15 +382,30 @@ def admin_overview() -> dict:
 
 
 def eval_summary() -> dict:
-    """评测快照。文件不存在时如实返回空，不编造指标。"""
-    candidates = sorted(Path("data/evaluation").glob("report.json"))
+    """评测快照。文件不存在时如实返回空，不编造指标。
+
+    两处易错点在这里一起修掉：
+    1. 路径基于 `PROJECT_ROOT`，不用相对路径 —— systemd 启动时 cwd 未必是
+       项目根，用 `Path("data/evaluation")` 会静默读不到报告；
+    2. 多份快照按修改时间取**最新**一份，而不是字典序第一份。
+    """
+    directory = config.PROJECT_ROOT / "data" / "evaluation"
+    try:
+        candidates = sorted(
+            directory.glob("report.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError as exc:
+        return {"available": False, "reason": f"报告目录读取失败：{exc}"}
     if not candidates:
         return {"available": False, "reason": "尚未生成评测报告快照"}
+    latest = candidates[0]
     try:
-        payload = json.loads(candidates[0].read_text(encoding="utf-8"))
+        payload = json.loads(latest.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return {"available": False, "reason": f"报告读取失败：{exc}"}
-    return {"available": True, "file": str(candidates[0]), "payload": payload}
+    return {"available": True, "file": str(latest), "payload": payload}
 
 
 def about_info() -> dict:

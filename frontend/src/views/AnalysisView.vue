@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { AnalysisResult, Meta, ReportItem } from '../api/types'
+import { useFavorites } from '../composables/useFavorites'
 
 const meta = ref<Meta | null>(null)
 const text = ref('')
@@ -11,7 +12,7 @@ const brand = ref('')
 const result = ref<AnalysisResult | null>(null)
 const error = ref('')
 const busy = ref(false)
-const favorites = ref<string[]>([])
+const { favorites, load: loadFavorites, toggle: toggleFavoriteRaw } = useFavorites()
 
 onMounted(async () => {
   try {
@@ -19,23 +20,12 @@ onMounted(async () => {
   } catch {
     meta.value = null
   }
-  try {
-    const data = await api.get<{ items: { product_id: string }[] }>('/favorites')
-    favorites.value = data.items.map((i) => i.product_id)
-  } catch {
-    favorites.value = []
-  }
+  await loadFavorites()
 })
 
 async function toggleFavorite(productId: string) {
-  if (!productId) return
-  const wasFavorite = favorites.value.includes(productId)
   try {
-    if (wasFavorite) await api.delete(`/favorites/${encodeURIComponent(productId)}`)
-    else await api.post('/favorites', { product_id: productId })
-    favorites.value = wasFavorite
-      ? favorites.value.filter((id) => id !== productId)
-      : [...favorites.value, productId]
+    await toggleFavoriteRaw(productId)
   } catch {
     error.value = '收藏操作失败，请稍后重试'
   }

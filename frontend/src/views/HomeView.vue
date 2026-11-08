@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api } from '../api/client'
+import { api, ApiError } from '../api/client'
 import type { HistoryEntry, Meta } from '../api/types'
+import { formatDateTime } from '../utils/format'
 import AppIcon from '../components/AppIcon.vue'
 
 const meta = ref<Meta | null>(null)
 const recent = ref<HistoryEntry[]>([])
-
-function formatTime(value: string): string {
-  return value ? value.replace('T', ' ').slice(0, 16) : ''
-}
+const error = ref('')
 
 onMounted(async () => {
   try {
@@ -19,8 +17,11 @@ onMounted(async () => {
     ])
     meta.value = metaData
     recent.value = history.entries.slice(0, 3)
-  } catch {
+  } catch (err) {
+    // 原先这里静默吞掉：加载失败后三个统计位永远显示「—」，
+    // 用户无法区分「加载失败」和「确实是 0」。
     meta.value = null
+    error.value = err instanceof ApiError ? err.message : '数据加载失败，请稍后重试'
   }
 })
 </script>
@@ -39,6 +40,8 @@ onMounted(async () => {
       <span class="step"><b>03</b> 做出决定</span>
     </div>
   </section>
+
+  <p v-if="error" class="notice error">{{ error }}</p>
 
   <div class="grid-3" style="margin-bottom: 20px">
     <div class="stat accent">
@@ -62,7 +65,7 @@ onMounted(async () => {
     </div>
     <div v-if="recent.length" class="grid-3">
       <RouterLink v-for="entry in recent" :key="entry.id" to="/history" class="product-row" style="text-decoration: none">
-        <span class="small muted">{{ formatTime(entry.created_at) }}</span>
+        <span class="small muted">{{ formatDateTime(entry.created_at) }}</span>
         <strong>{{ entry.demand_summary || '未填写需求摘要' }}</strong>
         <span class="small muted">首选 {{ entry.top_product || '—' }} · {{ entry.result_count }} 条结果</span>
       </RouterLink>

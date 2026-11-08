@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api, ApiError } from '../api/client'
+import { formatDateTime } from '../utils/format'
 
 interface Metric {
   key: string
@@ -31,6 +32,7 @@ interface EvalResponse {
 
 const response = ref<EvalResponse | null>(null)
 const error = ref('')
+const loading = ref(true)
 
 const report = computed(() => response.value?.payload ?? null)
 const summary = computed(() => report.value?.summary)
@@ -40,15 +42,14 @@ function percent(metric: Metric): number {
   return Math.round((metric.numerator / metric.denominator) * 100)
 }
 
-function formatTime(value: string | undefined): string {
-  return value ? value.replace('T', ' ').slice(0, 19) : '—'
-}
-
 onMounted(async () => {
   try {
     response.value = await api.get<EvalResponse>('/eval')
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '评测数据加载失败'
+  } finally {
+    // 没有这个标志，请求失败后模板会一直停在「正在读取评测数据…」。
+    loading.value = false
   }
 })
 </script>
@@ -81,7 +82,7 @@ onMounted(async () => {
           <tbody>
             <tr><th>评测集</th><td>{{ report.dataset?.name }} · 版本 {{ report.dataset?.version }}</td></tr>
             <tr><th>用例数 / 数据更新</th><td>{{ report.dataset?.case_count }} 条 · {{ report.dataset?.updated_at }}</td></tr>
-            <tr><th>报告生成时间</th><td>{{ formatTime(report.generated_at) }}</td></tr>
+            <tr><th>报告生成时间</th><td>{{ formatDateTime(report.generated_at, { seconds: true }) || '—' }}</td></tr>
             <tr><th>结果生成耗时</th><td>{{ summary?.duration_ms }} 毫秒</td></tr>
             <tr><th>检索方式</th><td>{{ report.retrieval?.label || '本地检索' }}</td></tr>
             <tr><th>结果说明</th><td>最近一次完整评测，按用例逐项核对</td></tr>
@@ -148,5 +149,5 @@ onMounted(async () => {
       评测按批次运行，结果生成后会自动出现在这里。本页展示的是最近一次完整结果。
     </p>
   </div>
-  <p v-else class="loading"><span class="spinner" /> 正在读取评测数据…</p>
+  <p v-else-if="loading" class="loading"><span class="spinner" /> 正在读取评测数据…</p>
 </template>

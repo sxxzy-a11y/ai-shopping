@@ -39,6 +39,9 @@ class ToolContext:
 
     catalog: Catalog
     knowledge_index: BM25Index | None = None
+    #: 当前登录用户。为空时「用户画像」类工具应明确报告无归属，
+    #: 而不是拿全站数据冒充个人偏好。
+    user_id: str | None = None
 
 
 @dataclass(frozen=True)

@@ -266,6 +266,22 @@ def sync_brands(
     if not names:
         return 0
 
+    # 先比对再写。`brand_entries()` 会调这里，而它处在**分析渲染的读路径**上：
+    # 每次分析都开一次写事务，多线程下容易撞 SQLITE_BUSY，也白白写盘。
+    # 绝大多数调用这里已经齐全，于是一次写事务都不开。
+    try:
+        with _connection(path) as connection:
+            existing = {
+                row["brand_name"]
+                for row in connection.execute("SELECT brand_name FROM brand_meta")
+            }
+    except sqlite3.Error as exc:
+        raise ProductStoreWriteError(detail=f"{type(exc).__name__}: {exc}") from exc
+
+    missing = [name for name in names if name not in existing]
+    if not missing:
+        return 0
+
     try:
         with _connection(path) as connection:
             # `DO NOTHING`：已存在的品牌保留原有展示名与排序。
@@ -275,12 +291,12 @@ def sync_brands(
                 VALUES (?, NULL, 0, 1)
                 ON CONFLICT(brand_name) DO NOTHING
                 """,
-                [(name,) for name in names],
+                [(name,) for name in missing],
             )
             connection.commit()
     except sqlite3.Error as exc:
         raise ProductStoreWriteError(detail=f"{type(exc).__name__}: {exc}") from exc
-    return len(names)
+    return len(missing)
 
 
 def brand_entries(

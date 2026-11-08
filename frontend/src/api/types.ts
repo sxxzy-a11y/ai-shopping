@@ -39,6 +39,12 @@ export interface Product {
   source_url: string
   updated_at: string
   missing_fields?: string[]
+  /** 是否在售。下架商品仍会出现在 `/products` 里，展示与比较前需自行过滤。 */
+  is_active: boolean
+  entered_by: string
+  entered_at: string
+  price_source: string
+  price_collected_at: string
 }
 
 export interface ProductList {
@@ -78,6 +84,10 @@ export interface ReportItem {
 export interface DecisionReport {
   title?: string
   demand_summary?: string
+  /** 用户原始输入。老记录可能为空，展示前需判空。 */
+  demand_text?: string
+  /** 结构化条件指纹，落库去重用。 */
+  signature?: string
   created_at?: string
   conclusion?: string
   recommendations: ReportItem[]
@@ -98,6 +108,7 @@ export interface AnalysisResult {
   questions?: string[]
   report?: DecisionReport
   ai_enhanced?: boolean
+  preferences_applied?: boolean
 }
 
 export interface HistoryEntry {

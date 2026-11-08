@@ -42,12 +42,16 @@ def _call(
 # --------------------------------------------------------------------------
 
 
-def test_four_tools_are_registered(registry: ToolRegistry):
+def test_six_tools_are_registered(registry: ToolRegistry):
+    # O4 之后工具集从 4 个扩到 6 个：新增相似商品检索与用户画像。
+    # 顺序即声明顺序，MCP Server 的 tools/list 直接复用它。
     assert registry.names == [
         "search_products",
         "get_product_detail",
         "compare_products",
         "search_knowledge",
+        "find_similar_products",
+        "get_user_profile",
     ]
 
 

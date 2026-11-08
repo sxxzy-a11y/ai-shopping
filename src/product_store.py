@@ -389,6 +389,32 @@ def save_products(
         ProductStoreWriteError: 写入失败。
     """
     moment = stamp or _now()
+    rows, skipped = _build_product_rows(records, moment)
+    if skipped:
+        logger.warning("有 %d 条记录缺少商品 ID，已跳过：%s", len(skipped), skipped[:3])
+
+    _ensure_for_write(path)
+    try:
+        with _connect(path) as connection:
+            _write_product_rows(connection, rows, records, moment)
+            connection.commit()
+    except sqlite3.Error as exc:
+        raise ProductStoreWriteError(
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+    logger.info("商品写入完成：%d 条", len(rows))
+    return len(rows)
+
+
+def _build_product_rows(
+    records: Sequence[Mapping[str, Any]], moment: str
+) -> tuple[list[tuple[Any, ...]], list[str]]:
+    """把记录转成待写行，并挑出缺 ID 的记录。
+
+    抽出来是为了让 `replace_all` 能**在删除之前**完成这一步：缺 ID 的记录
+    一旦占多数，先删后写就会留下空商品表。
+    """
     rows: list[tuple[Any, ...]] = []
     skipped: list[str] = []
     for record in records:
@@ -397,10 +423,16 @@ def save_products(
             skipped.append(str(record)[:60])
             continue
         rows.append(values)
+    return rows, skipped
 
-    if skipped:
-        logger.warning("有 %d 条记录缺少商品 ID，已跳过：%s", len(skipped), skipped[:3])
 
+def _write_product_rows(
+    connection: sqlite3.Connection,
+    rows: list[tuple[Any, ...]],
+    records: Sequence[Mapping[str, Any]],
+    moment: str,
+) -> None:
+    """在**调用方的事务里**写商品与价格。不 commit、不开连接。"""
     placeholders = ", ".join("?" for _ in _PRODUCT_COLUMNS)
     columns = ", ".join(_PRODUCT_COLUMNS)
     # `INSERT OR REPLACE` 在 SQLite 里是**先删后插**——而 products 上开着外键级联，
@@ -413,31 +445,19 @@ def save_products(
         f"INSERT INTO products ({columns}) VALUES ({placeholders}) "
         f"ON CONFLICT(product_id) DO UPDATE SET {updates}"
     )
-
-    _ensure_for_write(path)
-    try:
-        with _connect(path) as connection:
-            connection.executemany(upsert, rows)
-            ids = [str(r.get("id") or "") for r in records if r.get("id")]
-            current = _current_price_rows(connection, ids)
-            for record in records:
-                product_id = str(record.get("id") or "")
-                if product_id:
-                    _write_price(
-                        connection,
-                        product_id,
-                        record,
-                        stamp=moment,
-                        existing=current.get(product_id),
-                    )
-            connection.commit()
-    except sqlite3.Error as exc:
-        raise ProductStoreWriteError(
-            detail=f"{type(exc).__name__}: {exc}",
-        ) from exc
-
-    logger.info("商品写入完成：%d 条", len(rows))
-    return len(rows)
+    connection.executemany(upsert, rows)
+    ids = [str(r.get("id") or "") for r in records if r.get("id")]
+    current = _current_price_rows(connection, ids)
+    for record in records:
+        product_id = str(record.get("id") or "")
+        if product_id:
+            _write_price(
+                connection,
+                product_id,
+                record,
+                stamp=moment,
+                existing=current.get(product_id),
+            )
 
 
 def replace_all(
@@ -446,16 +466,35 @@ def replace_all(
     path: Path | None = None,
     stamp: str | None = None,
 ) -> int:
-    """清空后写入。价格记录随外键级联删除。用于 `--mode replace`。"""
+    """清空后写入。价格记录随外键级联删除。用于 `--mode replace`。
+
+    删除与写入必须在**同一个事务**里：原先先删并提交、再调 `save_products`
+    另开连接写入，一旦写入失败（磁盘满、进程被杀、SQL 报错），商品表就空了，
+    而调用方只拿到一个异常，看不出数据已经没了。
+    """
+    moment = stamp or _now()
+    # 先构造待写行：缺 ID 的记录在这里就能发现，不必等到删除之后。
+    rows, skipped = _build_product_rows(records, moment)
+    if skipped:
+        logger.warning("有 %d 条记录缺少商品 ID，已跳过：%s", len(skipped), skipped[:3])
+    if not rows:
+        raise ProductStoreWriteError("没有可写入的商品记录，已中止覆盖操作。")
+
     _ensure_for_write(path)
     try:
         with _connect(path) as connection:
             connection.execute("DELETE FROM products")
             connection.execute("DELETE FROM product_prices")
+            _write_product_rows(connection, rows, records, moment)
             connection.commit()
     except sqlite3.Error as exc:
-        raise ProductStoreWriteError(detail=f"{type(exc).__name__}: {exc}") from exc
-    return save_products(records, path=path, stamp=stamp)
+        # 事务未提交，连接关闭时 SQLite 会回滚，原数据仍在。
+        raise ProductStoreWriteError(
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+    logger.info("商品覆盖写入完成：%d 条", len(rows))
+    return len(rows)
 
 
 def set_product_active(

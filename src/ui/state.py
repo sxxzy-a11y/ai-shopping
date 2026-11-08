@@ -8,16 +8,21 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import streamlit as st
 
 from src import config
 from src.auth import User
-from src.data_loader import Catalog, load_catalog
-from src.knowledge.corpus import build_corpus
-from src.knowledge.index import BM25Index
+
+# `get_catalog` / `get_vector_store` 在这里是**对外转出**：页面一直写
+# `state.get_catalog()`，保留同名导出可以让界面层不用改。显式的
+# `as` 写法是 ruff 认可的重导出标记，否则会被当成未使用的导入删掉。
+from src.runtime_cache import (
+    get_catalog as get_catalog,
+    get_knowledge_index,
+    get_vector_store as get_vector_store,
+)
 
 # --- session_state 键名 -----------------------------------------------------
 # 集中定义，避免各页面随手写字符串导致拼错后静默失效。
@@ -122,40 +127,9 @@ def clear_analysis() -> None:
 # --------------------------------------------------------------------------
 
 
-@st.cache_resource(show_spinner=False, max_entries=4)
-def _load_cached(path_str: str, mtime: float) -> Catalog:
-    """按「数据库路径 + 数据库文件修改时间」缓存数据集。
-
-    **缓存键从商品 JSON 换成了数据库**：商品数据现在存在 SQLite 里，
-    盯着 JSON 的 mtime 没有意义——它只在首次导入种子时被读一次。
-
-    把 mtime 放进缓存键是为了接入脚本：`ingest` 写库之后，运行中的应用
-    下一次渲染就会自动加载新数据，不需要重启（数据库文件写入后 mtime 会变）。
-    max_entries 取小值——旧版本的缓存没有复用价值，留 4 份足够覆盖
-    「刚刷新过」的窗口。
-
-    用 `cache_resource` 而不是 `cache_data`：返回的是同一个对象，
-    不做拷贝，页面之间共享。
-    """
-    return load_catalog(Path(path_str))
-
-
-def _file_stamp(path: Path) -> float:
-    """取文件修改时间；文件不在或读不到时返回 0（缓存键仍可用）。"""
-    try:
-        return path.stat().st_mtime
-    except OSError:
-        return 0.0
-
-
-def get_catalog() -> Catalog:
-    """取商品数据集。
-
-    这里**不吞异常**——数据库损坏、库空且种子缺失等情况让领域异常抛出去，
-    由 app.py 在边界处统一转成中文提示，保证整套异常处理只有一个出口。
-    """
-    path = config.products_db_path()
-    return _load_cached(str(path), _file_stamp(path))
+# 数据集缓存已抽到 `src.runtime_cache`：那里用 `functools.lru_cache` 实现，
+# 语义（按「路径 + 文件 mtime」作缓存键、改库自动重建）与原 `st.cache_resource`
+# 一致，但后端进程不再需要 import streamlit。`get_catalog` 见文件顶部导入。
 
 
 # --------------------------------------------------------------------------
@@ -163,46 +137,8 @@ def get_catalog() -> Catalog:
 # --------------------------------------------------------------------------
 
 
-def _knowledge_stamp(directory: Path) -> float:
-    """语料目录的变更印戳。
-
-    目录自身的 mtime **只在增删文件时变，改内容不会变**——只取目录会让
-    「编辑了一份指南」这种最常见的改动无法触发重建。所以把目录下所有
-    `.md` 的 mtime 一并取最大值。
-    """
-    stamps = [_file_stamp(directory)]
-    try:
-        stamps.extend(_file_stamp(path) for path in directory.rglob("*.md"))
-    except OSError:  # 目录不存在或读不了——保持可用，走空语料的分支
-        pass
-    return max(stamps, default=0.0)
-
-
-@st.cache_resource(show_spinner=False, max_entries=4)
-def _load_index_cached(
-    dir_str: str, knowledge_stamp: float, products_stamp: float
-) -> BM25Index:
-    """按「语料目录 + 语料 mtime + 商品数据 mtime」缓存检索索引。
-
-    商品数据也要进缓存键：商品级知识条目是由商品字段**合成**的，
-    改了 `products.json` 而语料没动时，索引同样需要重建。
-
-    后两个参数不参与计算，只用于构造缓存键——与 `_load_cached` 同一手法。
-    """
-    documents = build_corpus(Path(dir_str), get_catalog().products)
-    return BM25Index(documents)
-
-
-def get_knowledge_index() -> BM25Index:
-    """取知识检索索引。改语料或改商品数据后自动重建，不需要重启应用。"""
-    directory = config.knowledge_dir()
-    return _load_index_cached(
-        str(directory),
-        _knowledge_stamp(directory),
-        # 商品已迁入 SQLite：缓存键必须盯商品库文件，而不是种子 JSON——
-        # 否则在界面改完商品参数/亮点/不足，知识检索仍是旧内容。
-        _file_stamp(config.products_db_path()),
-    )
+# 检索索引及其 mtime 缓存同样在 `src.runtime_cache` 里，
+# `get_knowledge_index` 见文件顶部导入。
 
 
 def retrieve_knowledge(query: str, *, limit: int | None = None):
@@ -214,13 +150,6 @@ def retrieve_knowledge(query: str, *, limit: int | None = None):
     from src.knowledge import retrieval
 
     return retrieval.retrieve(query, index=get_knowledge_index(), limit=limit)
-
-
-def get_vector_store():
-    """取向量库（SQLite 表）。轻量对象，每次新建即可。"""
-    from src.knowledge.vector_store import VectorStore
-
-    return VectorStore()
 
 
 def ai_enhanced_active() -> bool:

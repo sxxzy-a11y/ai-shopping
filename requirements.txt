@@ -7,6 +7,10 @@
 # 本项目最低 Python 版本为 3.12（3.11 的测试尚未验证通过，见 README 第 8 节）。
 #
 # 升级依赖时请同步更新：本文件 → requirements-dev.txt → CI 矩阵 → README 版本声明。
+#
+# 只部署 Vue 版（backend/run.py + frontend/dist）时，改装 requirements-vue.txt：
+# 后端已经不 import streamlit（缓存层抽到了 src/runtime_cache.py），
+# 装全量只是为了保留 legacy 界面与测试套件。两个文件的版本必须一致。
 # 本机未安装、无法实测版本的工具不在此文件，见 requirements-dev.txt。
 
 # --- 运行时（部署镜像只装这一段）---

@@ -2,6 +2,7 @@
 import { onMounted, ref, computed } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { ComparisonTable, ProductList } from '../api/types'
+import { formatPrice } from '../utils/format'
 
 const category = ref('')
 const products = ref<ProductList | null>(null)
@@ -11,7 +12,7 @@ const table = ref<ComparisonTable | null>(null)
 const error = ref('')
 const busy = ref(false)
 
-const rows = computed(() => (table.value?.rows ?? []) as Record<string, unknown>[])
+const rows = computed(() => table.value?.rows ?? [])
 
 onMounted(async () => {
   try {
@@ -66,7 +67,9 @@ async function run() {
 
     <div class="check-grid">
       <label
-        v-for="p in (products?.products ?? []).filter((x) => !category || x.category === category)"
+        v-for="p in (products?.products ?? []).filter(
+          (x) => x.is_active !== false && (!category || x.category === category),
+        )"
         :key="p.id"
         class="check-item"
         :class="{ selected: selected.includes(p.id) }"
@@ -74,7 +77,7 @@ async function run() {
         <input type="checkbox" :checked="selected.includes(p.id)" @change="toggle(p.id)" />
         <span>
           <strong>{{ p.name }}</strong><br />
-          <span class="small muted">{{ p.brand }} · {{ p.price != null ? `¥${p.price}` : '价格缺失' }}</span>
+          <span class="small muted">{{ p.brand }} · {{ formatPrice(p.price) }}</span>
         </span>
       </label>
     </div>

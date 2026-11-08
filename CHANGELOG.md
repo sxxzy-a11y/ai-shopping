@@ -5,6 +5,249 @@
 
 ---
 
+## [未发布] — 2026-11-08（v2.9：O1 轨迹落库 / O4 工具扩展 / O3 账号安全 / O7 MCP）
+
+按用户指定顺序，四项均以「改动量小 + 复用现有代码 + 直接补缺口」为原则。
+
+### O1 Agent 轨迹落库（过程可解释）
+
+- 历史库新增 `agent_run` / `agent_step` 两张幂等表；`database.py` 新增
+  `save_agent_run()` / `list_agent_runs()` / `get_agent_run()`。
+- `runner.run_agent()` 的两个返回分支（正常结束、轮次上限降级）都落库，
+  降级轨迹里被拒/出错的调用同样保留；落库失败只记 warning，不阻断编排。
+- **补上 Vue 版根本不跑 Agent 的缺口**：`run_analysis()` 成功后用后台线程
+  异步跑一次编排并落库，主链路延迟不变；管理端新增
+  `GET /api/admin/agent/runs` 与 `GET /api/admin/agent/runs/{id}`，
+  「全站概览」页新增回放卡片（列表 + 逐步展开）。
+
+### O4 工具扩到 6 个
+
+- `ToolContext` 增 `user_id`（默认 None，向后兼容）。
+- 新增 `find_similar_products`：同品类内用 `scoring.spec_bounds` 的维度边界
+  归一算规格距离，叠加价格接近度与场景重叠，**不依赖向量库**。
+- 新增 `get_user_profile`：读本人 `favorites` + `analysis_history` 提炼品牌/品类/历史首选。
+  参数模型刻意不收 `user_id`，身份只从上下文取，防止模型传别人 ID 越权读取。
+- `TOOLS` 注册 6 个；`tests/test_agent_tools.py` 的注册断言同步到 6 个。
+
+### O3 账号安全（roadmap T1 P0）
+
+- 新增 `login_failures` 表（按用户名维度，时间戳存 Unix 秒）。
+  `record_login_failure()` 用单事务 UPSERT 计数，连续 5 次失败锁定 15 分钟，
+  登录成功 `clear_login_failures()`；组件读失败一律「放行 + 记日志」，不误伤登录。
+- 会话在 12 小时绝对过期之外增加 **30 分钟空闲超时**；
+  `_sessions` 从 2-tuple 改 3-tuple，滑动只更新「最近活动」，不延长绝对过期。
+- `SECURITY.md` / `README.md` / `docs/roadmap.md` 的「无会话过期、无限流」表述同步。
+
+### O7 MCP 化（可选能力，不进主站 venv）
+
+- 新增 `mcp_server/server.py`：stdio 传输，用低层 `Server` 的
+  `list_tools` / `call_tool` 把 `ToolRegistry.declarations()` 转成 MCP `inputSchema`，
+  工具调用直接复用 `registry.invoke()`——协议适配层，无第二份业务规则。
+- 新增 `requirements-mcp.txt`（`mcp==1.9.4` + `pydantic==2.12.4`，实测兼容；
+  MIT 许可）与 `docs/MCP.md`（安装、客户端配置、边界）。
+- 依赖实测记录：`mcp 1.9.4` + pydantic 2.14.x 会因内部 API
+  `eval_type_backport` 移除而 ImportError，因此锁定 2.12.4。
+
+### 验证
+
+- `ruff check .` / `ruff format --check .`（127 文件）/ `mypy src` 全绿；
+- `pytest -q`：**1114 / 0 failures / 0 errors**；`npm run build` 通过；
+- Wave 1 隔离库：`run_id=1`、列表 1 条、详情 2 步（`ok` + `rejected`）、接口 200/200/400；
+- Wave 2 隔离库：6 个工具注册、`find_similar_products` 返回 3 件、
+  非法 ID 与无用户画像都正确 `rejected`；
+- Wave 3 隔离库：5 次失败 `[401,401,401,401,429]`、锁定期正确密码 429、
+  解锁后 200、空闲超时后 `me` 401；`_sessions` 解包点 grep 全量核对；
+- Wave 4 真实 stdio JSON-RPC 会话：`initialize` / `tools/list`（6 个）/
+  两次 `tools/call`，4 个响应齐全、退出码 0。
+
+---
+
+## [未发布] — 2026-11-08（v2.8：Vue 版向量索引构建）
+
+Vue 版管理页此前只有「刷新检索索引」（清缓存），没有生成向量的入口；
+legacy 的 `src/ui/pages/knowledge_admin.py` 有，一直没搬过来。结果是配了
+Embedding 密钥也永远走不了语义检索。
+
+### 新增
+
+- **后端**（`backend/app/admin_api.py`）：
+  - `GET /api/admin/knowledge/vector`：返回配置状态、模型/维度、切片总数、
+    已就绪数、待生成数、最近构建时间；未配置密钥时如实说明「当前使用关键词检索」。
+  - `POST /api/admin/knowledge/vector/build`：调用 `VectorStore.build_index`
+    增量构建。切片来自 `runtime_cache.get_knowledge_index().documents`（含商品级
+    合成文档，不能只读 Markdown 目录）；上游鉴权/超时/维度不符统一转中文 503。
+  - 辅助函数 `_knowledge_slices()` 与 legacy 的 `_slices()` 同源。
+- **前端**（`KnowledgeAdminView.vue`）：新增「语义检索索引」卡片，展示三个统计位、
+  模型/维度/最近构建时间、待生成数量；按钮在构建中禁用并显示耗时提示，
+  全部就绪后变为「索引已是最新」。状态读取单独兜错，不会拖垮整页。
+
+### 为什么用同步接口
+
+`build_index` 按内容哈希增量生成，`EmbeddingService` 按 10 条一批请求。
+线上实测 **38 个切片约 2 秒完成**，同步请求完全够用，不需要引入后台任务 +
+进度轮询的复杂度。重复点击也不会重复消耗额度（见下方验证）。
+
+### 验证（线上真实调用）
+
+| 步骤 | 结果 |
+|---|---|
+| 构建前状态 | `total_slices=38, ready=0, generation_needed=38` |
+| 首次构建 | `200`，`embedded=38, skipped=0, removed=0` |
+| 构建后状态 | `ready=38, generation_needed=0` |
+| 检索调试 | `mode=vector, count=3`（此前 `keyword`） |
+| AI 问答 | `source=knowledge+products, retrieval_mode=vector` |
+| 再次构建 | `embedded=0, skipped=38`，耗时 **0.01s**，未调用向量服务 |
+
+`ruff` / `mypy` / `pytest`（1114）/ `npm run build` 全部通过。
+
+---
+
+## [未发布] — 2026-11-08（v2.7：解除 Streamlit 耦合 + 检索回退修复）
+
+### 解除 Streamlit 耦合
+
+- **后端不再依赖 Streamlit**：`backend/app/services.py` 与 `admin_api.py` 原先
+  `from src.ui.state import get_knowledge_index, get_vector_store`，而 `src/ui/state.py`
+  第一行就是 `import streamlit` —— 一个不跑 Streamlit 的服务端进程被迫拖进整个框架
+  （site-packages 里 streamlit 占 28MB，连同 pyarrow / altair 等传递依赖更多）。
+  新增 `src/runtime_cache.py`，用 `functools.lru_cache` 实现同一套缓存语义
+  （键含文件 mtime，改库/改语料自动重建），两处改为从它导入。
+- `src/ui/state.py` 改为从 `src.runtime_cache` **显式重导出**（`as` 写法），
+  界面层 `state.get_catalog()` / `state.get_vector_store()` 调用方式不变，
+  既有 Streamlit 测试无需改动。
+- `knowledge_reindex` 改用 `runtime_cache.clear_caches()`：原先靠
+  `getattr(state, name)` 猜私有函数名，缓存实现一改名就静默清不掉。
+- 新增 `requirements-vue.txt`（与 `requirements.txt` 版本一致，只少 streamlit），
+  `DEPLOY.md` 的 Vue 部署段落据此更新。
+
+**验证**：`import backend.app.main` 后 `streamlit` 与 `src.ui` 均不在 `sys.modules`；
+服务器上 `uv pip uninstall streamlit` 后服务正常启动，首页与 `/api/health` 均 200。
+
+### 检索回退修复
+
+- **配了 Embedding 密钥反而查不到资料**：配置密钥后走语义检索，但向量索引从未构建，
+  `VectorStore.search` 返回空。原设计「语义检索没命中就视为没有资料、不回退」混淆了
+  两种情形——**库为空是能力缺失**，不是「语义上不相关」。结果问答永远回落
+  `general-knowledge`，比不配密钥还差。
+  现在区分：库为空 → 回退关键词并说明「向量索引尚未构建」；库里有向量但低于阈值 →
+  维持原有不回退策略。
+
+**验证**：修复前 `mode=vector count=0`、问答 `source=general-knowledge`；
+修复后 `mode=keyword count=1`、`source=knowledge+products`。
+
+---
+
+## [未发布] — 2026-11-08（v2.6：补齐全量覆盖审查）
+
+第一轮审查聚焦 Vue 主链路，本轮补齐 `src/` 核心模块、`scripts/`、构建与 CI 配置。
+
+### 缺陷修复
+
+- **商品数据可能写进历史库**（`scripts/fetch_products.py`）：`DEFAULT_DB_PATH` 硬编码
+  `storage/zhigou.db`（历史库），而商品库是 `products.db`。缺省 `--out` 时会把商品写进
+  历史库、真实商品库保持旧数据，脚本还打印「已写入」。改为 `config.products_db_path()`。
+- **覆盖写入可能留下空商品表**（`src/product_store.py`）：`replace_all` 先在一条连接里
+  `DELETE` 并提交，再调 `save_products` 另开连接写入；写入失败即空表。改为单事务，
+  并把「构造待写行」提到删除之前，空记录时直接中止。
+- **`--mode replace` 无确认**（`scripts/fetch_products.py`）：一条命令可清空演示库商品，
+  新增 `--yes` 确认开关。
+- **保存分析会往历史库建商品表**（`src/database.py`）：`save_analysis` 用了 `init_db`，
+  而该函数自己的文档写着「应用读写的入口别用这个」。改为 `init_history_db`。
+- **预算下限被静默丢弃**（`src/agent/tools.py`）：`budget_min` 过了参数校验却从未参与筛选，
+  模型传「3000–5000」会返回 2000 元的商品并回报成功。改为在工具层按 price 过滤。
+- **读路径上反复写库**（`src/catalog_meta.py`）：`brand_entries()` 每次调用都 `sync_brands`，
+  而它处在分析渲染路径上，每次分析都开写事务，多线程下易撞 `SQLITE_BUSY`。
+  改为先比对已有品牌，无新增则零写入。
+- **`restore_db.py --verify/--restore` 必然失败**：`--db` 默认 `all`，却拿同一个备份文件
+  去校验两套表。改为要求显式指定 `--db`，并提示一个备份只含一个库。
+- **配置加载失败后永久转圈**（`SettingsView.vue`）：`cfg` 为 null 时模板命中
+  「正在读取设置…」，失败也一直转。补 `cfgLoading` 与失败态 + 重试按钮。
+- **账号页破坏性操作可重复提交**（`UsersView.vue`）：删除与改密码没有在途守卫，双击会发两次
+  DELETE；重置密码也不做 8 位校验，只能拿到服务端泛化 400。均补上。
+- **知识库操作无守卫与表单残留**（`KnowledgeAdminView.vue`）：`reindex` 不受 `busy` 保护；
+  新建成功后只清标题与正文，`doc_type`/`category`/`source` 残留，连点易造出错配资料。
+- **前端无全局错误出口**（`main.ts`）：渲染期异常与未捕获 Promise 拒绝在控制台之外无痕。
+
+### 配置与文档一致性
+
+- `scripts/init.py`：`MIN_PYTHON` 由 `(3, 11)` 改为 `(3, 12)`（与 README、
+  `requirements.txt` 的声明对齐）；末行提示由 `streamlit run app.py` 改为 `python backend/run.py`。
+- `.github/workflows/ci.yml`：注释里过时的 `python_version = "3.11"` 改为 3.12，
+  并注明以 `pyproject.toml` 为唯一来源。
+- 页脚版本号 `2.5` → `2.6`。
+
+### 验证
+
+- `ruff check` / `ruff format --check` / `mypy src` 全绿；
+- `pytest -q`：**1114 通过 / 0 失败**；
+- `npm run build`（含 `vue-tsc --noEmit`）通过；
+- 仓储层单独验证：`replace_all` 正常替换、空记录被拒且原数据保留、
+  `sync_brands` 第二次返回 0（读路径不再写库）。
+
+---
+
+## [未发布] — 2026-11-08（v2.5：代码审查与部署加固）
+
+### 缺陷修复
+
+- **请求头被覆盖**：`api/client.ts` 里 `...init` 写在 `headers` 之后，任何传入 headers 的
+  调用都会把默认 `Content-Type` 整块覆盖；改用 `Headers` 合并后传入。
+- **新机器首次启动无法登录**：Vue 版入口缺少旧版的 `_bootstrap_once`，商品种子与初始管理员
+  从不创建。`backend/app/main.py` 增加 `lifespan` 启动初始化（幂等、失败只记日志），
+  并把 `ZHIGOU_RESET_ADMIN_PASSWORD` 恢复通道一并接入。
+- **评测快照读不到**：`eval_summary` 用相对路径 `Path("data/evaluation")`，依赖进程 cwd，
+  systemd 启动时会静默失败；改用 `config.PROJECT_ROOT`，多份快照按 mtime 取最新。
+- **全站记录数虚报**：`/api/admin/analyses` 硬截 100 条却被界面当作全站总数；
+  接口补返回 `total` 与 `limit`，界面区分「显示最近 N 条」与「共 N 条」。
+- **登录/登出两处缺陷**：`logout()` 在 `finally` 清状态但仍把异常抛给调用方，导致
+  `router.replace('/')` 不执行；`restore()` 只处理 401，错误状态从不重置。
+- **评测页失败后无限转圈**：补 `loading` 状态，失败即停止 spinner。
+- **历史详情竞态**：快速切换记录时慢的旧响应会覆盖新选中项，加请求序号校验。
+- **收藏误报为空**：加载失败被静默当成「没有收藏」，改为提示错误。
+- **收藏重复提交**：分析页与问答页各写一份收藏逻辑且都无在途保护，抽成
+  `composables/useFavorites.ts`，补齐空值与重入守卫。
+- **下架商品可加入比较**：`CompareView` 未过滤 `is_active`，改为按 `is_active !== false` 过滤。
+- **`/api/meta` 用户字段缺 `role_label`**：与前端 `SessionUser` 类型不符；抽出
+  `_session_payload()` 供登录、`/auth/me`、`/meta` 共用。
+- **登出硬编码 Cookie 名**：改用 `core.COOKIE_NAME`，避免改名时漏改。
+- **检索调试接口无兜底**：`/api/admin/knowledge/retrieve` 故障直接 500，改为降级返回。
+- **非法数字静默提交**：`Number('abc')` 得到 `NaN`，序列化成 `null` 提交；新增
+  `toNumberOrUndefined()`。
+- **管理页无路由守卫**：`meta.admin` 是死配置，手动改 hash 可进入；补 `beforeEach`。
+
+### 可维护性
+
+- 新增 `utils/format.ts`：统一时间格式化（原先 4 处实现、2 种口径）与价格口径
+  （原先前端 `¥2999` 与后端 `2999 元` 两套）。
+- `CatalogView` 删除与 `Product` 重复的 `ProductRow` 声明，改用公共类型；
+  去掉一次「只为取品类而拉全量商品」的多余请求。
+- 配置保存、品类/品牌保存、上下架操作补在途守卫，避免连点重复提交与重复全量刷新。
+- 导航高亮改用 `exact-active-class`，不再依赖 `route.path === item.to`。
+- 三处静默 `except Exception: pass` 补日志（知识检索回退、模型初始化失败、模型回答失败）。
+- 会话增加 12 小时绝对过期与惰性清理，避免 token 只增不减。
+
+### 文档同步
+
+- `SECURITY.md` / `README.md` / `DEPLOY.md` / `docs/auth-boundary.md` / `docs/architecture.md` /
+  `docs/requirements.md` / `docs/technical-introduction.md` / `docs/VUE_MIGRATION.md` /
+  `openspec/specs/web-ui/spec.md`：把「无会话过期」更正为「有 12 小时绝对过期、无空闲超时」；
+  规范中沿用 legacy 的「刷新页面需重新登录」改为 Vue 版实际行为。
+- `DEPLOY.md` 补充部署必需但原先缺失的步骤：启动自动初始化、必须显式配置管理员密码、
+  安全组放行端口、systemd 守护、2G 内存机器在本地构建。
+- 登录页「长时间未操作后需要重新登录」与实现不符，改为「登录满 12 小时后」；
+  登录页与关于页补演示级鉴权边界披露。
+- 页脚版本号由 `2.2` 对齐到本轮的 `2.5`。
+
+### 验证
+
+- `ruff check` / `ruff format --check` / `mypy src` 全绿；
+- `pytest -q` 全量通过；
+- `npm run build`（含 `vue-tsc --noEmit`）通过；
+- 临时库接口实测：登录、`/auth/me`、`/meta`、`/admin/overview`、`/admin/analyses`（含 total）、
+  `/eval`、会话过期与清理均符合预期。
+
+---
+
 ## [未发布] — 2026-11-07（v2.4：问答结果可展开）
 
 ### 改动

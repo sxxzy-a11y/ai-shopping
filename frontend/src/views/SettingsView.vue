@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { Preferences } from '../api/types'
 import { useSession } from '../stores/session'
+import { toNumberOrUndefined } from '../utils/format'
 
 interface ApiConfigView {
   values: Record<string, string>
@@ -31,6 +32,8 @@ const probeEmb = ref<ProbeResult | null>(null)
 const probeBusy = ref('')
 const cfgMessage = ref('')
 const cfgError = ref('')
+const cfgBusy = ref(false)
+const cfgLoading = ref(false)
 
 onMounted(async () => {
   try {
@@ -42,6 +45,8 @@ onMounted(async () => {
 })
 
 async function loadConfig() {
+  cfgLoading.value = true
+  cfgError.value = ''
   try {
     cfg.value = await api.get<ApiConfigView>('/admin/api-config')
     cfgForm.llm_base_url = cfg.value.values.llm_base_url ?? ''
@@ -52,7 +57,11 @@ async function loadConfig() {
     cfgForm.llm_api_key = ''
     cfgForm.embedding_api_key = ''
   } catch (err) {
+    // 失败时 `cfg` 保持 null。没有独立的加载态，模板会一直显示
+    // 「正在读取设置…」，管理员会以为它在转，其实早就失败了。
     cfgError.value = err instanceof ApiError ? err.message : '设置读取失败'
+  } finally {
+    cfgLoading.value = false
   }
 }
 
@@ -72,6 +81,8 @@ async function save() {
 }
 
 async function saveConfig() {
+  if (cfgBusy.value) return
+  cfgBusy.value = true
   cfgError.value = ''
   cfgMessage.value = ''
   const payload: Record<string, string | number> = {
@@ -82,7 +93,9 @@ async function saveConfig() {
   }
   if (cfgForm.llm_api_key.trim()) payload.llm_api_key = cfgForm.llm_api_key
   if (cfgForm.embedding_api_key.trim()) payload.embedding_api_key = cfgForm.embedding_api_key
-  if (cfgForm.embedding_dim) payload.embedding_dim = Number(cfgForm.embedding_dim)
+  // 用安全解析：`Number('abc')` 会得到 NaN，序列化成 null 静默提交。
+  const dim = toNumberOrUndefined(cfgForm.embedding_dim)
+  if (dim !== undefined) payload.embedding_dim = dim
   try {
     cfg.value = await api.put<ApiConfigView>('/admin/api-config', payload)
     cfgMessage.value = '已保存。新配置从下一次请求开始生效。'
@@ -90,11 +103,17 @@ async function saveConfig() {
     cfgForm.embedding_api_key = ''
   } catch (err) {
     cfgError.value = err instanceof ApiError ? err.message : '配置保存失败'
+  } finally {
+    cfgBusy.value = false
   }
 }
 
 async function clearConfig() {
+  // 与 saveConfig 共用同一个在途标志：两者都会覆写服务端配置，
+  // 同时进行时后返回的那次会盖掉前一次的界面状态。
+  if (cfgBusy.value) return
   if (!confirm('确定恢复为环境变量 / 默认配置吗？本机覆盖文件会被删除。')) return
+  cfgBusy.value = true
   cfgError.value = ''
   try {
     cfg.value = await api.delete<ApiConfigView>('/admin/api-config')
@@ -107,6 +126,8 @@ async function clearConfig() {
     })
   } catch (err) {
     cfgError.value = err instanceof ApiError ? err.message : '恢复失败'
+  } finally {
+    cfgBusy.value = false
   }
 }
 
@@ -244,12 +265,18 @@ async function runProbe(kind: 'llm' | 'embedding') {
         <p v-if="probeEmb" class="notice" :class="probeEmb.ok ? 'info' : 'error'" style="margin-top: 12px">{{ probeEmb.message }}</p>
       </div>
     </div>
-    <p v-else class="loading"><span class="spinner" /> 正在读取设置…</p>
+    <p v-else-if="cfgLoading" class="loading"><span class="spinner" /> 正在读取设置…</p>
+    <p v-else class="small muted" style="margin-top: 18px">
+      设置未能读取。
+      <button class="btn btn-ghost btn-sm" style="margin-left: 6px" @click="loadConfig">重新读取</button>
+    </p>
 
     <div class="divider"></div>
     <div class="row">
-      <button class="btn btn-primary" @click="saveConfig">保存设置</button>
-      <button class="btn btn-ghost" @click="clearConfig">恢复默认设置</button>
+      <button class="btn btn-primary" :disabled="cfgBusy" @click="saveConfig">
+        <span v-if="cfgBusy" class="spinner" /> 保存设置
+      </button>
+      <button class="btn btn-ghost" :disabled="cfgBusy" @click="clearConfig">恢复默认设置</button>
     </div>
     <p v-if="cfgMessage" class="notice info" style="margin-top: 14px">{{ cfgMessage }}</p>
     <p v-if="cfgError" class="notice error" style="margin-top: 14px">{{ cfgError }}</p>

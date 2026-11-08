@@ -7,7 +7,10 @@
 回退原则：
 - 未配置 Embedding 服务 → 关键词
 - 语义检索抛领域异常 → 关键词，并带上降级说明
-- 语义检索成功但低于阈值 → 视为「没有相关资料」，**不**回退
+- **向量库为空**（索引从未构建）→ 关键词，并说明需要先构建索引。
+  这不是「不相关」而是能力缺失；不回退会让「配了密钥」反而比「不配」更差
+  —— 永远查不到任何资料，且界面只显示「未找到相关资料」。
+- 语义检索成功但低于阈值（库里有向量）→ 视为「没有相关资料」，**不**回退
   （回退会把「语义上确实不相关」变成「字面碰巧命中」，违背检索意图）
 
 边界处理：
@@ -114,12 +117,22 @@ def retrieve(
                 limit=limit,
             )
             passages = [_to_passage(hit, query) for hit in hits]
-            logger.debug("语义检索完成：命中 %d 条", len(passages))
-            return RetrievalResult(
-                passages=passages,
-                mode="vector",
-                note="" if passages else "本次为语义检索，未找到足够相关的资料。",
-            )
+            if not passages and not store.slice_rows(limit=1):
+                # 库是空的 = 索引从未构建。这与「搜过但语义不相关」是两件不同的事：
+                # 后者保持不回退（字面命中会误导），前者是能力缺失，必须回退——
+                # 否则配置了 Embedding 密钥却永远查不到资料，用户只会看到
+                # 「未找到相关资料」，比不配置密钥还差。
+                logger.warning("向量库为空（索引未构建），回退关键词检索")
+                fallback_note = (
+                    "向量索引尚未构建，本次使用关键词检索；构建索引后即可启用语义检索。"
+                )
+            else:
+                logger.debug("语义检索完成：命中 %d 条", len(passages))
+                return RetrievalResult(
+                    passages=passages,
+                    mode="vector",
+                    note="" if passages else "本次为语义检索，未找到足够相关的资料。",
+                )
         except ZhigouError as exc:
             logger.warning("语义检索失败，回退关键词：%s", to_user_message(exc))
             fallback_note = (

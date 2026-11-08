@@ -17,6 +17,7 @@
 - 代码仓库：<https://github.com/sxxzy-a11y/ai-shopping>
 - 技术栈：Vue 3 + Vite + TypeScript / FastAPI + Uvicorn / Python 3.12+ / SQLite
 - 当前数据：20 件商品，2 个品类（笔记本电脑、手机），13 个品牌
+- MCP Server（可选）：`python -m mcp_server.server`，把 6 个导购工具开放给外部 Agent，见 [docs/MCP.md](docs/MCP.md)
 
 > Streamlit Cloud 上的链接指向旧版，闲置后会休眠，第一次打开可能需要等待几十秒。
 > 当前版本的部署方式是构建 `frontend/dist` 后由 FastAPI 单端口托管，见 [DEPLOY.md](DEPLOY.md)。
@@ -360,7 +361,8 @@ copy .env.example .env
 - 只有 20 件商品、2 个品类，不能覆盖真实购物平台的长尾需求；
 - 不接入电商平台，不提供实时价格、库存、销量或真实评价；
 - 旧版演示部署在 Streamlit Community Cloud，文件系统临时，休眠或重部署后账号、历史和收藏可能重置；
-- 账号体系是演示级鉴权：Vue 版会话存服务端内存（重启即失效），没有登录限流与会话过期，公开演示不要输入真实个人信息；
+- 账号体系：Vue 版会话存服务端内存（重启即失效，12 小时绝对过期 + 30 分钟空闲超时），
+  连续 5 次登录失败按用户名临时锁定 15 分钟；仍是演示级鉴权，公开演示不要输入真实个人信息；
 - SQLite 仍是单实例，云端需挂持久卷；Vue 版已有 HTTP API，但不适合多副本并发写；
 - Vue 版未展示 Agent 执行轨迹，也不在线触发效果评测（旧版同样只读快照），见 `docs/VUE_MIGRATION.md` 第 7 节；
 - 评测集是自评，样本量有限，不能替代真实的用户研究。

@@ -1,26 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '../api/client'
-import type { Category, ProductList } from '../api/types'
+import type { Category, Product } from '../api/types'
+import { formatPrice } from '../utils/format'
 
-interface ProductRow {
-  id: string
-  name: string
-  brand: string
-  category: string
-  model: string
-  price: number | null
-  is_active: boolean
-  data_status: string
-  data_source: string
-  specs: Record<string, unknown>
-  use_cases: string[]
-  pros: string[]
-  cons: string[]
-  image_url: string
-  source_url: string
-  updated_at: string
-}
+/**
+ * 管理端商品行。
+ *
+ * 这些字段此前在本文件里重新声明了一遍，与 `api/types.ts` 的 `Product`
+ * 严重重复且已经开始漂移（缺 `entered_by` 等）。统一用公共类型，保留别名
+ * 以免模板大改。
+ */
+type ProductRow = Product
 
 interface CategoryMeta {
   key: string
@@ -128,14 +119,15 @@ function specsText(value: Record<string, unknown> | undefined): string {
 async function load() {
   error.value = ''
   try {
-    const [products, metaData, catalog] = await Promise.all([
+    // `/admin/catalog-meta` 已经带回带中文 label 的品类，先前额外请求一次
+    // 全量 `/products` 只为取 categories，是纯浪费。
+    const [products, metaData] = await Promise.all([
       api.get<{ items: ProductRow[] }>('/admin/products'),
       api.get<{ categories: CategoryMeta[]; brands: BrandMeta[] }>('/admin/catalog-meta'),
-      api.get<ProductList>('/products'),
     ])
     items.value = products.items
     meta.value = metaData
-    categories.value = catalog.categories
+    categories.value = metaData.categories.map(({ key, label }) => ({ key, label }))
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '商品数据加载失败'
   }
@@ -187,6 +179,9 @@ async function submit() {
 }
 
 async function toggleActive(row: ProductRow) {
+  // 连点会翻转两次并各触发一次全量刷新，用同一个在途标志挡住。
+  if (busy.value) return
+  busy.value = true
   try {
     await api.put(`/admin/products/${encodeURIComponent(row.id)}/active`, {
       is_active: row.is_active === false,
@@ -195,10 +190,14 @@ async function toggleActive(row: ProductRow) {
     await load()
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '操作失败'
+  } finally {
+    busy.value = false
   }
 }
 
 async function saveCategory(row: CategoryMeta) {
+  if (busy.value) return
+  busy.value = true
   try {
     await api.put(`/admin/catalog-meta/category/${encodeURIComponent(row.key)}`, {
       display_label: row.display_label,
@@ -209,10 +208,14 @@ async function saveCategory(row: CategoryMeta) {
     await load()
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '品类保存失败'
+  } finally {
+    busy.value = false
   }
 }
 
 async function saveBrand() {
+  if (busy.value) return
+  busy.value = true
   try {
     await api.put(`/admin/catalog-meta/brand/${encodeURIComponent(brandForm.brand_name)}`, {
       display_name: brandForm.display_name,
@@ -224,6 +227,8 @@ async function saveBrand() {
     await load()
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '品牌保存失败'
+  } finally {
+    busy.value = false
   }
 }
 
@@ -316,7 +321,7 @@ onMounted(load)
             <tr v-for="p in group.items" :key="p.id">
               <td><strong>{{ p.name }}</strong><br /><span class="small muted">{{ p.id }}</span></td>
               <td>{{ p.brand || '—' }}</td>
-              <td>{{ p.price != null ? `¥${p.price}` : '缺失' }}</td>
+              <td>{{ formatPrice(p.price) }}</td>
               <td><span class="badge" :class="p.is_active === false ? 'amber' : 'green'">{{ p.is_active === false ? '已停用' : '在售' }}</span></td>
               <td><span class="badge" :class="p.data_status === 'verified' ? 'green' : 'amber'">{{ p.data_status === 'verified' ? '已核实' : '未核实' }}</span></td>
               <td>

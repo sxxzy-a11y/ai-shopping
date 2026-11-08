@@ -59,14 +59,15 @@ pyproject.toml  pytest.ini  requirements.txt  requirements-dev.txt
 |---|---|---|
 | 源码 | `frontend/src/**`、`backend/app/**`、`src/**` | 提交 |
 | 构建产物 | `frontend/dist/` | 忽略；部署前由 `npm run build` 生成 |
-| 运行时数据 | `storage/*.db` | 忽略；由 `scripts/init.py` 初始化 |
+| 运行时数据 | `storage/*.db` | 忽略；应用启动时自动初始化（`scripts/init.py` 仍可单独执行） |
 | 快照/截图 | `submission/screenshots/`、`.tmp/shots/` | `.tmp/` 忽略；提交材料里的代表性截图可入库 |
 | 临时探针 | `.tmp/*.py` | 忽略，收尾时清理 |
 
 ## 6. 命名约定
 
 - Python：模块/函数用 `snake_case`，测试文件 `test_*.py`
-- Vue：`views/*View.vue`（路由页）、`components/*.vue`（可复用组件）、`api/`（请求层）、`stores/`（状态）
+- Vue：`views/*View.vue`（路由页）、`components/*.vue`（可复用组件）、`api/`（请求层）、
+  `stores/`（全局状态）、`composables/use*.ts`（跨页复用的状态与副作用）、`utils/`（无状态的纯函数）
 - 文档：`docs/<主题>.md` 小写连字符；变更归档按 `openspec/changes/archive/<日期>-<主题>/`
 - 计划：`Plan/<序号>. <中文名>_plan.md`
 
