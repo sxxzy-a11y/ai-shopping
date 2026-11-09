@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '../api/client'
+import { useConfirm } from '../composables/useConfirm'
+import { useInitialLoad } from '../composables/useInitialLoad'
 import { formatDateTime } from '../utils/format'
 
 interface UserRow {
@@ -104,7 +106,7 @@ async function resetPassword(username: string) {
 
 async function remove(row: UserRow) {
   if (busy.value) return
-  if (!confirm(`确定删除账号「${row.username}」吗？该账号的历史、收藏与偏好会一并删除，且不可恢复。`)) return
+  if (!(await useConfirm().ask(`确定删除账号「${row.username}」吗？该账号的历史、收藏与偏好会一并删除，且不可恢复。`, '删除账号'))) return
   busy.value = true
   error.value = ''
   try {
@@ -120,7 +122,9 @@ async function remove(row: UserRow) {
   }
 }
 
-onMounted(load)
+const { run } = useInitialLoad()
+
+onMounted(() => run(load))
 </script>
 
 <template>
@@ -137,7 +141,7 @@ onMounted(load)
   </div>
 
   <p v-if="error" class="notice error">{{ error }}</p>
-  <p v-if="notice" class="notice info">{{ notice }}</p>
+  <p v-if="notice && !error" class="notice info">{{ notice }}</p>
 
   <div class="card">
     <div class="spread" style="margin-bottom: 16px">

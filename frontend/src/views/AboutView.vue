@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { api } from '../api/client'
+import { useInitialLoad } from '../composables/useInitialLoad'
 
 interface AboutInfo {
   name: string
@@ -17,14 +18,15 @@ interface AboutInfo {
 
 const info = ref<AboutInfo | null>(null)
 const error = ref('')
+const { run } = useInitialLoad()
 
-onMounted(async () => {
+onMounted(() => run(async () => {
   try {
     info.value = await api.get<AboutInfo>('/about')
   } catch (err) {
     error.value = err instanceof Error ? err.message : '信息加载失败'
   }
-})
+}))
 </script>
 
 <template>
@@ -124,8 +126,9 @@ onMounted(async () => {
     <details class="faq-item">
       <summary>账号体系是生产级鉴权吗？</summary>
       <p>
-        不是，本系统使用演示级鉴权：没有登录失败限流、没有找回密码、没有 CSRF 防护，
-        会话仅保存在服务端进程内存中（服务重启即失效，登录满 12 小时后过期）。
+        不是，本系统使用演示级鉴权：没有找回密码、没有 CSRF 防护，也没有多副本会话共享。
+        已实现的是登录失败限流（连续 5 次锁定 15 分钟）、12 小时绝对过期与 30 分钟空闲超时；
+        会话仅保存在服务端进程内存中，服务重启即失效。
         请不要在演示环境使用真实密码，也不要填写真实手机号、邮箱等个人信息。
       </p>
     </details>

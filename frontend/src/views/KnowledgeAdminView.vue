@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '../api/client'
+import { useConfirm } from '../composables/useConfirm'
+import { useInitialLoad } from '../composables/useInitialLoad'
 import type { Meta, ProductList } from '../api/types'
 import { formatDateTime } from '../utils/format'
 
@@ -124,7 +126,7 @@ async function createDoc() {
 }
 
 async function removeDoc(row: DocRow) {
-  if (!confirm(`确定删除资料「${row.title}」吗？对应文件会被移除，商品级资料不能在页面删除。`)) return
+  if (!(await useConfirm().ask(`确定删除资料「${row.title}」吗？对应文件会被移除，商品级资料不能在页面删除。`, '删除资料'))) return
   try {
     const data = await api.delete<{ documents: DocRow[] }>(`/admin/knowledge/documents/${encodeURIComponent(row.doc_id)}`)
     docs.value = data.documents
@@ -164,7 +166,9 @@ async function reindex() {
   }
 }
 
-onMounted(load)
+const { run } = useInitialLoad()
+
+onMounted(() => run(load))
 </script>
 
 <template>
@@ -181,7 +185,7 @@ onMounted(load)
   </div>
 
   <p v-if="error" class="notice error">{{ error }}</p>
-  <p v-if="notice" class="notice info">{{ notice }}</p>
+  <p v-if="notice && !error" class="notice info">{{ notice }}</p>
 
   <div class="card">
     <div class="spread" style="margin-bottom: 16px">
@@ -263,6 +267,7 @@ onMounted(load)
       </button>
     </template>
     <p v-else-if="vectorStats" class="notice info">{{ vectorStats.message }}</p>
+    <p v-else-if="vectorError" class="small muted">索引状态读取失败，请点「刷新」重试。</p>
     <p v-else class="small muted">正在读取索引状态…</p>
   </div>
 

@@ -284,13 +284,14 @@ def history_export(entry_id: int, user: CurrentUser, format: str = "md") -> Resp
     else:
         content = report_service.markdown_bytes(report).decode("utf-8")
         media_type = "text/markdown; charset=utf-8"
-    filename = report_service.suggested_filename(
-        report, "csv" if format == "csv" else "md"
-    )
+    suffix = "csv" if format == "csv" else "md"
+    filename = report_service.suggested_filename(report, suffix)
     return PlainTextResponse(
         content,
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": report_service.content_disposition(filename, suffix)
+        },
     )
 
 

@@ -19,13 +19,11 @@ _FLASH_KEY = "zg_history_flash"
 
 
 def _flash(message: str, tone: str) -> None:
-    st.session_state[_FLASH_KEY] = (message, tone)
+    components.queue_flash(_FLASH_KEY, message, tone)
 
 
 def _render_flash() -> None:
-    pending = st.session_state.pop(_FLASH_KEY, None)
-    if pending:
-        components.show_notice(pending[0], pending[1])
+    components.render_flash(_FLASH_KEY)
 
 
 def _delete_entry(entry_id: int, confirmed: bool) -> None:

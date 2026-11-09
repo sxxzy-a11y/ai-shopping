@@ -41,7 +41,9 @@ python backend/run.py                 # 默认 127.0.0.1:8000
    不会下发到浏览器。**本地 `.env` 不入库，部署时必须手动把这几项迁过去**——
    漏了的话 AI 问答与语义检索不可用（其余功能仍正常，很容易被误认为「功能没做」）。
    配置后用 `/api/admin/api-config` 返回的 `configured` 字段确认是否真的生效。
-9. **上线前**：补登录限流与会话空闲超时（见 `SECURITY.md`），否则不适合长期公网开放。
+9. **上线前**：确认 `.env` 已关闭自助注册并使用强密码。登录失败限流（5 次锁 15 分钟）、
+   会话 12 小时绝对过期与 30 分钟空闲超时**已经实现**，无需另行补做；仍未做的是
+   CSRF 防护与生产级会话存储，见 `SECURITY.md`。
 
 > 现有 `Dockerfile` / `docker-compose.yml` 仍是 **legacy Streamlit 版**（8501 端口），
 > 尚未改为多阶段构建 Vue 前端。用它部署 Vue 版之前请先按上述方式替换，
@@ -90,7 +92,8 @@ ZHIGOU_EMBEDDING_API_KEY = "可选的向量检索密钥"
 
 ### 公开演示的安全边界
 
-- 当前账号体系是演示级：没有登录限流；会话 12 小时绝对过期，但没有空闲超时；
+- 当前账号体系是演示级：**已有**登录失败限流（连续 5 次锁 15 分钟）、12 小时绝对过期与
+  30 分钟空闲超时；仍未做的是 CSRF 防护与多副本会话共享；
 - 默认开放注册，任何访问者都能创建普通用户；
 - 不要输入真实个人信息、真实密码或其他敏感数据；
 - 公开演示只用于比赛和体验，不是生产服务。
@@ -115,7 +118,7 @@ docker compose up -d --build
 
 打开 <http://localhost:8501>。
 
-当前开发机没有安装 Docker，Dockerfile 做过静态检查，但没有在本机实际构建。作为补充，`.github/workflows/ci.yml` 里的 `docker` job 会在 ubuntu runner 上执行 `docker build`、启动容器并轮询 `/_stcore/health`；首次 CI 运行结果确认通过后，把该 job 的 `continue-on-error` 去掉即可转为阻断门禁。首次在服务器上部署时，建议先跑一次完整分析、比较和历史记录，再对外演示。
+当前开发机没有安装 Docker，Dockerfile 做过静态检查，但没有在本机实际构建。作为补充，`.github/workflows/ci.yml` 里的 `docker` job 会在 ubuntu runner 上执行 `docker build`、启动容器并轮询 `/_stcore/health`；该 job 已于 2026-11-07 转为**阻断门禁**（不再有 `continue-on-error`）。同一 workflow 另有 `frontend` job 负责 `npm ci` + `npm run build`（含 `vue-tsc`），保证 Vue 版构建不会被类型错误卡住。首次在服务器上部署时，建议先跑一次完整分析、比较和历史记录，再对外演示。
 
 ## 4. VPS + Docker + 反向代理（legacy 版）
 

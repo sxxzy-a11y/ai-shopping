@@ -65,6 +65,8 @@ function selectBrand(name: string) {
 const error = ref('')
 const notice = ref('')
 const busy = ref(false)
+/** 区分「正在加载」「加载失败」「确实为空」三态。 */
+const loaded = ref(false)
 const showForm = ref(false)
 const editing = ref(false)
 
@@ -118,6 +120,7 @@ function specsText(value: Record<string, unknown> | undefined): string {
 
 async function load() {
   error.value = ''
+  loaded.value = false
   try {
     // `/admin/catalog-meta` 已经带回带中文 label 的品类，先前额外请求一次
     // 全量 `/products` 只为取 categories，是纯浪费。
@@ -130,6 +133,8 @@ async function load() {
     categories.value = metaData.categories.map(({ key, label }) => ({ key, label }))
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '商品数据加载失败'
+  } finally {
+    loaded.value = true
   }
 }
 
@@ -196,12 +201,18 @@ async function toggleActive(row: ProductRow) {
 }
 
 async function saveCategory(row: CategoryMeta) {
+  // `v-model.number` 遇到非数字会保留原字符串，直接提交会序列化成 null。
+  const order = Number(row.sort_order)
+  if (!Number.isFinite(order)) {
+    error.value = '排序必须是数字'
+    return
+  }
   if (busy.value) return
   busy.value = true
   try {
     await api.put(`/admin/catalog-meta/category/${encodeURIComponent(row.key)}`, {
       display_label: row.display_label,
-      sort_order: row.sort_order,
+      sort_order: order,
       is_active: row.is_active,
     })
     notice.value = `品类「${row.display_label}」已保存。`
@@ -214,12 +225,17 @@ async function saveCategory(row: CategoryMeta) {
 }
 
 async function saveBrand() {
+  const order = Number(brandForm.sort_order)
+  if (!Number.isFinite(order)) {
+    error.value = '排序必须是数字'
+    return
+  }
   if (busy.value) return
   busy.value = true
   try {
     await api.put(`/admin/catalog-meta/brand/${encodeURIComponent(brandForm.brand_name)}`, {
       display_name: brandForm.display_name,
-      sort_order: brandForm.sort_order,
+      sort_order: order,
       is_active: brandForm.is_active,
     })
     notice.value = `品牌「${brandForm.brand_name}」已保存。`
@@ -254,7 +270,7 @@ onMounted(load)
   </div>
 
   <p v-if="error" class="notice error">{{ error }}</p>
-  <p v-if="notice" class="notice info">{{ notice }}</p>
+  <p v-if="notice && !error" class="notice info">{{ notice }}</p>
 
   <template v-if="tab === 'products'">
     <div class="card">
@@ -336,7 +352,8 @@ onMounted(load)
       </div>
     </div>
 
-    <p v-if="!items.length" class="loading"><span class="spinner" /> 正在加载商品目录…</p>
+    <p v-if="!loaded" class="loading"><span class="spinner" /> 正在加载商品目录…</p>
+    <p v-else-if="!items.length" class="small muted">商品目录为空或加载失败，请查看上方提示后刷新页面。</p>
   </template>
 
   <div v-else class="stack">

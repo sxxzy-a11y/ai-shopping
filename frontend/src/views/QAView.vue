@@ -10,7 +10,7 @@ const result = ref<QAResult | null>(null)
 const error = ref('')
 const busy = ref(false)
 const expanded = ref('')
-const { favorites, load: loadFavorites, toggle: toggleFavoriteRaw } = useFavorites()
+const { favorites, pending, loadError, load: loadFavorites, toggle: toggleFavoriteRaw } = useFavorites()
 
 const examples = [
   '写代码用的笔记本该看哪些参数？',
@@ -33,7 +33,10 @@ function percent(weight: number): string {
   return `${Math.round(weight * 100)}%`
 }
 
-onMounted(loadFavorites)
+onMounted(async () => {
+  await loadFavorites()
+  if (loadError.value) error.value = loadError.value
+})
 
 async function toggleFavorite(productId: string) {
   try {
@@ -186,7 +189,7 @@ async function ask(text = question.value) {
               <div class="row">
                 <a v-if="p.source_url" :href="p.source_url" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">查看原始资料</a>
                 <button class="btn btn-ghost btn-sm" @click="toggleFavorite(p.id)">
-                  {{ favorites.includes(p.id) ? '取消收藏' : '收藏' }}
+                  {{ pending.includes(p.id) ? '处理中…' : (favorites.includes(p.id) ? '取消收藏' : '收藏') }}
                 </button>
               </div>
             </div>

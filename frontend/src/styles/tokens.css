@@ -1,0 +1,54 @@
+/* 设计令牌与全局基线 —— 只放变量、reset、字体与键盘焦点规则。
+   改主题色/圆角/字体只动这里；组件样式在 components.css。 */
+
+:root {
+  /* 底色：偏暖的纸感，避免纯白 */
+  --bg: #f5f1e9;
+  --surface: #fffdf9;
+  --surface-soft: #faf6ee;
+
+  /* 墨色文字：偏冷绿黑，与侧栏同源 */
+  --ink: #17262c;
+  --ink-soft: #4a5d64;
+  --muted: #84939a;
+
+  /* 侧栏：深墨，像账本封皮 */
+  --sidebar: #14242b;
+  --sidebar-soft: #1c3138;
+
+  /* 强调：铜橙（算筹/铜钱的暖金属，比珊瑚红更沉稳） */
+  --accent: #c8763f;
+  --accent-dark: #a85f2e;
+  --accent-soft: #fbf1e7;
+  --amber: #c99a45;
+  --green: #3d7f66;
+  --line: #e6dfd2;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(23, 38, 44, .04), 0 10px 28px -18px rgba(23, 38, 44, .35);
+  --shadow-lift: 0 2px 4px rgba(23, 38, 44, .05), 0 18px 44px -20px rgba(23, 38, 44, .45);
+
+  /* 统一缓动：指数衰减，收尾干净，不用回弹 */
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-body: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  /* 中文标题用宋体形成"文书感"，正文仍用黑体保证可读；不引入网络字体 */
+  --font-display: "Songti SC", "STSong", "Noto Serif SC", "SimSun", Georgia, serif;
+
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  /* 数字等宽：表格与统计列对齐，不跳动 */
+  font-variant-numeric: tabular-nums;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input, select, textarea { font: inherit; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+.app-icon { width: 19px; height: 19px; flex: 0 0 auto; }

@@ -361,13 +361,11 @@ def render(catalog=None) -> None:
 
 
 def _flash(message: str, tone: str) -> None:
-    st.session_state[_KEY_FLASH] = (message, tone)
+    components.queue_flash(_KEY_FLASH, message, tone)
 
 
 def _render_flash() -> None:
-    pending = st.session_state.pop(_KEY_FLASH, None)
-    if pending:
-        components.show_notice(pending[0], pending[1])
+    components.render_flash(_KEY_FLASH)
 
 
 def _render_new_document() -> None:

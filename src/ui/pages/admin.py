@@ -32,20 +32,13 @@ def _viewer():
 
 
 def _flash(message: str, tone: str) -> None:
-    """记下一条提示，留到**下一次运行**再显示。
-
-    为什么不就地 `show_notice()`：管理操作做完会 `st.rerun()` 刷新列表，
-    那次重跑会把这一轮的输出整体丢掉。结果是用户点了「停用账号」，
-    页面刷新了，然后什么都没说——他只能自己去列表里猜有没有生效。
-    """
-    st.session_state[_KEY_FLASH] = (message, tone)
+    """记下一条提示，留到**下一次运行**再显示（实现见 `components.queue_flash`）。"""
+    components.queue_flash(_KEY_FLASH, message, tone)
 
 
 def _render_flash() -> None:
     """显示并清掉上一条提示。"""
-    pending = st.session_state.pop(_KEY_FLASH, None)
-    if pending:
-        components.show_notice(pending[0], pending[1])
+    components.render_flash(_KEY_FLASH)
 
 
 # --------------------------------------------------------------------------

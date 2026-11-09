@@ -30,4 +30,28 @@ router.beforeEach(async (to) => {
   return true
 })
 
+/**
+ * 预加载目标路由的代码块。
+ *
+ * 所有页面都是 `() => import(...)` 懒加载，首次进入要等网络往返 —— 这就是
+ * 点导航时「先空一下再出现」的另一半原因。悬停/聚焦时提前触发同一个 import，
+ * 浏览器与 Vite 都会缓存该模块，真正点击时基本是同步渲染。
+ */
+export function preloadRoute(path: string): void {
+  try {
+    const loader = router.resolve(path).matched[0]?.components?.default
+    // 只有懒加载函数能当 Promise 用；同步/函数式组件调用后返回的是 VNode，
+    // 直接 `.catch()` 会抛 TypeError。先探测返回值再决定要不要吞异常。
+    if (typeof loader !== 'function') return
+    const result = (loader as () => unknown)()
+    if (result && typeof (result as Promise<unknown>).then === 'function') {
+      void (result as Promise<unknown>).catch(() => {
+        /* 预加载失败无所谓，点击时还会再试一次 */
+      })
+    }
+  } catch {
+    /* 路由解析失败同样忽略，不能让悬停动作影响导航 */
+  }
+}
+
 export default router

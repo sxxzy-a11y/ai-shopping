@@ -44,8 +44,18 @@ export const useSession = defineStore('session', () => {
       // 一旦冒泡就会变成未捕获的 rejection，页面也不会跳转。
     } finally {
       user.value = null
+      // 清掉上次 restore 留下的「服务暂时不可用」，否则重新登录后
+      // 登录页会顶着一条陈旧错误。
+      error.value = ''
     }
   }
 
-  return { user, ready, error, restore, login, logout }
+  /** 会话在服务端已失效时，只清本地状态，不再发请求、不再重置 ready。 */
+  function clearLocal() {
+    user.value = null
+    error.value = '登录状态已失效，请重新登录'
+    ready.value = true
+  }
+
+  return { user, ready, error, restore, login, logout, clearLocal }
 })

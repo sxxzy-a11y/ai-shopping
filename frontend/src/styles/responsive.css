@@ -1,0 +1,52 @@
+/* 响应式与可访问性 —— 所有断点集中在这里，组件样式里不散落媒体查询。 */
+
+@media (max-width: 900px) {
+  .metric-row { grid-template-columns: 1fr; gap: 6px; }
+  .metric-value { text-align: left; }
+  .app-shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static; height: auto; padding: 14px 14px 10px; gap: 12px;
+    border-right: none; border-bottom: 1px solid rgba(255, 255, 255, .06);
+  }
+  .brand { padding: 0; }
+  /* 三组拍平成一行横向滚动：原先每组各占一行，390px 下要吃掉 250px 高度 */
+  .nav-scroll {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding-bottom: 6px; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .nav-scroll::-webkit-scrollbar { display: none; }
+  .nav-group { display: contents; }
+  .nav-label, .sidebar-foot { display: none; }
+  .nav-item { white-space: nowrap; padding: 8px 11px; }
+  /* 横向滚动时不需要左侧竖条，改用底部下划线 */
+  .nav-item.active::before { left: 50%; top: auto; bottom: 2px; transform: translateX(-50%); width: 16px; height: 2px; border-radius: 2px; }
+  .topbar { padding: 13px 18px; }
+  .page { padding: 22px 18px 48px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .hero { padding: 28px 24px; }
+  .hero h1 { font-size: 26px; letter-spacing: 1px; }
+  .page-head h1 { font-size: 24px; }
+  .app-footer { padding: 16px 18px; }
+}
+
+@media (max-width: 560px) {
+  .login-card { padding: 28px 22px 24px; border-radius: 16px; }
+  .login-brand h1 { font-size: 21px; }
+  .hero { padding: 24px 20px; border-radius: 16px; }
+  .hero h1 { font-size: 22px; }
+  .hero p { font-size: 13px; }
+  .card { padding: 18px 16px; border-radius: 14px; }
+  .stat { padding: 16px 18px; }
+  .stat .value { font-size: 26px; }
+  .page-head h1 { font-size: 22px; }
+  .topbar .mode-chip { display: none; }
+  /* 触控目标不小于 40px */
+  .btn { min-height: 40px; }
+  .nav-item { min-height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}

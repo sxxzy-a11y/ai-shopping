@@ -12,7 +12,7 @@ const brand = ref('')
 const result = ref<AnalysisResult | null>(null)
 const error = ref('')
 const busy = ref(false)
-const { favorites, load: loadFavorites, toggle: toggleFavoriteRaw } = useFavorites()
+const { favorites, pending, loadError, load: loadFavorites, toggle: toggleFavoriteRaw } = useFavorites()
 
 onMounted(async () => {
   try {
@@ -21,6 +21,7 @@ onMounted(async () => {
     meta.value = null
   }
   await loadFavorites()
+  if (loadError.value) error.value = loadError.value
 })
 
 async function toggleFavorite(productId: string) {
@@ -149,7 +150,7 @@ function scoreText(item: ReportItem) {
             style="margin-top: 12px"
             @click="toggleFavorite(result.report.recommendations[0].product_id)"
           >
-            {{ favorites.includes(result.report.recommendations[0].product_id) ? '取消收藏' : '收藏首选' }}
+            {{ pending.includes(result.report.recommendations[0].product_id) ? '处理中…' : (favorites.includes(result.report.recommendations[0].product_id) ? '取消收藏' : '收藏首选') }}
           </button>
         </div>
       </div>
@@ -184,7 +185,7 @@ function scoreText(item: ReportItem) {
             <div class="spread">
               <span class="small muted">{{ item.score_total }} 分 · {{ item.match_level }}</span>
               <button class="btn btn-ghost btn-sm" @click="toggleFavorite(item.product_id)">
-                {{ favorites.includes(item.product_id) ? '已收藏' : '收藏' }}
+                {{ pending.includes(item.product_id) ? '处理中…' : (favorites.includes(item.product_id) ? '已收藏' : '收藏') }}
               </button>
             </div>
           </div>

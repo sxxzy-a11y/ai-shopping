@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#1b2a31"/>
-  <text x="32" y="45" text-anchor="middle" font-size="38" fill="#ffffff" font-family="PingFang SC, Microsoft YaHei, sans-serif">智</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#14242b"/>
+  <path d="M8.4 22A10.8 10.8 0 1 1 23.6 22" stroke="#f2e8d8" stroke-width="1.9" stroke-linecap="round" fill="none"/>
+  <path d="M10.4 20.8 13.6 16.2 16.8 18.4 20.8 11.7" stroke="#c8763f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="20.8" cy="11.7" r="1.9" fill="#c8763f"/>
 </svg>

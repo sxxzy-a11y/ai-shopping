@@ -5,7 +5,7 @@
 ## 项目概况
 
 **智购参谋**（SmartBuy AI Assistant）——面向 AI 创新大赛的可解释消费决策助手。
-当前基线：12 份能力规格，1114 条测试（以 `python -m pytest --collect-only` 为准），
+当前基线：12 份能力规格，1117 条测试（以 `python -m pytest --collect-only` 为准），
 **Vue 3 + FastAPI 前后端分离**；Streamlit 单体保留为 legacy 入口。
 （各类规模的明细在各自规格里维护，此处不再汇总，免得与规格漂移。）
 

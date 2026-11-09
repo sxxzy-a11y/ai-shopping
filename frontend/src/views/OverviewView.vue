@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api, ApiError } from '../api/client'
+import { useConfirm } from '../composables/useConfirm'
+import { useInitialLoad } from '../composables/useInitialLoad'
 import type { HistoryEntry, Overview } from '../api/types'
 import { formatDateTime } from '../utils/format'
 
@@ -33,7 +35,7 @@ async function load() {
 }
 
 async function removeAnalysis(entry: HistoryEntry) {
-  if (!confirm(`确定删除记录 #${entry.id}（${entry.demand_summary || '无摘要'}）吗？此操作不可恢复。`)) return
+  if (!(await useConfirm().ask(`确定删除记录 #${entry.id}（${entry.demand_summary || '无摘要'}）吗？此操作不可恢复。`, '删除记录'))) return
   try {
     const result = await api.delete<{ ok: boolean; message?: string }>(`/admin/analyses/${entry.id}`)
     notice.value = result.ok ? `已删除记录 #${entry.id}。` : (result.message ?? '删除未生效')
@@ -97,10 +99,11 @@ async function openTrace(id: number) {
   }
 }
 
-onMounted(() => {
-  void load()
-  void loadAgentRuns()
-})
+const { run } = useInitialLoad()
+
+onMounted(() => run(async () => {
+  await Promise.all([load(), loadAgentRuns()])
+}))
 </script>
 
 <template>
@@ -111,7 +114,7 @@ onMounted(() => {
   </div>
 
   <p v-if="error" class="notice error">{{ error }}</p>
-  <p v-if="notice" class="notice info">{{ notice }}</p>
+  <p v-if="notice && !error" class="notice info">{{ notice }}</p>
 
   <div class="grid-3" style="margin-bottom: 20px">
     <div class="stat accent"><div class="value">{{ data?.user_count ?? '—' }}</div><div class="label">账号总数</div></div>

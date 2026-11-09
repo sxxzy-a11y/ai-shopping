@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useSession } from '../stores/session'
+import BrandMark from '../components/BrandMark.vue'
 
 const session = useSession()
 const username = ref('')
@@ -19,7 +20,7 @@ async function submit() {
   <div class="login-screen">
     <div class="login-card">
       <div class="login-brand">
-        <div class="mark">智</div>
+        <BrandMark :size="44" tone="light" />
         <div>
           <h1>智购参谋</h1>
         </div>
@@ -42,14 +43,6 @@ async function submit() {
           <span v-if="busy" class="spinner" /> {{ busy ? '登录中…' : '登录' }}
         </button>
       </form>
-
-      <div class="divider"></div>
-      <p class="small muted" style="margin: 0; line-height: 1.7">
-        本项目为演示级鉴权：账号只用于区分角色与数据归属，未做登录限流，
-        <strong>请勿使用真实密码或填写个人信息</strong>。<br />
-        登录满 12 小时后需要重新登录。<br />
-        商品价格与参数为整理所得参考值，请以官方渠道为准。
-      </p>
     </div>
   </div>
 </template>

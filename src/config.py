@@ -7,9 +7,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------
 # 路径
@@ -520,7 +523,9 @@ def ensure_dynamic_categories() -> None:
             if key and key not in CATEGORY_LABELS:
                 CATEGORY_LABELS[key] = label or key
     except Exception:  # noqa: BLE001 —— 库不可用时退回代码内置分类
-        pass
+        # 不静默：读失败会让界面一直只有内置品类，没有日志很难区分
+        # 「数据库坏了」和「本来就没配自定义品类」。
+        logger.warning("动态品类加载失败，本次退回内置分类", exc_info=True)
 
 
 def category_label(category: str) -> str:

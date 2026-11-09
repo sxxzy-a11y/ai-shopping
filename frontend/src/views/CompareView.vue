@@ -11,6 +11,10 @@ const text = ref('')
 const table = ref<ComparisonTable | null>(null)
 const error = ref('')
 const busy = ref(false)
+/** 目录请求是否已结束。没有它，加载失败会永远显示「正在加载商品目录…」。 */
+const loaded = ref(false)
+/** 与 `config.MAX_COMPARE_COUNT`、README「2–5 件」、Agent 工具校验保持同一口径。 */
+const MAX_SELECTED = 5
 
 const rows = computed(() => table.value?.rows ?? [])
 
@@ -19,13 +23,16 @@ onMounted(async () => {
     products.value = await api.get<ProductList>('/products')
   } catch (err) {
     error.value = err instanceof Error ? err.message : '商品目录加载失败'
+  } finally {
+    loaded.value = true
   }
 })
 
 function toggle(id: string) {
   const index = selected.value.indexOf(id)
   if (index >= 0) selected.value.splice(index, 1)
-  else if (selected.value.length < 6) selected.value.push(id)
+  else if (selected.value.length < MAX_SELECTED) selected.value.push(id)
+  else error.value = `最多只能选择 ${MAX_SELECTED} 件商品`
 }
 
 async function run() {
@@ -62,7 +69,7 @@ async function run() {
           <option v-for="c in products?.categories ?? []" :key="c.key" :value="c.key">{{ c.label }}</option>
         </select>
       </div>
-      <span class="badge">已选 {{ selected.length }} / 6</span>
+      <span class="badge">已选 {{ selected.length }} / {{ MAX_SELECTED }}</span>
     </div>
 
     <div class="check-grid">
@@ -81,14 +88,15 @@ async function run() {
         </span>
       </label>
     </div>
-    <p v-if="!products" class="loading"><span class="spinner" /> 正在加载商品目录…</p>
+    <p v-if="!loaded" class="loading"><span class="spinner" /> 正在加载商品目录…</p>
+    <p v-else-if="!products" class="small muted">商品目录加载失败，请查看下方错误提示后刷新页面。</p>
 
     <div class="field" style="margin-top: 18px">
       <label for="cmp-text">需求文本（可选）</label>
       <input id="cmp-text" v-model="text" class="input" placeholder="例如：主要写代码，看重便携和续航" />
     </div>
     <button class="btn btn-primary" :disabled="busy || selected.length < 2" @click="run">
-      <span v-if="busy" class="spinner" /> 开始比较
+      <span v-if="busy" class="spinner" /> {{ busy ? '正在比较…' : '开始比较' }}
     </button>
     <span v-if="selected.length < 2" class="small muted" style="margin-left: 12px">还需选择 {{ 2 - selected.length }} 件</span>
   </div>

@@ -838,3 +838,26 @@ def render_stored_report(report) -> None:
         st.markdown(
             notice_html(report.dataset_disclaimer, "warn"), unsafe_allow_html=True
         )
+
+
+# --------------------------------------------------------------------------
+# 跨页复用的延迟提示（flash）
+# --------------------------------------------------------------------------
+
+
+def queue_flash(key: str, message: str, tone: str) -> None:
+    """把提示存进 `session_state`，留到**下一次运行**再显示。
+
+    管理操作做完会 `st.rerun()` 刷新列表，那次重跑会把本轮的即时输出整体丢掉；
+    用户点了按钮却看不到任何反馈，只能自己去列表里猜有没有生效。
+    各页面此前各自实现了一遍同样的两行，这里收成一处，key 仍由调用方传入，
+    保持每个页面原本的 session_state 命名空间不变（测试也依赖这些 key）。
+    """
+    st.session_state[key] = (message, tone)
+
+
+def render_flash(key: str) -> None:
+    """显示并清掉上一条延迟提示。"""
+    pending = st.session_state.pop(key, None)
+    if pending:
+        show_notice(pending[0], pending[1])

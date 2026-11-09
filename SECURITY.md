@@ -37,7 +37,7 @@
 
 ## 4. 仍未做的加固
 
-以下属于已知边界，不是疏漏，记录在 `docs/roadmap.md` 与 `项目全面检查报告.md`：
+以下属于已知边界，不是疏漏，记录在 `docs/roadmap.md` 与 `docs/archive/项目全面检查报告.md`：
 
 - CSRF 防护、安全响应头、管理端独立访问控制（登录限流与会话超时已实现）；
 - 生产级数据库与审计、多实例并发写下的连接池与事务边界；
@@ -52,7 +52,8 @@
 | `pillow` | 12.3.0 | 13.0.0 | `streamlit 1.51.0` 要求 `pillow<13` |
 | `pyarrow` | 21.0.0 | 23.0.1 | `streamlit 1.51.0` 要求 `pyarrow<22` |
 
-两者都是 `streamlit` 的**传递依赖**（本项目只直接依赖 5 个包），强制升级会与 streamlit 冲突。
+两者都是 `streamlit` 的**传递依赖**（`requirements.txt` 直接锁定 7 个包，
+Vue 版专用的 `requirements-vue.txt` 只装其中 6 个、不含 streamlit），强制升级会与 streamlit 冲突。
 
 **影响评估**
 

@@ -188,7 +188,7 @@
 
 ### Requirement: 界面视觉规范
 
-界面 SHALL 使用统一的深色侧栏、线性图标系统与卡片式布局。导航 SHALL 使用线性图标而非 emoji。视觉令牌（配色、圆角、阴影）SHALL 集中定义，不得散落在各页面中。自定义样式 SHALL NOT 依赖框架生成的哈希类名；Vue 版由 `src/assets/main.css` 集中定义设计令牌。
+界面 SHALL 使用统一的深色侧栏、线性图标系统与卡片式布局。导航 SHALL 使用线性图标而非 emoji。视觉令牌（配色、圆角、阴影）SHALL 集中定义，不得散落在各页面中。自定义样式 SHALL NOT 依赖框架生成的哈希类名；Vue 版由 `frontend/src/styles/tokens.css` 集中定义设计令牌。
 
 #### Scenario: 侧栏为深色并保持生效
 
@@ -205,7 +205,9 @@
 界面 SHALL 向使用者说明本系统的账号体系是**演示级鉴权**，
 并 SHALL 具体列出它不具备的能力，SHALL NOT 用「安全」「可靠」等笼统措辞带过。
 
-登录页与项目说明页 SHALL 均包含该说明的入口或内容。
+该说明 SHALL 集中在**项目说明页**（关于页 FAQ）。登录页 SHALL 保持简洁，
+SHALL NOT 铺开鉴权边界长文、会话说明或免责声明——与
+`tests/test_app.py::test_the_login_page_stays_clean` 的既有约定一致。
 
 #### Scenario: 说明具体列出不具备的能力
 

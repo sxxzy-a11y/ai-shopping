@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '../api/client'
+import { useConfirm } from '../composables/useConfirm'
 import type { Preferences } from '../api/types'
 import { useSession } from '../stores/session'
 import { toNumberOrUndefined } from '../utils/format'
@@ -99,6 +100,9 @@ async function saveConfig() {
   try {
     cfg.value = await api.put<ApiConfigView>('/admin/api-config', payload)
     cfgMessage.value = '已保存。新配置从下一次请求开始生效。'
+    // 配置已变，此前的连接检测结论不再适用，必须清掉避免误导。
+    probeLlm.value = null
+    probeEmb.value = null
     cfgForm.llm_api_key = ''
     cfgForm.embedding_api_key = ''
   } catch (err) {
@@ -112,12 +116,15 @@ async function clearConfig() {
   // 与 saveConfig 共用同一个在途标志：两者都会覆写服务端配置，
   // 同时进行时后返回的那次会盖掉前一次的界面状态。
   if (cfgBusy.value) return
-  if (!confirm('确定恢复为环境变量 / 默认配置吗？本机覆盖文件会被删除。')) return
+  if (!(await useConfirm().ask('确定恢复为环境变量 / 默认配置吗？本机覆盖文件会被删除。', '恢复默认'))) return
   cfgBusy.value = true
   cfgError.value = ''
   try {
     cfg.value = await api.delete<ApiConfigView>('/admin/api-config')
     cfgMessage.value = '已恢复为环境变量 / 默认配置。'
+    // 恢复默认后连接目标可能完全不同，旧探测结果必须作废。
+    probeLlm.value = null
+    probeEmb.value = null
     Object.assign(cfgForm, {
       llm_base_url: cfg.value.values.llm_base_url, llm_model: cfg.value.values.llm_model,
       llm_api_key: '', embedding_base_url: cfg.value.values.embedding_base_url,
@@ -194,7 +201,7 @@ async function runProbe(kind: 'llm' | 'embedding') {
       <h2>数据与会话</h2>
       <ul class="fact-list">
         <li>你的偏好只按账号保存，不会用于其他用途。</li>
-        <li>为保障安全，长时间未操作后需要重新登录。</li>
+        <li>登录满 12 小时、或连续 30 分钟没有操作后，需要重新登录。</li>
         <li>模型服务密钥只保存在服务端，不会出现在页面中。</li>
         <li>商品价格是整理所得参考值，均标注核验状态，不代表实时成交价。</li>
       </ul>
@@ -278,7 +285,7 @@ async function runProbe(kind: 'llm' | 'embedding') {
       </button>
       <button class="btn btn-ghost" :disabled="cfgBusy" @click="clearConfig">恢复默认设置</button>
     </div>
-    <p v-if="cfgMessage" class="notice info" style="margin-top: 14px">{{ cfgMessage }}</p>
+    <p v-if="cfgMessage && !cfgError" class="notice info" style="margin-top: 14px">{{ cfgMessage }}</p>
     <p v-if="cfgError" class="notice error" style="margin-top: 14px">{{ cfgError }}</p>
   </div>
 </template>

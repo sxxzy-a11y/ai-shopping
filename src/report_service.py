@@ -17,6 +17,7 @@ import io
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
+from urllib.parse import quote
 
 from src import config
 from src.data_loader import Catalog, Product
@@ -275,7 +276,7 @@ def collect_verification_items(
         "这些因素可能影响你的决定，建议另行核实。"
     )
 
-    # 4) 超预算商品的价格尤其需要确认
+    # 5) 超预算商品的价格尤其需要确认
     if result.over_budget:
         items.append(
             f"有 {result.over_budget_total} 件商品超出预算，"
@@ -289,7 +290,7 @@ def collect_verification_items(
                 f"另有 {hidden} 件超出预算更多的商品未列出。"
             )
 
-    # 5) 没有任何匹配时，说清是数据覆盖不到，而不是「不存在这样的商品」
+    # 6) 没有任何匹配时，说清是数据覆盖不到，而不是「不存在这样的商品」
     if not result.has_results:
         items.append(
             "当前没有任何商品满足条件。这只说明在本数据集的范围内没有匹配项，"
@@ -580,3 +581,17 @@ def suggested_filename(report: DecisionReport, suffix: str) -> str:
     """生成导出文件名，例如 `智购参谋报告_20261012_2130.md`。"""
     stamp = report.created_at.replace("-", "").replace(":", "").replace("T", "_")[:15]
     return f"智购参谋报告_{stamp}.{suffix}"
+
+
+def content_disposition(filename: str, suffix: str) -> str:
+    """构造 `Content-Disposition` 响应头。
+
+    HTTP 头按规范只能承载 latin-1，中文文件名直接写进去会让 Starlette 抛
+    `UnicodeEncodeError`（曾导致线上导出接口整体 500）。按 RFC 5987 处理：
+    给旧客户端一个 ASCII 兜底名，同时用 `filename*` 携带 UTF-8 百分号编码。
+    """
+    ascii_name = f"zhigou-report.{suffix}"
+    return (
+        f'attachment; filename="{ascii_name}"; '
+        f"filename*=UTF-8''{quote(filename, safe='')}"
+    )

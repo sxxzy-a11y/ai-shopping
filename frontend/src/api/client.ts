@@ -1,5 +1,12 @@
 /** 统一 API 客户端：同源 Cookie 会话 + 一致的错误处理。 */
 
+/**
+ * 会话失效事件。任何业务请求拿到 401 时派发，由 `App.vue` 统一清登录态并回登录页。
+ * 用事件而不是在客户端里直接 import Pinia store：`session.ts` 已经依赖本模块，
+ * 反向 import 会形成循环依赖。
+ */
+export const UNAUTHORIZED_EVENT = 'zhigou:unauthorized'
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message)
@@ -19,6 +26,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   })
 
   if (!response.ok) {
+    if (response.status === 401 && path !== '/auth/login' && path !== '/auth/me') {
+      // 会话过期（30 分钟空闲 / 12 小时绝对）后，业务请求会 401。
+      // 不通知应用层的话，页面仍显示已登录，用户点任何按钮都只得到错误提示，
+      // 必须手动刷新浏览器才能回到登录页。
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+    }
     let message = `请求失败（${response.status}）`
     try {
       const body = await response.json()

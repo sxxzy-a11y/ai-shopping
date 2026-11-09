@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { api, ApiError } from '../api/client'
+import { useConfirm } from '../composables/useConfirm'
 import type { DecisionReport, HistoryEntry } from '../api/types'
 import { formatDateTime } from '../utils/format'
 
@@ -68,7 +69,13 @@ async function open(id: number) {
   }
 }
 
+let removing = false
+
 async function remove(id: number) {
+  if (removing) return
+  if (!(await useConfirm().ask(`确定删除记录 #${id} 吗？报告快照将被移除，且不可恢复。`, '删除记录'))) return
+  removing = true
+  error.value = ''
   try {
     await api.delete(`/history/${id}`)
     if (activeId.value === id) {
@@ -78,6 +85,8 @@ async function remove(id: number) {
     await load()
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '删除失败'
+  } finally {
+    removing = false
   }
 }
 
@@ -128,6 +137,11 @@ onMounted(load)
       </table>
     </div>
   </div>
+
+  <!-- open() 会先置 activeId 再清空 detail，加载失败时 error 有值：这三个量足以区分详情的三态，无需另加状态。 -->
+  <p v-if="activeId !== null && !detail && !error" class="loading">
+    <span class="spinner" /> 正在读取报告详情…
+  </p>
 
   <div v-if="detail" class="card">
     <div class="spread" style="margin-bottom: 16px">

@@ -1,0 +1,5 @@
+/* 样式入口。顺序有意义：令牌 → 基础 → 组件 → 响应式覆盖。 */
+@import './tokens.css';
+@import './base.css';
+@import './components.css';
+@import './responsive.css';

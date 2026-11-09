@@ -2,7 +2,9 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSession } from '../stores/session'
+import { preloadRoute } from '../router'
 import AppIcon from './AppIcon.vue'
+import BrandMark from './BrandMark.vue'
 
 interface NavItem {
   label: string
@@ -55,8 +57,17 @@ const visibleGroups = computed(() =>
 )
 const title = computed(() => String(route.meta.title ?? '智购参谋'))
 
+let loggingOut = false
+
 async function logout() {
-  await session.logout()
+  // 连点会各自触发一次路由替换；先用模块级标志挡住重复提交。
+  if (loggingOut) return
+  loggingOut = true
+  try {
+    await session.logout()
+  } finally {
+    loggingOut = false
+  }
   router.replace('/')
 }
 </script>
@@ -65,26 +76,30 @@ async function logout() {
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="mark">智</div>
+        <BrandMark :size="38" tone="dark" />
         <div>
           <strong>智购参谋</strong>
           <small>SMARTBUY ADVISOR</small>
         </div>
       </div>
 
-      <div v-for="group in visibleGroups" :key="group.label" class="nav-group">
-        <div class="nav-label">{{ group.label }}</div>
-        <RouterLink
-          v-for="item in group.items"
-          :key="item.to"
-          :to="item.to"
-          class="nav-item"
-          exact-active-class="active"
-        >
-          <AppIcon :name="item.icon" />
-          <span>{{ item.label }}</span>
-        </RouterLink>
-      </div>
+      <nav class="nav-scroll">
+        <div v-for="group in visibleGroups" :key="group.label" class="nav-group">
+          <div class="nav-label">{{ group.label }}</div>
+          <RouterLink
+            v-for="item in group.items"
+            :key="item.to"
+            :to="item.to"
+            class="nav-item"
+            exact-active-class="active"
+            @mouseenter="preloadRoute(item.to)"
+            @focus="preloadRoute(item.to)"
+          >
+            <AppIcon :name="item.icon" />
+            <span>{{ item.label }}</span>
+          </RouterLink>
+        </div>
+      </nav>
 
       <div class="sidebar-foot">
         <div class="user-chip">
@@ -108,12 +123,18 @@ async function logout() {
           <span class="badge">{{ session.user?.role_label }}</span>
         </div>
       </header>
-      <div class="page"><RouterView /></div>
+      <div class="page">
+        <RouterView v-slot="{ Component }">
+          <Transition name="page-fade">
+            <component :is="Component" />
+          </Transition>
+        </RouterView>
+      </div>
       <footer class="app-footer">
         <span>© 2026 智购参谋 · 商品信息为整理所得参考值，不构成购买建议</span>
         <span class="row" style="gap: 12px">
           <RouterLink to="/about">关于与数据说明</RouterLink>
-          <span class="muted">版本 2.8</span>
+          <span class="muted">版本 2.16</span>
         </span>
       </footer>
     </main>

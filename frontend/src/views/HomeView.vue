@@ -3,13 +3,15 @@ import { onMounted, ref } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { HistoryEntry, Meta } from '../api/types'
 import { formatDateTime } from '../utils/format'
+import { useInitialLoad } from '../composables/useInitialLoad'
 import AppIcon from '../components/AppIcon.vue'
 
 const meta = ref<Meta | null>(null)
 const recent = ref<HistoryEntry[]>([])
 const error = ref('')
+const { run } = useInitialLoad()
 
-onMounted(async () => {
+onMounted(() => run(async () => {
   try {
     const [metaData, history] = await Promise.all([
       api.get<Meta>('/meta'),
@@ -23,7 +25,7 @@ onMounted(async () => {
     meta.value = null
     error.value = err instanceof ApiError ? err.message : '数据加载失败，请稍后重试'
   }
-})
+}))
 </script>
 
 <template>

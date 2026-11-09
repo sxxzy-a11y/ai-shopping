@@ -9,14 +9,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src import config
+
 
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=256)
 
 
-class RegisterRequest(LoginRequest):
-    pass
+# 注册只需要用户名 + 密码，与登录完全一致。保留别名而不是空子类：
+# 空子类不增加任何约束，却会让 OpenAPI 里出现一个内容重复的模型。
+RegisterRequest = LoginRequest
 
 
 class AnalysisRequest(BaseModel):
@@ -27,7 +30,11 @@ class AnalysisRequest(BaseModel):
 
 
 class CompareRequest(BaseModel):
-    product_ids: list[str] = Field(default_factory=list, max_length=8)
+    # 与 config.MAX_COMPARE_COUNT、services.compare_products、前端 MAX_SELECTED 同源，
+    # 避免「Pydantic 放行 8 件、业务层拒绝 6 件」这种两层口径打架。
+    product_ids: list[str] = Field(
+        default_factory=list, max_length=config.MAX_COMPARE_COUNT
+    )
     text: str = Field(default="", max_length=2000)
 
 

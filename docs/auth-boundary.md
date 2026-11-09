@@ -1,9 +1,9 @@
 # 账号与鉴权边界
 
-> **版本状态（2026-11-07）**：本文描述 legacy Streamlit 版的会话（`session_state`）。
-> **Vue 版改为** `HttpOnly` + `SameSite=Lax` Cookie 指向服务端内存会话，重启即失效、
-> 仍无登录限流与空闲超时（仅有 12 小时绝对过期）；权限仍由后端入口兜底。当前状态见
-> [VUE_MIGRATION.md](VUE_MIGRATION.md) 第 3、7 节。
+> **版本状态（2026-11-08）**：本文描述 legacy Streamlit 版的会话（`session_state`）。
+> **Vue 版改为** `HttpOnly` + `SameSite=Lax` Cookie 指向服务端内存会话，重启即失效；
+> 已实现登录失败限流（5 次锁 15 分钟）、12 小时绝对过期与 30 分钟空闲超时，
+> 权限仍由后端入口兜底。当前状态见 [VUE_MIGRATION.md](VUE_MIGRATION.md) 第 3、7 节。
 
 ## 定位
 
@@ -20,9 +20,8 @@
 
 它做不到：
 
-- 登录限流和失败次数限制；
-- 会话空闲超时（绝对过期已实现）；
 - 找回密码和邮箱验证；
+- 身份凭证的离线校验（重启后内存会话全部失效）；
 - CSRF 防护；
 - 多租户、组织和细粒度权限。
 

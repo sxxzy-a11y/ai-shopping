@@ -1295,7 +1295,7 @@ AI 测试覆盖的失败输入包括：未配置密钥、超时、401、429、�
 | `src/ai_enhance.py` | 提示词、四类校验、问答 |
 | `src/agent/runner.py` | 编排循环、轨迹、降级 |
 | `src/agent/registry.py` | 工具声明、校验、三态结果 |
-| `src/agent/tools.py` | 四个工具的实现与语义校验 |
+| `src/agent/tools.py` | 六个工具的实现与语义校验 |
 | `src/database.py` | 表结构、迁移、用户隔离、去重 |
 | `src/auth.py` | PBKDF2、角色、管理员守卫 |
 | `src/ui/state.py` | 会话状态、缓存键、模式判定 |

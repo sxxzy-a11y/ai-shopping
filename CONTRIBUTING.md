@@ -112,7 +112,7 @@ storage/api_config.json（个人设置页写入）> 环境变量 / Streamlit Sec
 2. 影响到的能力规格，在变更里写 delta spec；
 3. 实现时按 `tasks.md` 推进，每组改动跑相关测试；
 4. 完成后把变更归档到 `openspec/changes/archive/`，并同步 `README.md`、
-   `docs/` 与 `项目全面检查报告.md` 的状态表；
+   `docs/` 与 `docs/archive/项目全面检查报告.md` 的状态表；
 5. 一次只推进一个变更，避免预算过滤、评分权重、AI 校验、权限边界互相踩。
 
 ## 7. 相关文档

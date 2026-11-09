@@ -1,6 +1,6 @@
 # 测试与评测
 
-> **版本状态（2026-11-07）**：本文的 `tests/` 与评测方法**仍然适用**（1114 条测试未改动）。
+> **版本状态（2026-11-08）**：本文的 `tests/` 与评测方法**仍然适用**（当前 1117 条，新增的 3 条是导出响应头回归）。
 > 其中「界面」小节描述 legacy Streamlit 的 `AppTest`；当前 Vue 版的验证方式
 > （`npm run build`、API 冒烟、Playwright 全站巡检）见 [VUE_MIGRATION.md](VUE_MIGRATION.md) 第 6 节。
 

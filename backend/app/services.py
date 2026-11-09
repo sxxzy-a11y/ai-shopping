@@ -161,6 +161,10 @@ def list_products(category: str = "") -> dict:
 
 
 def compare_products(product_ids: list[str], text: str) -> dict:
+    # 与前端选择上限、`config.MAX_COMPARE_COUNT` 保持同一口径：
+    # 此前只校验下限，Web 端选 6 件能提交成功，而 Agent 工具按 5 件拒绝。
+    if len(product_ids) > config.MAX_COMPARE_COUNT:
+        raise BadRequest(f"最多只能比较 {config.MAX_COMPARE_COUNT} 件商品。")
     catalog = get_catalog()
     products = [p for pid in product_ids if (p := catalog.get(pid)) is not None]
     if len(products) < 2:

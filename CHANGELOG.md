@@ -5,6 +5,281 @@
 
 ---
 
+## [未发布] — 2026-11-09（v2.17：新代码系统优化与目录重组）
+
+### 代码质量
+
+- 新增 `utils/errors.ts` 的 `toMessage(err, fallback)`：统一把未知异常转为用户可读文案，
+  处理 `message` 为空串的情况；`useFavorites` 首个接入。
+- `preloadRoute()` 去掉「懒加载函数一定返回 Promise」的假设：先探测返回值是否有 `then`，
+  再决定是否 `.catch()`，并给路由解析加 try/catch。同步/函数式组件不会因此抛 TypeError。
+- `schemas.CompareRequest.product_ids` 的 `max_length` 由硬编码 8 改为
+  `config.MAX_COMPARE_COUNT`（5），与 `services.compare_products`、前端 `MAX_SELECTED` 同源，
+  消除「Pydantic 放行 8 件、业务层拒绝 6 件」的契约漂移。
+
+### 目录重组（层次清晰 / 职责分明）
+
+- `frontend/src/assets/main.css`（445 行单文件）拆成 `frontend/src/styles/` 四层：
+  `tokens.css`（变量与 reset）、`base.css`（登录/表单/按钮/骨架/路由反馈）、
+  `components.css`（卡片/表格/徽标/业务组件）、`responsive.css`（全部断点与 reduced-motion），
+  `index.css` 汇总；`main.ts` 只引用入口。**声明值一字未改**，避免视觉回归。
+- 删除迁移后的 `frontend/src/assets/main.css` 及空掉的 `assets/` 目录。
+- 根目录 `项目全面检查报告.md`（69 KB 历史快照）移入 `docs/archive/`，
+  同步 `CONTRIBUTING.md` / `SECURITY.md` / `docs/roadmap.md` / `docs/PROJECT_STRUCTURE.md` 四处引用。
+- `docs/DESIGN_SYSTEM.md`、`openspec/specs/web-ui/spec.md`、`docs/PROJECT_STRUCTURE.md`
+  的样式入口与目录规范全部同步；grep 复核旧路径引用为 0 残留。
+- **仍未移动运行时顶层目录**（`backend/`、`src/`、`frontend/`、`data/`、`storage/`）：
+  静态托管路径、`PROJECT_ROOT`、CI、systemd 与 1117 项测试的导入路径都绑定现层级。
+
+### 删除内容
+
+| 删除 | 原因 |
+|---|---|
+| `frontend/src/assets/main.css` | 内容完整迁移到 `styles/` 四层 |
+| `frontend/src/assets/`（空目录） | 拆分后无文件 |
+| 根目录 `项目全面检查报告.md` | 移入 `docs/archive/`（不是丢弃） |
+| `.tmp/`、`.mypy_cache/`、`.ruff_cache/`、测试 junit、桌面部署包 | 临时产物 |
+
+### 验证
+
+- `ruff check` / `format --check`（128 文件）/ `mypy src` 全绿；`pytest` **1117 / 0 / 0**；
+- `npm run build` 通过，CSS 产物 **无 `@import` 残留**（Vite 已内联，不会运行时再发请求）；
+- 真实浏览器 **14/14**：`--accent = #c8763f`、侧栏底色 `rgb(20,36,43)` 正确，
+  12 个页面正文渲染正常、控制台 0 错误；
+- 已部署，服务 `active`，首页 200。
+
+---
+
+## [未发布] — 2026-11-09（v2.16：修复导航切换白屏）
+
+### 问题
+
+点「商品维护」等页面时闪一下白屏、切换不流畅。根因不是网络慢，而是 v2.12 加的
+**全屏 `rgba(255,255,255,.82)` 加载遮罩**：任何页面挂载都会立刻把 `loading` 置真，
+整页被盖成白色，请求回来才撤——再快也会闪一帧。
+
+### 修复
+
+- **遮罩改为顶部 2px 进度条**（`.route-progress`），只提示「在加载」，不遮挡内容。
+- **延迟 180ms 才显示**（`useInitialLoad`）：首屏请求通常 50–150ms 返回，
+  更快的请求完全不显示提示，慢请求才出现，避免"提示本身成为闪烁"。
+- **路由预加载**：`preloadRoute()` 在导航悬停 / 键盘聚焦时提前触发同一个 `import()`，
+  点击时模块已在缓存里。
+- **页面淡入 180ms**（`.page-fade`，只 enter 不 leave，避免旧内容先消失的空档）。
+- `.page` 增加 `min-height: 320px`，防止内容未到时布局塌陷跳动。
+
+### 验证（系统 Edge，实测数字）
+
+| 场景 | 60ms 时页面内容 | 60ms 时遮罩/进度条 |
+|---|---|---|
+| 未预加载，直接切到用户管理 | 149 字符（已渲染） | 无 |
+| 悬停预加载后切到商品维护 | 140 字符（已渲染） | 无 |
+| 慢网络（限速 40KB/s + 400ms 延迟），320ms | 已渲染 | 进度条出现（1 个） |
+
+---
+
+## [未发布] — 2026-11-09（v2.15：品牌标记重设计与视觉体系升级）
+
+### 品牌
+
+- 新增 `BrandMark.vue`：**刻度棱镜**——一段不闭合的弧，内部一条上升折线与铜橙结论点
+  （按反馈去掉弧顶的三根刻度线，只保留量具轮廓）；提供 `tone="light"`（自带深墨底）
+  与 `tone="dark"`（镂空）两种变体。
+  替换掉原来侧栏 / 登录页 / 启动屏的「智」字方块，`favicon.svg` 同步换为同构图形。
+- 三个候选方向（算筹 / 刻度棱镜 / 双括号）的理念、配色、场景与取舍写入
+  `docs/DESIGN_SYSTEM.md` 第 2 节；**最终采用方向 B（刻度棱镜）**，配色沿用既有深墨 + 铜橙。
+
+### 视觉体系
+
+- 重写 `main.css` 设计令牌：珊瑚红改为更沉稳的铜橙 `#c8763f`；底色更暖的纸感
+  `#f5f1e9`；卡片圆角 18→16、阴影从"四周大投影"改为"底部大范围低透明度"。
+- 字体分层：标题用宋体栈（`--font-display`）形成文书感，正文保持黑体；
+  全局 `tabular-nums` 让表格与统计数字对齐。不引入网络字体，离线可用。
+- 标题层级：`page-head h1` 28px、hero 34px，移动端分别降到 22–24 与 22–26。
+- 导航激活态从"整块橙色高亮"改为"左侧 3px 铜橙竖条 + 淡铜底"，层次更清楚。
+- Hero 装饰从大圆环改为「账页横线纹理 + 细铜环」，装饰承载"账本"语义。
+- 统计块加左侧 2px 竖线；主按钮去掉外投影改为顶部内高光；表格表头加字距。
+- 新增 `prefers-reduced-motion` 支持与 ≤560px 断点（触控目标 ≥40px）。
+
+### 响应式修复
+
+- 移动端三组导航原先各占一行，390px 下吃掉约 250px 首屏且「AI 问答」被截断。
+  改为 `.nav-scroll` 容器 + `.nav-group { display: contents }`，拍平成一行横向滚动
+  （隐藏滚动条、右侧渐隐提示可滑动）；激活态在移动端改为底部横条。
+
+### 验证
+
+- `npm run build`（含 `vue-tsc`）通过；
+- 系统 Edge 实拍 1360×900 与 390×844 两档：登录页、首页、全站概览、商品比较，
+  桌面分组导航与移动端单行导航均正常，无控制台错误；
+- 已部署，服务 `active`。
+
+---
+
+## [未发布] — 2026-11-08（v2.14：导出 500 修复与写操作全量回归）
+
+### 缺陷修复（线上真实故障）
+
+- **导出接口整体 500**：`GET /api/history/{id}/export` 把中文文件名直接写进
+  `Content-Disposition`，Starlette 用 latin-1 编码响应头时抛 `UnicodeEncodeError`，
+  两种格式（md/csv）都不可用。线上日志已定位到 `history_export` 行。
+  修复：`report_service.content_disposition()` 按 RFC 5987 生成
+  「ASCII 兜底名 + `filename*=UTF-8''<百分号编码>`」，接口改为调用该函数。
+- 新增 `tests/test_export_headers.py`（3 条）锁定该缺陷：断言响应头可 latin-1 编码、
+  编码后可还原、ASCII 兜底名与后缀一致。全量测试从 1114 增至 **1117**。
+
+### 代码卫生
+
+- `schemas.RegisterRequest` 由空子类改为 `RegisterRequest = LoginRequest` 别名，
+  消除无约束的重复模型定义，OpenAPI 模型名保持不变。
+- 删除 `.gitignore` 中已失效的 `submission/screenshots/smoke-*.png` 规则，
+  并注明该目录 8 张截图是刻意入库的提交材料。
+
+### 验证（真实写操作回归 32/32）
+
+按线上 OpenAPI 的 20 个写接口逐条真实执行，测试数据全部自清理：
+
+| 组 | 覆盖 |
+|---|---|
+| 分析链路 | 提交分析、历史详情、**导出 md/csv（修复后 200）**、用户端删除、管理端删除 |
+| 收藏 | 新增、列表校验、删除、确认清空 |
+| 偏好 | 读取、修改、持久化校验、恢复原值 |
+| 商品 | 同值更新、上下架幂等 |
+| 用户 | 创建、改角色、改密码、停用、删除、确认消失 |
+| 知识库 | 新增、删除、重建索引、向量构建 |
+| 目录元信息 | 品类/品牌原值写回 |
+| 其他 | 注册已关闭（403）、登出 |
+
+- `ruff` / `format --check`（128 文件）/ `mypy src` 全绿；
+- `pytest` **1117 / 0 / 0**；
+- 部署后服务 `active`，首页与 health 200。
+
+---
+
+## [未发布] — 2026-11-08（v2.13：交互收尾与全库整理）
+
+### 交互细节收尾（审计遗留的最后 4 项）
+
+- **历史详情加载态**：点开报告到返回之间补 spinner；用 `activeId && !detail && !error`
+  三量判定，不新增状态，也避免加载失败时无限转圈。
+- **排序字段校验**：品类/品牌 `sort_order` 保存前用 `Number()` 校验，
+  非数字直接提示而不提交（`v-model.number` 对非法输入会保留原字符串，此前会序列化成 null）。
+- **连接检测结果刷新**：保存配置与恢复默认后清空 `probeLlm` / `probeEmb`，
+  避免旧配置下的「连接成功」结论继续显示。
+- **退出登录去重**：`AppShell` 用模块级标志挡住连点，避免重复触发路由替换。
+
+### 目录与结构整理
+
+- 删除根目录 `zhigou.log`（调试日志）与 `submission/rendered/` 空目录，
+  删除前备份到桌面 `_zhigou_archive_backup/`，可还原。
+- 对 `submission/` 按 SHA-256 全量比对：**没有内容完全相同的重复文件**；
+  审计提到的 3 个截图脚本是「相似」而非「相同」，属各自版本的提交材料，保留。
+- `docs/PROJECT_STRUCTURE.md` 重写为当前真实结构：补 `mcp_server/`、四份 requirements、
+  `.env.example`、CI 双门禁、公共逻辑唯一实现位置；
+  新增第 8 节说明为何**不做物理目录迁移**（路径绑定运行时与 1114 项测试）。
+- `.gitignore` 已覆盖 `.mypy_cache/` / `.ruff_cache/` / `*.bak*`，临时区与缓存收尾清理。
+
+### 验证
+
+- `npm run build`（含 `vue-tsc`）通过；
+- **12 个页面逐个真实浏览器点检 12/12**（系统 Edge）：每页正文正常渲染、
+  控制台 0 错误、无残留 spinner；
+- 结合上一轮交互验收 10/10 与 HTTP 功能验收 12/12；
+- 部署 `index-BfLIDbr1.js`，服务 `active`。
+
+---
+
+## [未发布] — 2026-11-08（v2.12：补齐交互与结构整理）
+
+按「全量遍历与系统性优化」要求补齐 v2.11 未覆盖的部分。
+
+### 交互细节
+
+- **站内二次确认**：新增 `composables/useConfirm.ts` + `components/ConfirmDialog.vue`，
+  `App.vue` 全局渲染一次；5 个页面的原生 `confirm()` 全部改为
+  `await ask(...)`，弹窗样式统一、不再阻塞浏览器线程、自动化脚本可覆盖。
+- **全局首屏加载态**：`composables/useInitialLoad.ts` 用模块级单例 + 请求计数，
+  `App.vue` 渲染一处遮罩；首页、关于页、全站概览、用户管理、知识库管理接入
+  `run()`，消除「加载中 / 失败 / 空数据」三态混同与空态闪烁。
+- **收藏反馈**：`useFavorites` 新增 `loadError`（加载失败不再伪装成「没有收藏」）；
+  分析页与问答页的收藏按钮显示「处理中…」并复用 `pending` 去重。
+- **提示互斥**：用户管理、全站概览、知识库管理、商品维护、设置页的成功提示
+  在出现错误时不再与红色错误并存。
+
+### 结构与冗余
+
+- **删除重复实现**：`src/ui/components.py` 新增 `queue_flash()` / `render_flash()`，
+  5 个 legacy 页面各自的 `_flash` / `_render_flash` 改为薄委托；
+  session_state key 保持不变，AppTest 用例不受影响（1114 项全绿）。
+- **目录清理**：`.tmp/`（4085 文件）、`.mypy_cache/`（17340 文件）、
+  `.ruff_cache/`、`data/evaluation/report.md`、`storage/backups/` 空目录全部清除；
+  归档区 `openspec/changes/archive/`、`submission/`、数据库、`frontend/dist/` 保持完好。
+- **未做物理目录迁移**：`backend/app/main.py` 的静态托管路径、
+  `src/config.py` 的 PROJECT_ROOT 与大量文档引用都绑定当前层级，
+  迁移会破坏已上线服务；结构清晰化通过「删冗余 + 抽公共 + 补目录规范」完成。
+
+### 验证
+
+- `ruff check` / `format --check`（127 文件）/ `mypy src` 全绿；
+- `pytest` **1114 / 0 / 0**；`npm run build` 通过；
+- **真实浏览器交互 10/10**（系统 Edge 驱动，无需下载 Chromium）：
+  登录页、免责文字移除、登录跳转、比较上限与超限提示、Agent 轨迹卡片、
+  站内确认对话框、会话失效后自动回登录页并显示原因；
+- 部署后服务 `active`，首页与 health 200。
+
+---
+
+## [未发布] — 2026-11-08（v2.11：全量遍历与系统性优化）
+
+### 交互修复
+
+- **会话失效不再卡在「已登录」**：`api/client.ts` 在业务请求 401 时派发
+  `zhigou:unauthorized`（登录与 `restore` 的正常 401 除外），`App.vue` 监听后
+  `session.clearLocal()` 并 `router.replace('/')`。此前 30 分钟空闲超时或 12 小时
+  绝对过期后，用户点任何按钮只得到错误提示，必须手动刷新浏览器才能重新登录。
+- **加载失败不再永久转圈**：`CompareView` / `CatalogView` 补 `loaded` 标志，
+  `KnowledgeAdminView` 用 `vectorError` 区分失败态；三者现在区分「加载中 / 失败 / 空数据」。
+- **比较件数三处口径统一**：前端上限由 6 改为 5（与 `config.MAX_COMPARE_COUNT`、
+  README、Agent 工具一致），后端 `services.compare_products` 补上限校验；
+  超限时给出中文提示，比较按钮补「正在比较…」文字反馈。
+- **删除历史记录补确认与重入守卫**（此前连点会发多次不可逆 DELETE）。
+- 退出登录清掉 `restore` 留下的陈旧错误；页脚版本对齐 `2.11`。
+
+### 文档与配置一致性
+
+- 修正「工具只有四个」「Vue 版未展示 Agent 轨迹」「无登录限流 / 无空闲超时」等
+  过时表述，涉及 `README.md`、`DEPLOY.md`、`SECURITY.md`、`docs/auth-boundary.md`、
+  `docs/VUE_MIGRATION.md`、`docs/requirements.md`、`docs/roadmap.md`、
+  `docs/technical-introduction.md`，以及关于页 / 设置页的界面文案。
+- `docs/roadmap.md` 的 T1 任务按实际实现勾选，保留真正未做的「集中式会话存储」。
+- `.env.example` 补 `ZHIGOU_API_HOST` / `ZHIGOU_API_PORT` / 管理员与注册开关，
+  避免照样例配置后服务只监听 `127.0.0.1`。
+- `.gitignore` 补 `.mypy_cache/` / `.ruff_cache/` / `*.bak*`；
+  README 的启动命令改跨平台写法。
+- CI 新增 `frontend` job（`npm ci` + `npm run build` 含 `vue-tsc`），
+  补齐 Vue 单端口部署路径的构建门禁；DEPLOY 删除已不适用的 `continue-on-error` 指令。
+
+### 范围说明
+
+本轮**未重构目录结构**：项目刚部署上线、1114 项测试全绿，全库 2 万余文件中
+绝大多数是历史归档（183 篇）与临时产物；按「安全 > 范围纪律」保留既有层次，
+仅清理临时区并补齐忽略规则。`openspec/changes/archive/`、`submission/`、
+`storage/*.bak`、`frontend/dist/`、`app.py` + `src/ui/` 均按项目约定不动。
+
+---
+
+## [未发布] — 2026-11-08（v2.10：登录页精简）
+
+- 应用户要求，`LoginView.vue` 去掉登录表单下方的整段说明
+  （演示级鉴权提示、会话时长说明、商品价格免责声明）及分隔线，登录页只保留品牌与表单。
+- `openspec/specs/web-ui/spec.md` 同步：鉴权边界说明集中在**项目说明页**（关于页 FAQ），
+  登录页 SHALL NOT 铺开长文。这与项目既有测试
+  `tests/test_app.py::test_the_login_page_stays_clean`「登录页保持简洁」的约定一致，
+  也修正了 v2.5 把长文加进登录页时与该约定产生的偏差。
+- 关于页的鉴权 FAQ 保留，界面仍有一处披露入口。
+
+---
+
 ## [未发布] — 2026-11-08（v2.9：O1 轨迹落库 / O4 工具扩展 / O3 账号安全 / O7 MCP）
 
 按用户指定顺序，四项均以「改动量小 + 复用现有代码 + 直接补缺口」为原则。

@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { api } from '../api/client'
+import { toMessage } from '../utils/errors'
 
 /**
  * 收藏状态与切换动作。
@@ -11,13 +12,16 @@ import { api } from '../api/client'
 export function useFavorites() {
   const favorites = ref<string[]>([])
   const pending = ref<string[]>([])
+  /** 读取失败不能伪装成「没有收藏」，否则按钮会一直显示「收藏」让人反复点。 */
+  const loadError = ref('')
 
   async function load(): Promise<void> {
+    loadError.value = ''
     try {
       const data = await api.get<{ items: { product_id: string }[] }>('/favorites')
       favorites.value = data.items.map((item) => item.product_id)
-    } catch {
-      // 收藏是辅助信息，读取失败按空处理，不阻塞主流程。
+    } catch (err) {
+      loadError.value = toMessage(err, '收藏加载失败')
       favorites.value = []
     }
   }
@@ -37,5 +41,5 @@ export function useFavorites() {
     }
   }
 
-  return { favorites, pending, load, toggle }
+  return { favorites, pending, loadError, load, toggle }
 }

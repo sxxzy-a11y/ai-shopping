@@ -131,3 +131,24 @@ jobs:
       - name: Clean up
         if: always()
         run: docker rm -f zhigou-ci
+
+  # --------------------------------------------------------------------------
+  # Vue 前端构建门禁：README / DEPLOY 推荐的单端口部署路径必须能编译过。
+  # docker job 验的是 legacy Streamlit 镜像，覆盖不到 Vue 版。
+  # --------------------------------------------------------------------------
+  frontend:
+    name: frontend / typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type check and build
+        working-directory: frontend
+        run: npm run build
