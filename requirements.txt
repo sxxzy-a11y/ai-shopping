@@ -17,7 +17,7 @@
 streamlit==1.51.0      # 旧版 Web 界面（legacy）          Requires-Python >=3.10
 fastapi==0.162.0       # Vue 版 API 服务                  >=3.10
 uvicorn==0.54.0        # ASGI 服务器                      >=3.9
-pandas==2.3.3          # 商品数据整理与比较表            >=3.9
+pandas==3.1.1          # 商品数据整理与比较表            >=3.9
 pydantic==2.12.4       # 结构化数据校验                  >=3.9
 httpx==0.28.1          # 大模型 API（OpenAI 兼容直连）    >=3.8
 numpy==2.3.5           # 向量检索余弦计算                >=3.11（决定最低版本）
