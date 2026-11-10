@@ -5,7 +5,7 @@
 
 ## 1. 准备环境
 
-> **版本状态**：当前主界面是 Vue 3 + FastAPI；`src/` 业务层与 legacy Streamlit 版共用。
+> **版本状态**：当前主界面是 Vue 3 + FastAPI；`src/` 业务层与 legacy Streamlit 版共用（legacy 入口仅用于历史回退与测试）。
 > 目录分类见 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)，
 > 迁移状态与 API 清单见 [docs/VUE_MIGRATION.md](docs/VUE_MIGRATION.md)。
 
@@ -25,7 +25,7 @@ python backend/run.py                 # http://127.0.0.1:8000
 # 开发态热更新（另开终端）
 npm --prefix frontend run dev         # http://127.0.0.1:5173，/api 代理到 8000
 
-# legacy 版（回退 / 对照用）
+# legacy 版（历史回退 / 测试对照，勿单独删除）
 streamlit run app.py                  # http://localhost:8501
 ```
 
@@ -48,7 +48,7 @@ python -m eval.runner --write /tmp/report.md   # 评测冒烟；--list-categorie
 python scripts/init.py --check     # 只看现状：商品数、账号数、语料、评测用例
 ```
 
-真实浏览器冒烟（可选，需另开终端 `streamlit run app.py`）：
+真实浏览器冒烟（legacy 界面，可选，需另开终端 `streamlit run app.py`）：
 
 ```bash
 python submission/smoke_test.py            # 默认 --channel msedge，复用系统 Edge

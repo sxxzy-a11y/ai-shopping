@@ -187,7 +187,16 @@ export interface QAResult {
   retrieval_note: string
 }
 
+/** 比较表的一行。`values` / `missing` 与 `products` 顺序一一对应。 */
+export interface ComparisonRow {
+  label: string
+  values: string[]
+  missing: boolean[]
+  /** 各商品取值是否不同，界面据此高亮差异项。 */
+  varies: boolean
+}
+
 export interface ComparisonTable {
-  products: Record<string, unknown>[]
-  rows: Record<string, unknown>[]
+  products: Product[]
+  rows: ComparisonRow[]
 }

@@ -19,8 +19,8 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       { label: '首页', to: '/', icon: 'home' },
       { label: '智能分析', to: '/analysis', icon: 'insights' },
-      { label: '商品比较', to: '/compare', icon: 'compare' },
       { label: 'AI 问答', to: '/qa', icon: 'chat' },
+      { label: '商品比较', to: '/compare', icon: 'compare' },
       { label: '历史记录', to: '/history', icon: 'history' },
     ],
   },
@@ -123,18 +123,14 @@ async function logout() {
           <span class="badge">{{ session.user?.role_label }}</span>
         </div>
       </header>
-      <div class="page">
-        <RouterView v-slot="{ Component }">
-          <Transition name="page-fade">
-            <component :is="Component" />
-          </Transition>
-        </RouterView>
+      <div class="page" :class="{ 'fx-off': route.path === '/settings' || route.path === '/users' }">
+        <RouterView />
       </div>
       <footer class="app-footer">
         <span>© 2026 智购参谋 · 商品信息为整理所得参考值，不构成购买建议</span>
         <span class="row" style="gap: 12px">
           <RouterLink to="/about">关于与数据说明</RouterLink>
-          <span class="muted">版本 2.16</span>
+          <span class="muted">版本 2.18</span>
         </span>
       </footer>
     </main>

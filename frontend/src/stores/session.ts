@@ -3,6 +3,10 @@ import { ref } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { SessionUser } from '../api/types'
 
+/** 主动登录成功后广播：与「刷新页面时 restore 恢复会话」区分开，
+ *  只有前者需要播放进入主界面的咖啡杯过渡。 */
+export const LOGGED_IN_EVENT = 'zg:logged-in'
+
 export const useSession = defineStore('session', () => {
   const user = ref<SessionUser | null>(null)
   const ready = ref(false)
@@ -28,6 +32,7 @@ export const useSession = defineStore('session', () => {
     error.value = ''
     try {
       user.value = await api.post<SessionUser>('/auth/login', { username, password })
+      window.dispatchEvent(new Event(LOGGED_IN_EVENT))
       return true
     } catch (err) {
       error.value = err instanceof Error ? err.message : '登录失败'

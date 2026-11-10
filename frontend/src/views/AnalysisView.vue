@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { api, ApiError } from '../api/client'
 import type { AnalysisResult, Meta, ReportItem } from '../api/types'
 import { useFavorites } from '../composables/useFavorites'
+import { useLoadingBar } from '../composables/useLoadingBar'
 
 const meta = ref<Meta | null>(null)
 const text = ref('')
@@ -12,6 +13,8 @@ const brand = ref('')
 const result = ref<AnalysisResult | null>(null)
 const error = ref('')
 const busy = ref(false)
+/** 接口可能百毫秒内返回，加载条至少留 1.5s，让动效看得见；结果不延迟。 */
+const { visible: progressVisible } = useLoadingBar(busy)
 const { favorites, pending, loadError, load: loadFavorites, toggle: toggleFavoriteRaw } = useFavorites()
 
 onMounted(async () => {
@@ -102,6 +105,9 @@ function scoreText(item: ReportItem) {
       </button>
       <button class="btn btn-ghost" :disabled="busy" @click="fillExample">填入示例</button>
       <span class="small muted">分析会保存为一条历史记录</span>
+    </div>
+    <div v-if="progressVisible" class="progress indeterminate" style="margin-top: 16px" role="progressbar" aria-label="正在分析">
+      <span></span>
     </div>
   </div>
 

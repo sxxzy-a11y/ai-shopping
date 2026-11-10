@@ -172,8 +172,38 @@ tbody tr:hover { background: #fdfaf4; }
   background: var(--accent-soft); border-color: var(--accent);
   color: var(--accent-dark); font-weight: 600;
 }
-.progress { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
-.progress > span { display: block; height: 100%; background: var(--green); border-radius: 999px; }
+/* 指标进度条：span 的宽度是真实比例，动效只做叠加，不把数据画成假的。 */
+.progress {
+  height: 6px; border-radius: 999px; background: var(--line);
+  overflow: hidden; position: relative;
+}
+.progress > span {
+  display: block; height: 100%; background: var(--green); border-radius: 999px;
+  /* 入场把 expansion 走一遍：撑满 → 缩回 → 停在真实比例 */
+  animation: zg-progress-in 1.2s ease-in-out both;
+}
+@keyframes zg-progress-in {
+  0%   { clip-path: inset(0 100% 0 0); }
+  45%  { clip-path: inset(0 0 0 0); }
+  70%  { clip-path: inset(0 100% 0 0); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+/* 轨道上的活动指示条：与顶部加载条同一节奏无限循环，半透明不盖住绿色比例条 */
+.progress::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0;
+  width: 18%; border-radius: 999px; pointer-events: none;
+  background: rgba(255, 253, 249, .55);
+  animation: zg-expansion 6s ease-in-out infinite;
+}
+/* 加载态：没有确定比例时整条按 expansion 伸缩滑行，数据条不跟着动 */
+.progress.indeterminate::after { display: none; }
+.progress.indeterminate > span {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  width: 18%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--amber));
+  animation: zg-expansion 1.4s ease-in-out infinite;
+  clip-path: none;
+}
 .metric-row {
   display: grid; grid-template-columns: minmax(150px, 1fr) 110px minmax(120px, 1.2fr);
   gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line);
@@ -184,3 +214,303 @@ tbody tr:hover { background: #fdfaf4; }
 .faq-item:last-child { border-bottom: none; }
 .faq-item summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
 .faq-item p { margin: 10px 0 0; font-size: 13px; line-height: 1.85; color: var(--ink-soft); }
+
+/* ---------- 商品比较：左右分栏对照 ----------
+   后端给的是「一行 = 一个维度 + N 个值」，界面按商品拆成独立列，
+   不再把多台机器的值塞进同一格，也不暴露 missing / varies 这类内部字段。 */
+.cmp-result-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+.cmp-result-head h2 { margin-bottom: 6px; }
+.cmp-result-sub { margin: 0; color: var(--ink-soft); font-size: 12.5px; line-height: 1.7; max-width: 560px; }
+.cmp-seg {
+  display: inline-flex; padding: 3px; gap: 2px;
+  border: 1px solid var(--line); background: var(--surface-soft); border-radius: 999px;
+}
+.cmp-seg button {
+  border: 0; background: transparent; color: var(--ink-soft);
+  font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 999px;
+  cursor: pointer; white-space: nowrap;
+  transition: background .18s var(--ease), color .18s var(--ease);
+}
+.cmp-seg button:hover { color: var(--accent-dark); }
+.cmp-seg button.active { background: var(--sidebar); color: #fffdf9; }
+.cmp-summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+
+/* 关键差异速览：左值 / 维度 / 右值，三者对垒 */
+.cmp-highlights {
+  background: var(--surface-soft); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 18px 20px 8px; margin-bottom: 20px;
+}
+.cmp-hl-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+.cmp-hl-head .eyebrow { margin: 0; }
+.cmp-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-soft); }
+.cmp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cmp-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.cmp-hl-row {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
+  padding: 11px 0; border-bottom: 1px dashed var(--line);
+}
+.cmp-hl-row:last-child { border-bottom: none; }
+.cmp-hl-val { font-size: 14px; font-weight: 700; letter-spacing: .2px; overflow-wrap: anywhere; }
+.cmp-hl-val.left { text-align: right; color: var(--accent-dark); }
+.cmp-hl-val.right { text-align: left; color: var(--green); }
+.cmp-hl-label {
+  font-family: var(--font-display); font-size: 12px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 13px; white-space: nowrap; letter-spacing: .5px;
+}
+/* 三件及以上：速览按商品列平铺，每格带列色与字母，不退回成一串文字 */
+.cmp-hl-multi { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.cmp-highlights > .cmp-hl-multi:last-child { border-bottom: none; }
+.cmp-hl-multi-label {
+  display: block; font-family: var(--font-display); font-size: 12px;
+  color: var(--ink-soft); letter-spacing: .5px; margin-bottom: 8px;
+}
+.cmp-hl-multi-values {
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 8px;
+}
+.cmp-hl-multi-cell {
+  display: flex; align-items: center; gap: 9px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--line);
+  border-left: 3px solid var(--col-color, var(--accent)); border-radius: 8px; padding: 7px 11px;
+}
+.cmp-hl-multi-letter {
+  font-family: var(--font-display); font-size: 15px; font-weight: 700;
+  color: var(--col-color, var(--accent)); flex: 0 0 auto;
+}
+.cmp-hl-multi-value { font-size: 13px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.cmp-hl-multi-cell.is-missing .cmp-hl-multi-value { color: var(--muted); font-weight: 400; font-style: italic; }
+
+/* 主表：一列维度 + N 列商品，头卡与参数行共用同一套列宽 */
+.cmp-scroll { overflow-x: auto; border-radius: var(--radius-sm); }
+.cmp-grid, .cmp-notes-grid {
+  display: grid;
+  grid-template-columns: 148px repeat(var(--cols, 2), minmax(210px, 1fr));
+}
+.cmp-grid {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  overflow: hidden; background: var(--surface);
+}
+.cmp-row { display: contents; }
+.cmp-cell { padding: 12px 16px; border-bottom: 1px solid var(--line); min-width: 0; }
+.cmp-product, .cmp-value, .cmp-notes-cell { border-left: 1px solid var(--line); }
+.cmp-grid > .cmp-row:last-child > .cmp-cell { border-bottom: none; }
+.cmp-corner {
+  background: #0f1e24; color: #d9e4e6;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 5px;
+}
+.cmp-corner-label { font-size: 11px; letter-spacing: 1.5px; color: #8ea6ac; }
+.cmp-corner-count { font-size: 11px; color: #6c868d; }
+.cmp-head-row .cmp-cell { border-bottom: 2px solid #0f1e24; }
+.cmp-product {
+  background: linear-gradient(155deg, #1d343c, #14242b); color: #f4efe4;
+  position: relative; padding: 18px 18px 16px;
+  /* 商品名长短不一时，价格统一贴在卡片底部，三列仍在同一水平线上 */
+  display: flex; flex-direction: column;
+}
+.cmp-product::before {
+  content: ''; position: absolute; inset: 0 0 auto; height: 3px;
+  background: var(--col-color, var(--accent));
+}
+.cmp-product-head { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.cmp-letter {
+  font-family: var(--font-display); font-size: 32px; line-height: 1; font-weight: 600;
+  color: var(--col-color, var(--accent)); flex: 0 0 auto; margin-top: 2px;
+}
+.cmp-product-info { display: grid; gap: 4px; min-width: 0; }
+.cmp-product-name {
+  font-family: var(--font-display); font-size: 16px; font-weight: 600;
+  letter-spacing: .4px; line-height: 1.35; overflow-wrap: anywhere;
+}
+.cmp-product-sub { font-size: 11px; color: #9db2b8; }
+.cmp-product-price {
+  font-size: 22px; font-weight: 700; color: #f0c99f;
+  margin: auto 0 6px; padding-top: 14px; font-variant-numeric: tabular-nums;
+}
+.cmp-product-foot { font-size: 10.5px; color: #7d959b; letter-spacing: .5px; }
+.cmp-dim {
+  background: var(--surface-soft); display: flex; align-items: center;
+  justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--ink-soft);
+}
+.cmp-diff-tag {
+  font-size: 10px; color: var(--accent-dark); background: var(--accent-soft);
+  border: 1px solid #f3ddc9; border-radius: 999px; padding: 2px 6px; white-space: nowrap;
+}
+.cmp-value { font-size: 13.5px; color: var(--ink-soft); background: var(--surface); overflow-wrap: anywhere; }
+.cmp-row.differs .cmp-cell { background: #fdf5ec; }
+.cmp-row.differs .cmp-dim { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; color: var(--ink); }
+.cmp-row.differs .cmp-value { color: var(--ink); font-weight: 600; }
+/* 缺失值一律弱化：即使落在高亮的差异行里，也不能看起来像真实数据 */
+.cmp-hl-val.is-missing,
+.cmp-value.is-missing,
+.cmp-row.differs .cmp-value.is-missing,
+.cmp-note-item p.is-missing { color: var(--muted); font-weight: 400; font-style: italic; }
+
+/* 评价与资料：与主表同宽同列，上下对齐 */
+.cmp-notes-grid {
+  margin-top: 18px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); overflow: hidden; background: var(--surface);
+}
+.cmp-notes-grid .cmp-cell { border-bottom: none; }
+.cmp-notes-dim { display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; font-size: 13px; }
+.cmp-notes-cell { border-top: 3px solid var(--col-color, var(--accent)); padding: 16px 18px; }
+.cmp-notes-col-head {
+  font-family: var(--font-display); font-size: 14px; font-weight: 600;
+  margin-bottom: 12px; color: var(--col-color, var(--accent));
+}
+.cmp-note-item { padding: 9px 0; border-bottom: 1px dashed var(--line); }
+.cmp-note-item:last-child { border-bottom: none; }
+.cmp-note-label { display: block; font-size: 10.5px; letter-spacing: 1px; color: var(--muted); margin-bottom: 5px; }
+.cmp-note-item p { margin: 0; font-size: 12.5px; line-height: 1.8; color: var(--ink-soft); overflow-wrap: anywhere; }
+.cmp-footnote { margin: 16px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.7; }
+
+/* ---------- 咖啡杯载入动画 ----------
+   From Uiverse.io by esraaabdel-kareem（MIT）。原版代码原样使用：
+   类名、颜色、尺寸、z-index、关键帧名与 6s 节奏一律不改。
+   两处有意偏离：.loader 上的 isolation，让原版 z-index:-1 的点阵
+   在载入卡片里仍可见；::after/::before 上的 left:0，抵消继承的
+   text-align:center 把咖啡面/杯托推到杯子中央的浏览器静态定位行为。
+   .coffee-loader 只负责居中，不参与动画。 */
+/* 官网预览预加载了 Inter.ttf，点阵那串点用的是 Inter 的度量；
+   没有这个字体时点宽会差 12px，看起来像点阵和杯子不同步。 */
+@font-face {
+  font-family: Inter;
+  src: url('/fonts/Inter.ttf') format('truetype');
+  font-display: block;
+}
+.coffee-loader { display: grid; justify-items: center; }
+/* 官网把组件放进 Shadow DOM 并注入了 `*{box-sizing:border-box}`：
+   实测 loader / cup / .load 全都是 border-box，只有伪元素是 content-box。
+   项目全局 reset 恰好就是这个口径，因此这里不要再改 box-sizing。
+   只把点阵字体栈与 :root 的字体特性还原成官网默认值。 */
+.coffee-loader .load {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: normal;
+  font-synthesis: weight style small-caps;
+  -webkit-font-smoothing: auto;
+  /* 官网容器有 line-height:1.5，10px 字体点阵行高正好 15px */
+  line-height: 1.5;
+}
+.loader {
+  width: 100px;
+  height: 80px;
+  position: relative;
+  display: flex;
+  justify-items: center;
+  align-items: center;
+  isolation: isolate;
+}
+.loader .cup {
+  position: absolute;
+  width: 25px;
+  height: 18px;
+  background-color: #fff;
+  border: 1px solid #2e2e2e;
+  z-index: 1;
+  border-radius: 2px 2px 10px 10px;
+  animation: expansion 6s infinite ease-in-out;
+  transform-origin: center;
+}
+/* 咖啡面与杯托不写 left 时走“静态位置”：会被继承的 text-align:center
+   居中到杯子水平中央，视觉上咖啡永远超前杯子半个杯宽（uiverse 官网宿主
+   没有 text-align:center 所以看不出）。显式钉在左缘，与继承环境解耦。 */
+.cup::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 0;
+  width: calc(100% - 2px);
+  height: 2px;
+  background: #fed59fca;
+  border: 1px solid #2e2e2ebe;
+  border-radius: 50%;
+}
+.cup::before {
+  content: "";
+  position: absolute;
+  top: 15px;
+  left: 0;
+  width: calc(100% - 2px);
+  height: 4px;
+  background: #ffffff00;
+  border: 1px solid #2e2e2e;
+  border-top: none;
+  border-radius: 50%;
+  z-index: -1;
+}
+.loader .cup .cup-handle {
+  position: absolute;
+  width: 5px;
+  height: 10px;
+  background-color: #fff;
+  border: 1px solid #2e2e2e;
+  right: -5px;
+  top: 2px;
+  border-radius: 2px 10px 20px 2px;
+}
+.loader .cup .smoke {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 15px;
+  height: 25px;
+  background: rgba(107, 102, 102, 0.433);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  animation: rise 6s infinite ease-in-out;
+  filter: blur(8px);
+}
+.loader .cup .smoke.one { animation-delay: 0s; }
+.loader .cup .smoke.two { animation-delay: 1s; }
+.loader .cup .smoke.three { animation-delay: 2s; }
+.loader .load {
+  position: absolute;
+  font-size: 10px;
+  opacity: 0.7;
+  top: 45%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: -1;
+}
+@keyframes expansion {
+  0%   { width: 25px; transform: translateX(0); }
+  40%  { width: 100%; transform: translateX(0); }
+  80%  { width: 25px; transform: translateX(64px); }
+  90%  { width: 100%; transform: translateX(0); }
+  100% { width: 25px; transform: translateX(0); }
+}
+@keyframes rise {
+  0%   { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
+  30%  { opacity: 0.7; }
+  60%  { opacity: 0.4; }
+  100% { transform: translate(-50%, -120px) scale(1); opacity: 0; }
+}
+.coffee-label { margin: 14px 0 0; font-size: 13px; letter-spacing: 1px; color: var(--ink-soft); }
+
+/* 整页载入画面：覆盖视口、居中卡片，加载结束淡出。
+   卡片底色用原版预览的 #e8e8e8，白杯与深描边才看得清。 */
+.coffee-splash {
+  position: fixed; inset: 0; z-index: 2000;
+  display: grid; place-items: center; padding: 24px;
+  background:
+    radial-gradient(900px 480px at 12% -10%, rgba(200, 118, 63, .10), transparent 62%),
+    radial-gradient(760px 420px at 100% 100%, rgba(201, 154, 69, .10), transparent 58%),
+    var(--bg);
+}
+.coffee-splash-card {
+  display: grid; justify-items: center; text-align: center;
+  padding: 34px 54px 30px;
+  background: #e8e8e8; border: 1px solid var(--line);
+  border-radius: 20px; box-shadow: var(--shadow-lift);
+}
+.coffee-splash-fade-enter-active { transition: opacity .3s var(--ease); }
+.coffee-splash-fade-enter-from { opacity: 0; }
+.coffee-splash-fade-enter-from .coffee-splash-card { transform: translateY(10px) scale(.98); }
+.coffee-splash-fade-enter-active .coffee-splash-card { transition: transform .35s var(--ease); }
+.coffee-splash-fade-leave-active { transition: opacity .45s var(--ease); }
+.coffee-splash-fade-leave-to { opacity: 0; }
+/* 咖啡杯淡出后登录页跟着淡入，两段过渡连起来，不是硬切 */
+.login-screen { animation: login-screen-in .55s var(--ease) both; }
+@keyframes login-screen-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}

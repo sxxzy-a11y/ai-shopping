@@ -1,4 +1,4 @@
-# Vue 化迁移说明（v2.1：能力对齐）
+# Vue 化迁移说明（v2.18：能力对齐）
 
 > 本文是**当前版本状态的单一事实源**。其它文档里出现的 Streamlit 描述，除旧版入口说明外，
 > 均指 v1.x 实现；`openspec/changes/archive/` 下的 86 篇文档是历史快照，保持原样不改。
@@ -7,8 +7,8 @@
 > 商品 CRUD、品类品牌元信息、用户管理、知识库文档与索引、全站记录删除、完整问答链路、收藏）。
 > 不再有「管理员页面只读 / AI 问答简化版」的限制，详见第 2、7 节。
 
-**更新日期**：2026-11-07
-**对应提交**：以 `git log -1` 为准；迁移计划见 `Plan/1. Vue前端迁移_plan.md`
+**更新日期**：2026-11-10
+**对应提交**：以 `git log -1` 为准；迁移计划为 `Plan/1. Vue前端迁移_plan.md`（本机过程文件，不入库）
 
 ---
 
@@ -114,7 +114,7 @@ streamlit run app.py           # http://127.0.0.1:8501
 |---|---|
 | Git 分支 | `backup/streamlit-v1` → `8b3ae9b` |
 | Git 标签 | `v1.0.0-streamlit` → `8b3ae9b` |
-| 源码快照 | `ai-shopping-streamlit-v1.0.0.zip`（仓库外，桌面） |
+| 源码快照 | 仓库外 zip 快照已清理；git 分支 `backup/streamlit-v1` 与标签 `v1.0.0-streamlit` 保留 |
 
 回退到纯 Streamlit 版：`git checkout backup/streamlit-v1`，或删除新增的 `frontend/`、`backend/`
 并还原 `requirements.txt` 中两行依赖即可；`src/` 从未改动。
@@ -126,7 +126,7 @@ streamlit run app.py           # http://127.0.0.1:8501
 | `npm run build` | ✅ vue-tsc 零错、62 模块、13 个页面 chunk |
 | `ruff check .` / `ruff format --check .` | ✅ All checks passed / 124 文件已格式化 |
 | `mypy src` | ✅ 57 个源文件零错误（无回归） |
-| `pytest -q --junitxml` | ✅ **tests=1114 failures=0 errors=0 skipped=0**（109.8s） |
+| `pytest -q --junitxml` | ✅ **tests=1117 failures=0 errors=0 skipped=0**（109.8s） |
 | API 冒烟 | ✅ 20/20（含 401/400/422 拒绝两态、登出失效、管理员端点） |
 | **管理员写操作冒烟** | ✅ **30/30**（在临时库实例上跑，不碰真实数据） |
 | **AI 连接检测实测** | ✅ 对话：`deepseek-flash 可用，消耗 42 tokens`；向量化：`text-embedding-v4 · 1024 维` |

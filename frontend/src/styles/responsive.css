@@ -29,11 +29,23 @@
   .hero h1 { font-size: 26px; letter-spacing: 1px; }
   .page-head h1 { font-size: 24px; }
   .app-footer { padding: 16px 18px; }
+  /* 商品比较：窄屏保留横向对照，可在容器内滑动，不改成上下堆叠 */
+  .cmp-grid, .cmp-notes-grid { grid-template-columns: 112px repeat(var(--cols, 2), minmax(180px, 1fr)); }
+  .cmp-cell { padding: 10px 12px; }
+  .cmp-product { padding: 14px 12px 12px; }
+  .cmp-letter { font-size: 26px; }
+  .cmp-product-name { font-size: 14px; }
+  .cmp-product-price { font-size: 19px; margin-top: 10px; }
+  .cmp-hl-row { grid-template-columns: 1fr 1fr; gap: 3px 10px; }
+  .cmp-hl-label { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
+  .cmp-hl-val.left { grid-column: 1; grid-row: 2; text-align: right; }
+  .cmp-hl-val.right { grid-column: 2; grid-row: 2; text-align: left; }
+  .cmp-hl-multi-values { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 }
 
 @media (max-width: 560px) {
-  .login-card { padding: 28px 22px 24px; border-radius: 16px; }
-  .login-brand h1 { font-size: 21px; }
+  .login-card { padding: 18px 16px; }
+  .login-title { font-size: 20px; }
   .hero { padding: 24px 20px; border-radius: 16px; }
   .hero h1 { font-size: 22px; }
   .hero p { font-size: 13px; }
@@ -45,8 +57,13 @@
   /* 触控目标不小于 40px */
   .btn { min-height: 40px; }
   .nav-item { min-height: 40px; }
+  .coffee-splash-card { padding: 26px 24px 24px; }
+  .coffee-splash-card h2 { font-size: 19px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  /* 无限循环的两层指示条直接停掉，避免极短 duration 造成高频重绘 */
+  .route-progress::after, .progress::after, .progress > span { animation: none !important; }
+  .progress > span { clip-path: none !important; }
 }

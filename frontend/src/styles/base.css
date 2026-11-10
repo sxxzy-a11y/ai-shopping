@@ -16,45 +16,198 @@
 }
 .boot-screen p { font-size: 13px; letter-spacing: .4px; margin: 0; }
 
+/* 登录卡片：Uiverse.io by D3OXY（MIT）的硬边阴影表单风格。
+   2px 深边框 + 4px 硬投影；颜色映射到全局色板 —— 冷灰底换成暖纸色，
+   纯黑换成深墨绿黑（--ink），蓝色聚焦换成铜橙（--accent），
+   与站内账本/文书的暖色调一致。字体不引网络字体，
+   标题用粗黑体、副标题用等宽栈近似原版的 DelaGothicOne / SpaceMono。 */
 .login-card {
-  width: min(420px, calc(100vw - 40px));
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  box-shadow: var(--shadow-lift);
-  padding: 34px 34px 30px;
+  --lg-ink: var(--ink);
+  --lg-ink-soft: #8d7f6d;
+  --lg-bg: #efe6d7;
+  --lg-field: var(--surface);
+  --lg-focus: var(--accent);
+  width: min(340px, calc(100vw - 40px));
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+  background: var(--lg-bg);
+  border: 2px solid var(--lg-ink);
+  border-radius: 5px;
+  box-shadow: 4px 4px var(--lg-ink);
+  position: relative;
+}
+.login-title {
+  margin: 0 0 5px;
+  display: flex;
+  flex-direction: column;
+  color: var(--lg-ink);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  line-height: 1.25;
+}
+.login-title span {
+  margin-top: 4px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  color: var(--lg-ink-soft);
+}
+.login-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.login-separator > div {
+  flex: 1 1 auto;
+  height: 3px;
+  border-radius: 5px;
+  background-color: var(--lg-ink-soft);
+}
+.login-separator > span {
+  color: var(--accent-dark);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.login-form { display: grid; gap: 20px; width: 100%; }
+.login-input {
+  width: 100%;
+  height: 40px;
+  border-radius: 5px;
+  border: 2px solid var(--lg-ink);
+  background-color: var(--lg-field);
+  box-shadow: 4px 4px var(--lg-ink);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--lg-ink);
+  padding: 5px 10px;
+  outline: none;
+  transition: border-color .18s var(--ease), box-shadow .18s var(--ease);
+}
+.login-input::placeholder { color: #8d7f6d; font-weight: 500; }
+/* 原版变量 --input-focus 定义未使用，这里落到聚焦态上 */
+.login-input:focus {
+  border-color: var(--lg-focus);
+  box-shadow: 4px 4px var(--lg-ink), 0 0 0 3px rgba(200, 118, 63, .20);
+}
+.login-submit {
   position: relative;
   overflow: hidden;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  border-radius: 5px;
+  border: 2px solid var(--lg-ink);
+  background-color: var(--lg-field);
+  box-shadow: 4px 4px var(--lg-ink);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--lg-ink);
+  cursor: pointer;
+  transition: all 250ms;
 }
-/* 顶部一道铜橙细线：账本装订边的暗示，也是品牌色的锚点 */
-.login-card::before {
+/* 悬停时黑底从左向右铺满，文字反白 —— 原版 oauthButton 的动效 */
+.login-submit::before {
   content: '';
-  position: absolute; inset: 0 0 auto; height: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--amber) 60%, transparent);
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0;
+  background-color: var(--sidebar);
+  z-index: -1;
+  box-shadow: 4px 8px 19px -3px rgba(23, 38, 44, .27);
+  transition: all 250ms;
 }
-.login-brand { display: flex; align-items: center; gap: 13px; margin-bottom: 8px; }
-.login-brand h1 {
-  font-family: var(--font-display);
-  font-size: 24px; margin: 0; letter-spacing: 1px; font-weight: 600;
+.login-submit:hover:not(:disabled) { color: #f4efe4; }
+.login-submit:hover:not(:disabled)::before { width: 100%; }
+.login-submit:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px var(--lg-ink);
 }
-.login-sub {
-  color: var(--muted); font-size: 11px; margin: 0 0 26px;
-  letter-spacing: 3px; padding-left: 2px;
+.login-submit:disabled { opacity: .6; cursor: not-allowed; }
+.login-submit .spinner { border-color: rgba(23, 38, 44, .25); border-top-color: var(--lg-ink); }
+.login-submit:hover:not(:disabled) .spinner {
+  border-color: rgba(244, 239, 228, .3);
+  border-top-color: #f4efe4;
+}
+.login-error {
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: #a33a24;
+  background: #fbeae3;
+  border: 2px solid #a33a24;
+  border-radius: 5px;
+  box-shadow: 3px 3px #a33a24;
 }
 
 /* ---------- 表单 ---------- */
 .field { display: grid; gap: 7px; margin-bottom: 16px; }
 .field > label { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .field .hint { font-size: 12px; color: var(--muted); }
+
+/* 输入控件：Uiverse.io by 0xnihilism（MIT）的故障硬边输入框。
+   原版 4px 黑边 + 8px 硬投影 + 等宽字，按站内密度收成 3px / 6px，
+   颜色映射到暖色板（深墨边、暖白底、铜橙聚焦投影）。
+   未采用原版的 typing 宽度动画与假光标 |（前者改输入框宽度、
+   后者与真实光标重复）；故障抖动只在失焦且已有内容时播放，
+   保证打字过程中文字始终可读。 */
 .input, .select, .textarea {
-  width: 100%; padding: 11px 13px; border: 1px solid var(--line);
-  border-radius: var(--radius-sm); background: var(--surface-soft);
+  width: 100%;
+  padding: 10px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: var(--surface);
   color: var(--ink);
-  transition: border-color .18s var(--ease), box-shadow .18s var(--ease), background .18s var(--ease);
+  box-shadow: 6px 6px 0 var(--ink);
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease),
+    background-color .22s var(--ease), color .22s var(--ease), border-color .22s var(--ease);
 }
+.input {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 13.5px;
+  letter-spacing: .2px;
+}
+.input::placeholder, .textarea::placeholder { color: var(--muted); }
+/* 悬停：面板整体抬起，硬投影变长 */
+.input:hover, .select:hover, .textarea:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 9px 9px 0 var(--ink);
+}
+/* 聚焦：保持浅底不反色（手动输入时文字可读），只用铜橙描边 + 铜色光晕 */
 .input:focus, .select:focus, .textarea:focus {
-  outline: none; border-color: var(--accent); background: #fff;
-  box-shadow: 0 0 0 3px rgba(200, 118, 63, .13);
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 6px 6px 0 var(--ink), 0 0 0 3px rgba(200, 118, 63, .18);
+}
+.input:focus::placeholder, .textarea:focus::placeholder { color: var(--muted); }
+/* 聚焦瞬间左右晃动一下（原版 silly-quail-9 的手感），底色保持浅色不反黑 */
+.input:focus { animation: input-shake .5s var(--ease); }
+@keyframes input-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px) rotate(-2deg); }
+  50% { transform: translateX(4px) rotate(2deg); }
+  75% { transform: translateX(-3px) rotate(-1deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .input, .select, .textarea { transform: none !important; }
 }
 .textarea { min-height: 116px; resize: vertical; line-height: 1.7; }
 .select {
@@ -67,21 +220,81 @@
 /* ---------- 按钮 ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  border: 1px solid transparent; border-radius: var(--radius-sm);
+  border: 2px solid transparent; border-radius: var(--radius-sm);
   padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
   transition: background .18s var(--ease), color .18s var(--ease),
     border-color .18s var(--ease), transform .12s var(--ease);
 }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-/* 主按钮：扁平铜橙 + 顶部内高光，不做大投影（避免"AI 卡片"感） */
-.btn-primary {
-  background: var(--accent); color: #fffdf9;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+/* 交互按钮：magicui Interactive Hover Button 的「圆点放大填充」。
+   主/次按钮完全统一：直角、2px 墨边、3px 硬投影、暖白底、墨色字；
+   静止时左侧探出一枚铜点，悬停放大铺满整块、文字反白并抬起。
+   纯 CSS 实现（不复制文字层），省掉了原版「原文字右移淡出 +
+   副本文字滑入」那一半动画。 */
+.btn-primary,
+.btn-ghost {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease),
+    color .25s var(--ease), background .25s var(--ease), border-color .25s var(--ease);
 }
-.btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
-.btn-ghost { background: var(--surface); border-color: var(--line); color: var(--ink-soft); }
-.btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-dark); }
+.btn-primary::before,
+.btn-ghost::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  transition: transform .45s var(--ease);
+  z-index: -1;
+}
+.btn-primary:hover:not(:disabled),
+.btn-ghost:hover:not(:disabled) {
+  color: #fffdf9;
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+.btn-primary:active:not(:disabled),
+.btn-ghost:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+.btn-primary:hover:not(:disabled)::before,
+.btn-ghost:hover:not(:disabled)::before { transform: scale(90); }
+.btn-primary.btn-sm::before,
+.btn-ghost.btn-sm::before { left: 6px; width: 6px; height: 6px; margin-top: -3px; }
+/* 禁用/加载中：铜点与加载圈不要一起出现，隐藏圆点 */
+.btn-primary:disabled::before,
+.btn-ghost:disabled::before { opacity: 0; }
+/* 深色 Hero 上墨色投影看不见，换成铜色硬投影 */
+.hero .btn-primary { box-shadow: 3px 3px 0 var(--accent); }
+.hero .btn-primary:hover:not(:disabled) { box-shadow: 5px 5px 0 var(--accent); }
+/* 个人设置 / 用户管理：去掉填充特效，只留静态边框与普通悬停 */
+.fx-off .btn-primary::before,
+.fx-off .btn-ghost::before { display: none; }
+.fx-off .btn-primary:hover:not(:disabled),
+.fx-off .btn-primary:active:not(:disabled) {
+  color: var(--ink);
+  transform: none;
+  background: var(--surface-soft);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.fx-off .btn-ghost:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--surface-soft);
+  border-color: var(--accent);
+}
 .btn-sm { padding: 7px 12px; font-size: 12px; }
 .btn-block { width: 100%; }
 
@@ -161,21 +374,27 @@
 }
 .page { padding: 30px 34px 60px; max-width: 1180px; width: 100%; margin: 0 auto; min-height: 320px; }
 
-/* 路由切换：只淡入不淡出。带淡出会出现「旧内容先消失、新内容还没进来」的空档。 */
-.page-fade-enter-active { transition: opacity .18s var(--ease); }
-.page-fade-enter-from { opacity: 0; }
+/* 路由切换不做过渡：侧栏切页立即渲染，不再加淡入。 */
 
-/* 顶部加载条：只提示在加载，不遮挡内容（替代原先会让整页发白的全屏遮罩） */
+/* 顶部加载条：轨道固定，指示条短段伸缩 + 滑行，不遮挡内容。
+   节奏取自 uiverse.io/esraaabdel-kareem/bad-dragonfly-54（MIT）的 expansion：
+   短条撑满 → 缩回滑到末端 → 再撑满 → 缩回。两处进度条共用这一组关键帧。 */
 .route-progress {
-  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 1100;
-  background: linear-gradient(90deg, var(--accent), var(--amber));
-  transform-origin: left center;
-  animation: route-progress 1.1s var(--ease) infinite;
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 1100;
+  background: var(--line); overflow: hidden;
 }
-@keyframes route-progress {
-  0% { transform: scaleX(.06); opacity: 1; }
-  55% { transform: scaleX(.62); opacity: 1; }
-  100% { transform: scaleX(.92); opacity: .55; }
+.route-progress::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0;
+  width: 18%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--amber));
+  animation: zg-expansion 1.4s ease-in-out infinite;
+}
+@keyframes zg-expansion {
+  0%   { width: 18%; left: 0; }
+  40%  { width: 100%; left: 0; }
+  80%  { width: 18%; left: 82%; }
+  90%  { width: 100%; left: 0; }
+  100% { width: 18%; left: 0; }
 }
 .page-head { margin-bottom: 24px; }
 .page-head h1 {

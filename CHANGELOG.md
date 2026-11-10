@@ -5,6 +5,51 @@
 
 ---
 
+## [未发布] — 2026-11-10（v2.18：界面动效统一、线上发布与代码库整理）
+
+### 界面
+
+- 修复咖啡杯载入动效「咖啡面超前杯子半个杯宽」：`components.css` 给 `.cup::after` / `.cup::before`
+  显式 `left:0`，抵消载入卡片继承的 `text-align:center` 静态定位行为；7 个动画相位实测对齐。
+- 登录页按 D3OXY 硬边表单风格重做，颜色映射到暖纸 + 铜橙 + 深墨色板；`responsive.css` 同步小屏规则。
+- 全局 `.input/.select/.textarea` 改为硬边风格：3px 墨边 + 6px 硬投影、直角、等宽字；
+  聚焦铜橙描边 + 晃动（不反黑），失焦不再持续抖动；`prefers-reduced-motion` 关闭动效。
+- `.btn-primary` / `.btn-ghost` 统一为直角墨边 + 3px 硬投影 + 铜点放大填充；
+  个人设置 / 用户管理通过 `fx-off` 关闭填充特效。
+- `App.vue` 移除路由切换的咖啡覆盖层（0.9s）与 `page-fade` 淡入；仅保留进入登录页 1.8s、
+  登录成功 1.4s 两段过渡。
+
+### 部署
+
+- 通过 SSH 上传新 `frontend/dist` 到 `/opt/zhigou/frontend/dist`，`systemctl restart zhigou` 生效；
+  旧产物备份为 `dist.bak-20261110`；线上 CSS `index-DpEru_pH.css`、HTTP 200 已复核。
+
+### 清理与文档
+
+- 删除开发期 `coffee-preview.html` / `progress-preview.html`、3 张孤立设计图、缓存目录、
+  运行时日志与 `submission/make_deck.js`；清理仓库外旧版备份与过期上传包。
+- legacy Streamlit 代码保留（CI docker job 与 AppTest 仍依赖），文档统一改为「历史回退入口」。
+- 文档口径统一：版本 v2.18、测试 1117 条 / 41 文件（实测 `pytest --collect-only`）、
+  `Plan/` 不入库、实际部署路径与发布流程。
+
+### 验证
+
+- `npm run build` ✅；本地与线上 `/` 均 200；登录页与按钮悬停截图复核。
+
+---
+
+## [未发布] — 2026-11-09（v2.18：侧栏顺序微调）
+
+- `AppShell.vue` 的「选购工作台」分组把 **AI 问答** 移到 **商品比较** 上方（按用户要求）；
+  桌面侧栏与移动端横向导航共用同一份 `groups` 数据，两档顺序自动一致。
+- `tests/test_app.py` 里出现「商品比较、AI 问答」的那行是 parametrize 的遍历参数
+  （legacy AppTest），不是顺序断言，无需改动。
+- 验证：`npm run build` 通过；Edge 实测 1360×900 与 390×844 前五项均为
+  首页 / 智能分析 / AI 问答 / 商品比较 / 历史记录；已部署，服务 `active`。
+- 页脚版本同步为 `2.18`。
+
+---
+
 ## [未发布] — 2026-11-09（v2.17：新代码系统优化与目录重组）
 
 ### 代码质量
@@ -634,7 +679,7 @@ Vue 版未展示 Agent 执行轨迹（需独立异步端点）、不在线触发
 - 新增 `backend/`：FastAPI 26 个路由，复用 `src/` 全部业务函数；`HttpOnly` Cookie 内存会话；
   后端入口做权限兜底；`frontend/dist` 存在时单端口托管 SPA
 - `requirements.txt` 增加 `fastapi==0.162.0` / `uvicorn==0.54.0`
-- 旧版完整备份：分支 `backup/streamlit-v1`、标签 `v1.0.0-streamlit`、仓库外源码快照 zip
+- 旧版备份：分支 `backup/streamlit-v1`、标签 `v1.0.0-streamlit` 保留；仓库外 zip 快照已于 2026-11-10 清理
 - 新增 `docs/VUE_MIGRATION.md`（迁移状态/页面覆盖矩阵/API/回退）与
   `docs/PROJECT_STRUCTURE.md`（目录分类规范）；README / DEPLOY / CONTRIBUTING / SECURITY 同步现状
 - 清理根目录 6 个 pip 临时目录；`.gitignore` 补 `frontend/dist/`

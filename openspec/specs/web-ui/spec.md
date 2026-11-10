@@ -1,6 +1,6 @@
 # web-ui Specification
 
-> **版本状态（2026-11-07，v2.0）**：当前主界面以 **Vue 3 + FastAPI** 实现，
+> **版本状态（2026-11-10，v2.18）**：当前主界面以 **Vue 3 + FastAPI** 实现，
 > Streamlit 旧版保留为 legacy 入口。本规格中涉及 Streamlit 内部 DOM / Secrets 的
 > 条目是 v1.x 时期的实现约束，业务层面仍成立；页面构成、导航、响应式与视觉规范
 > 对 Vue 版继续适用。逐页覆盖矩阵见 `docs/VUE_MIGRATION.md` 第 2 节。

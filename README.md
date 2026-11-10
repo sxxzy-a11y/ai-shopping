@@ -2,8 +2,8 @@
 
 **把一句“预算 2000，主要拍照”变成一份能看懂的购买建议。**
 
-> **版本状态（2026-11-08）**：当前主界面是 **Vue 3 + FastAPI**，单端口运行；
-> 原 Streamlit 版完整保留为 **legacy 入口**，可随时回退（tag `v1.0.0-streamlit`）。
+> **版本状态（2026-11-10，v2.18）**：当前主界面是 **Vue 3 + FastAPI**，单端口运行；
+> 原 Streamlit 版保留为 **legacy 历史入口**（CI docker job 与 AppTest 仍依赖，勿单独删除），回退见 tag `v1.0.0-streamlit`。
 > 迁移范围、页面覆盖矩阵与 API 清单见 [docs/VUE_MIGRATION.md](docs/VUE_MIGRATION.md)，
 > 目录分类规范见 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)。
 > `docs/` 下描述旧版界面的技术长文档均带「版本状态」标注；业务层 `src/` 为两版共用，
@@ -13,14 +13,14 @@
 
 它不替用户下单，也不假装自己是实时比价平台。它解决的是买之前的那个问题：**在有限预算里，哪件商品更适合这次的具体用途，为什么。**
 
-- 在线演示（**旧版** Streamlit Cloud）：<https://ai-shopping-10.streamlit.app/>
+- 在线演示：当前为 Vue 3 + FastAPI 单端口部署，地址与发布流程见 [DEPLOY.md](DEPLOY.md)
 - 代码仓库：<https://github.com/sxxzy-a11y/ai-shopping>
 - 技术栈：Vue 3 + Vite + TypeScript / FastAPI + Uvicorn / Python 3.12+ / SQLite
 - 当前数据：20 件商品，2 个品类（笔记本电脑、手机），13 个品牌
 - MCP Server（可选）：`python -m mcp_server.server`，把 6 个导购工具开放给外部 Agent，见 [docs/MCP.md](docs/MCP.md)
 
-> Streamlit Cloud 上的链接指向旧版，闲置后会休眠，第一次打开可能需要等待几十秒。
-> 当前版本的部署方式是构建 `frontend/dist` 后由 FastAPI 单端口托管，见 [DEPLOY.md](DEPLOY.md)。
+> 界面要点：仅启动（1.8s）与登录成功（1.4s）有咖啡杯过渡，侧栏切页无过渡；登录页为硬边卡片、主次按钮统一圆点填充、输入控件聚焦晃动且不反黑，见 [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)。
+> legacy Streamlit Cloud 链接仅为历史记录，已停用；当前构建 `frontend/dist` 后由 FastAPI 单端口托管，见 [DEPLOY.md](DEPLOY.md)。
 > 公开演示只用于体验，不要输入真实个人信息。
 
 ---
@@ -335,7 +335,7 @@ python backend/run.py
 打开 <http://127.0.0.1:8000>。一个进程同时提供 `/api/*` 与前端页面。
 开发态可另开终端 `cd frontend && npm run dev`（5173 端口，`/api` 由 Vite 代理到 8000）获得热更新。
 
-**旧版入口（legacy，回退用）**：`streamlit run app.py` → <http://localhost:8501>。
+**legacy 入口（历史回退 / 测试对照）**：`streamlit run app.py` → <http://localhost:8501>；`app.py`、`src/ui/`、`Dockerfile` 仍被 CI 与 AppTest 引用，勿单独删除。
 
 不配置模型密钥也能使用智能分析、商品比较、历史记录等核心功能；AI 问答需要配置模型密钥。
 
@@ -363,7 +363,7 @@ cp .env.example .env        # Git Bash / macOS / Linux
 
 - 只有 20 件商品、2 个品类，不能覆盖真实购物平台的长尾需求；
 - 不接入电商平台，不提供实时价格、库存、销量或真实评价；
-- 旧版演示部署在 Streamlit Community Cloud，文件系统临时，休眠或重部署后账号、历史和收藏可能重置；
+- legacy 演示站点已停用；当前单端口部署的数据在 `storage/`，云端需持久化挂载；
 - 账号体系：Vue 版会话存服务端内存（重启即失效，12 小时绝对过期 + 30 分钟空闲超时），
   连续 5 次登录失败按用户名临时锁定 15 分钟；仍是演示级鉴权，公开演示不要输入真实个人信息；
 - SQLite 仍是单实例，云端需挂持久卷；Vue 版已有 HTTP API，但不适合多副本并发写；
@@ -395,7 +395,7 @@ cp .env.example .env        # Git Bash / macOS / Linux
 ├── data/                  商品种子、知识语料、评测用例
 ├── storage/               运行时数据库（不提交）
 ├── scripts/               初始化、导入、备份、评测入口
-├── eval/  tests/  docs/  openspec/  design/  submission/  Plan/
+├── eval/  tests/  docs/  openspec/  design/  submission/  Plan/（本机过程文件，不入库）
 └── 平台约定文件            README / LICENSE / Dockerfile / requirements*.txt ...
 ```
 

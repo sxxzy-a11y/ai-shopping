@@ -1,6 +1,8 @@
 # 设计系统与品牌规范
 
-> 适用：Vue 版全部界面（`frontend/src`）。最后更新 2026-11-09（v2.15）。
+> 适用：Vue 版全部界面（`frontend/src`）。最后更新 2026-11-10（v2.18）。
+>
+> v2.18 界面行为：仅「进入页面→登录页」1.8s 与「登录成功→主页面」1.4s 有咖啡杯覆盖层，侧栏切页无过渡；登录页为 D3OXY 风格硬边卡片（暖纸 + 铜橙 + 深墨）；输入控件为 3px 墨边 + 6px 硬投影、聚焦晃动且不反黑；主/次按钮统一为直角墨边 + 3px 硬投影 + 铜点放大填充（个人设置 / 用户管理页通过 `fx-off` 关闭填充特效）。
 > 实现入口：`frontend/src/styles/`（tokens / base / components / responsive / index）、
 > `frontend/src/components/BrandMark.vue`（品牌标记）、`frontend/public/favicon.svg`。
 
