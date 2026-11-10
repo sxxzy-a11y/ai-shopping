@@ -11,4 +11,4 @@
 -r requirements-vue.txt
 
 mcp==1.9.4
-pydantic==2.12.4
+pydantic==2.14.3
